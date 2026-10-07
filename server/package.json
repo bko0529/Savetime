@@ -1,0 +1,13 @@
+{
+  "name": "@savetime/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "tsc -p . && node --test dist/domain/stateMachine.test.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

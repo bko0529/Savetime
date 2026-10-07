@@ -1,0 +1,4499 @@
+openapi: 3.0.3
+info:
+  title: 세이브타임 API
+  version: 0.2.0
+  description: '세이브타임 서버 API v0.2 (Node.js/Express). 요구사항분석서 v0.115 · 상태 전이표 v0.2 · DB 스키마 v0.2 · 실시간 통신 설계 v0.2 기준.
+
+
+    **공통 규칙**
+
+    - 기본 주소: `/api/v1` · 형식: JSON (가입 신청·재신청만 multipart)
+
+    - 시간: ISO 8601, 모두 **서버 시각**. 모든 응답 헤더에 `X-Server-Now`, 시간이 중요한 응답 본문에는 `serverNow`. 2분·5분은 서버 수신 시각으로 판정
+
+    - 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(30일, 폐기 가능) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
+
+    - **계정 상태는 요청마다 확인** (정지·탈퇴·PC 해제 후 10초 안 모든 요청 거부, SER-016). 토큰이 살아 있어도 401·403
+
+    - 병원·관리자 웹: 상태를 바꾸는 요청은 `Origin` 헤더가 허용 목록일 때만 (CSRF 방어)
+
+    - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
+
+    - 상태 변경: 상태 전이표 v0.2의 전이 함수를 거친다. 사용자 요청에는 `version` 필수(SFR-160). 검사 순서 = 표 → 상태 → 시간·사유 → 버전. 실패하면 409와 `error.details.current`(최신 상태)
+
+    - 확정은 `Idempotency-Key` 헤더, 이송 건 생성은 앱 UUID, 오프라인 기록은 `clientRecordId`로 중복 방지
+
+    - 목록은 `limit`·`cursor`로 나눠 받음 (`nextCursor`)
+
+    - 오류 형식: `{"error": {"code": "...", "message": "...", "details": {...}}}`
+
+    - 각 API의 `x-state-events`는 거치는 상태 전이 사건 이름 (stateMachine.ts)
+
+    - 실시간 알림(웹소켓 이벤트)은 실시간 통신 설계 v0.2·events.ts에서 정의. 이벤트에는 환자 정보가 없으니 받으면 이 API로 상세를 가져온다
+
+    '
+servers:
+- url: https://api.savetime.example/api/v1
+  description: 운영(시연)
+- url: http://localhost:4000/api/v1
+  description: 개발
+tags:
+- name: 1. 대원 인증·계정
+- name: 2. 팀
+- name: 3. 병원 정보·위치 (대원 앱)
+- name: 4. 이송 (대원 앱 · 핵심)
+- name: 5. 병원 웹
+- name: 6. 관리자 웹
+paths:
+  /agencies/{code}:
+    get:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 소속기관 코드 확인
+      description: "**요구사항**: SFR-017  \n**화면**: S-02 가입 신청  \n**오류 코드**: AGENCY_NOT_FOUND"
+      operationId: get_agencies__code
+      security: &id001 []
+      x-error-codes:
+      - AGENCY_NOT_FOUND
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  name:
+                    type: string
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/signup:
+    post:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 가입 신청 (공무원증 사진)
+      description: "관리자 알림 '신규 가입 신청'이 생긴다.\n\n**요구사항**: SFR-017, SER-015, DAR-012  \n**화면**: S-02 가입 신청  \n**오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED"
+      operationId: post_auth_signup
+      security: *id001
+      x-error-codes:
+      - VALIDATION_FAILED
+      - AGENCY_NOT_FOUND
+      - LOGIN_ID_TAKEN
+      - CONSENT_REQUIRED
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                agencyCode: &id002
+                  type: string
+                loginId:
+                  type: string
+                password:
+                  type: string
+                name: &id003
+                  type: string
+                rank: &id004
+                  type: string
+                safetyCenter: &id005
+                  type: string
+                employeeNo: &id006
+                  type: string
+                photo: &id007
+                  type: string
+                  format: binary
+                  description: 공무원증 사진 (승인·반려 즉시 삭제)
+                photoConsent: &id008
+                  type: boolean
+                  description: 필수, true여야 함
+              required:
+              - agencyCode
+              - loginId
+              - password
+              - name
+              - rank
+              - safetyCenter
+              - employeeNo
+              - photo
+              - photoConsent
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - pending
+                  appliedAt:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/signup:
+    put:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 반려 후 다시 신청
+      description: "me.status가 rejected일 때만. 반려 사유(me.rejectReason)를 보고 고쳐서 다시 낸다 → pending.\n\n**요구사항**: SFR-083, SFR-017  \n**화면**: S-02 승인 대기  \n**오류 코드**: SIGNUP_NOT_REJECTED, CONSENT_REQUIRED, AGENCY_NOT_FOUND"
+      operationId: put_me_signup
+      security: &id009
+      - paramedicAuth: []
+      x-error-codes:
+      - SIGNUP_NOT_REJECTED
+      - CONSENT_REQUIRED
+      - AGENCY_NOT_FOUND
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                agencyCode: *id002
+                name: *id003
+                rank: *id004
+                safetyCenter: *id005
+                employeeNo: *id006
+                photo: *id007
+                photoConsent: *id008
+              required:
+              - agencyCode
+              - name
+              - rank
+              - safetyCenter
+              - employeeNo
+              - photo
+              - photoConsent
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/login:
+    post:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 로그인
+      description: "5번 틀리면 10분 잠금. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려' 화면만 연다 (SFR-022·083).\n\n**요구사항**: SFR-018, SER-011  \n**화면**: S-02 로그인  \n**오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED,\
+        \ ACCOUNT_SUSPENDED"
+      operationId: post_auth_login
+      security: *id001
+      x-error-codes:
+      - INVALID_CREDENTIALS
+      - ACCOUNT_LOCKED
+      - ACCOUNT_SUSPENDED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                loginId:
+                  type: string
+                password:
+                  type: string
+                deviceId:
+                  type: string
+                  description: 앱 설치마다 고유
+              required:
+              - loginId
+              - password
+              - deviceId
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    $ref: '#/components/schemas/Tokens'
+                  me:
+                    $ref: '#/components/schemas/Me'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 토큰 재발급
+      description: "**요구사항**: SER-016  \n**화면**: (모든 화면)  \n**오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED, ACCOUNT_SUSPENDED"
+      operationId: post_auth_refresh
+      security: *id001
+      x-error-codes:
+      - TOKEN_REVOKED
+      - TOKEN_EXPIRED
+      - ACCOUNT_SUSPENDED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required:
+              - refreshToken
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/logout:
+    post:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 로그아웃 (팀에서 빠짐)
+      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport. 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝낸다.\n\n**요구사항**: SFR-070, SFR-113  \n**화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED\
+        \  \n**상태 전이 사건**: CANCEL"
+      operationId: post_auth_logout
+      security: *id009
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+      parameters:
+      - &id010
+        name: confirmCancelActive
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113)
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me:
+    get:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 내 정보
+      description: "**요구사항**: SFR-022, SFR-083  \n**화면**: S-02 승인 대기 · 앱 시작"
+      operationId: get_me
+      security: *id009
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 회원 탈퇴
+      description: "탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인을 받고, 마지막 1명이면 이송 건을 취소(withdrawal)로 끝낸 뒤 계정·프로필 즉시 삭제.\n\n**요구사항**: SFR-071, SFR-113  \n**화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n\
+        **상태 전이 사건**: CANCEL"
+      operationId: delete_me
+      security: *id009
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+      parameters:
+      - *id010
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/password:
+    put:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 비밀번호 변경 (임시 비밀번호 후 필수)
+      description: "**요구사항**: SFR-021  \n**화면**: (비밀번호 변경)  \n**오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED"
+      operationId: put_me_password
+      security: *id009
+      x-error-codes:
+      - INVALID_CREDENTIALS
+      - VALIDATION_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+              required:
+              - currentPassword
+              - newPassword
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/pin:
+    put:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 앱 잠금 PIN 설정·변경
+      description: "**요구사항**: SFR-150  \n**화면**: S-12 설정"
+      operationId: put_me_pin
+      security: *id009
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pin:
+                  type: string
+                  pattern: ^\d{6}$
+              required:
+              - pin
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/pin/verify:
+    post:
+      tags:
+      - 1. 대원 인증·계정
+      summary: PIN 확인 (5회 실패 시 로그아웃)
+      description: "생체 인증(지문·Face ID)은 폰 안에서 처리하고 서버를 부르지 않는다. 5번째 실패 → 토큰 폐기·팀에서 빠짐(마지막 1명이면 이송 취소 logout) + account.force_logout{pin_failed}.\n\n**요구사항**: SFR-150  \n**화면**: S-02 앱 잠금  \n**오류 코드**: PIN_LOCKED_OUT\
+        \  \n**상태 전이 사건**: CANCEL"
+      operationId: post_me_pin_verify
+      security: *id009
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - PIN_LOCKED_OUT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pin:
+                  type: string
+              required:
+              - pin
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  remaining:
+                    type: integer
+                    description: 남은 시도 횟수
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/push-device:
+    put:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 푸시 토큰 등록
+      description: "**요구사항**: SFR-130, COR-009  \n**화면**: 앱 시작"
+      operationId: put_me_push_device
+      security: *id009
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceId:
+                  type: string
+                platform:
+                  type: string
+                  enum:
+                  - android
+                  - ios
+                fcmToken:
+                  type: string
+              required:
+              - deviceId
+              - platform
+              - fcmToken
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams:
+    post:
+      tags:
+      - 2. 팀
+      summary: 팀 만들기 (근무 시작)
+      description: "14시간 자동 근무 종료 타이머가 걸린다.\n\n**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED"
+      operationId: post_teams
+      security: *id009
+      x-error-codes:
+      - ALREADY_IN_TEAM
+      - NOT_APPROVED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                  - driver
+                  - care
+              required:
+              - role
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/join:
+    post:
+      tags:
+      - 2. 팀
+      summary: 코드·QR로 참여
+      description: "code와 qrToken 중 하나만 보낸다. 운전은 팀에 1명. 이 시점 이후 이벤트만 받는다(joined_seq).\n\n**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: TEAM_NOT_FOUND, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM"
+      operationId: post_teams_join
+      security: *id009
+      x-error-codes:
+      - TEAM_NOT_FOUND
+      - TEAM_FULL
+      - DRIVER_TAKEN
+      - ALREADY_IN_TEAM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                qrToken:
+                  type: string
+                role:
+                  type: string
+                  enum:
+                  - driver
+                  - care
+              required:
+              - role
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/current:
+    get:
+      tags:
+      - 2. 팀
+      summary: 내 팀 보기
+      description: "**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: NOT_IN_TEAM"
+      operationId: get_teams_current
+      security: *id009
+      x-error-codes:
+      - NOT_IN_TEAM
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/current/members/me:
+    patch:
+      tags:
+      - 2. 팀
+      summary: 내 역할 바꾸기
+      description: "**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: DRIVER_TAKEN, ACTIVE_TRANSPORT_EXISTS"
+      operationId: patch_teams_current_members_me
+      security: *id009
+      x-error-codes:
+      - DRIVER_TAKEN
+      - ACTIVE_TRANSPORT_EXISTS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                  - driver
+                  - care
+              required:
+              - role
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/current/leave:
+    post:
+      tags:
+      - 2. 팀
+      summary: 근무 종료 (나만 팀에서 빠짐)
+      description: "진행 중 이송이 있으면 확인 필요. 마지막 1명이면 이송 건을 취소(duty_end)로 끝내고 팀 해제.\n\n**요구사항**: SFR-113  \n**화면**: S-03 · S-12  \n**오류 코드**: NOT_IN_TEAM, ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이 사건**: CANCEL"
+      operationId: post_teams_current_leave
+      security: *id009
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - NOT_IN_TEAM
+      - ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+      parameters:
+      - *id010
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /paramedics/on-duty:
+    get:
+      tags:
+      - 2. 팀
+      summary: 같은 소방서 근무 중 대원 목록·이름 검색
+      description: "**요구사항**: SFR-159, SFR-143  \n**화면**: S-03 팀원 목록 초대"
+      operationId: get_paramedics_on_duty
+      security: *id009
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 이름 검색 (비우면 근무 중 목록)
+      - &id014
+        name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+        description: ''
+      - &id015
+        name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 이전 응답의 nextCursor
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OnDutyParamedic'
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/current/invites:
+    post:
+      tags:
+      - 2. 팀
+      summary: 팀 초대 보내기 (5분 만료)
+      description: "받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.\n\n**요구사항**: SFR-159  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND"
+      operationId: post_teams_current_invites
+      security: *id009
+      x-error-codes:
+      - TEAM_FULL
+      - TARGET_IN_TEAM
+      - NOT_FOUND
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                toParamedicId:
+                  type: integer
+              required:
+              - toParamedicId
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inviteId:
+                    type: integer
+                  expiresAt:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invites/{inviteId}/accept:
+    post:
+      tags:
+      - 2. 팀
+      summary: 초대 수락 (역할 선택)
+      description: "나에게 온 초대가 아니면 404.\n\n**요구사항**: SFR-159, SFR-113  \n**화면**: (초대 알림)  \n**오류 코드**: NOT_FOUND, INVITE_EXPIRED, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM"
+      operationId: post_invites__inviteId__accept
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - INVITE_EXPIRED
+      - TEAM_FULL
+      - DRIVER_TAKEN
+      - ALREADY_IN_TEAM
+      parameters:
+      - name: inviteId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                  - driver
+                  - care
+              required:
+              - role
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invites/{inviteId}/decline:
+    post:
+      tags:
+      - 2. 팀
+      summary: 초대 거절
+      description: "**요구사항**: SFR-159  \n**화면**: (초대 알림)  \n**오류 코드**: NOT_FOUND, INVITE_EXPIRED"
+      operationId: post_invites__inviteId__decline
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - INVITE_EXPIRED
+      parameters:
+      - name: inviteId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /memos/{paramedicId}:
+    put:
+      tags:
+      - 2. 팀
+      summary: 나만 보는 한 줄 메모
+      description: "**요구사항**: SFR-143  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: NOT_FOUND"
+      operationId: put_memos__paramedicId
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: paramedicId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memo:
+                  type: string
+                  maxLength: 20
+              required:
+              - memo
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /teams/current/draft:
+    get:
+      tags:
+      - 2. 팀
+      summary: 팀 작성 중 환자 정보 불러오기
+      description: "**요구사항**: SFR-114, SFR-157  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**: NOT_IN_TEAM"
+      operationId: get_teams_current_draft
+      security: *id009
+      x-error-codes:
+      - NOT_IN_TEAM
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: integer
+                  assessment:
+                    $ref: '#/components/schemas/Assessment'
+                  fieldMeta:
+                    type: object
+                    properties: {}
+                    description: 항목별 {byName, at}
+                  prefilledFromTransportId:
+                    type: string
+                    nullable: true
+                    description: 직전 환자 정보로 채워진 경우 (10분, SFR-157)
+                  prefillExpiresAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - 2. 팀
+      summary: 팀 작성 중 환자 정보 고치기 (항목 단위 병합)
+      description: "버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated. 운전 역할이 주행 중(시속 10km 초과)이면 DRIVER_INPUT_LOCKED.\n\n**요구사항**: SFR-114, SFR-115  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**:\
+        \ NOT_IN_TEAM, DRIVER_INPUT_LOCKED, VALIDATION_FAILED"
+      operationId: patch_teams_current_draft
+      security: *id009
+      x-error-codes:
+      - NOT_IN_TEAM
+      - DRIVER_INPUT_LOCKED
+      - VALIDATION_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                baseVersion:
+                  type: integer
+                  description: 내가 마지막으로 받은 버전
+                changes:
+                  type: object
+                  properties: {}
+                  description: 바뀐 항목만 (Assessment의 일부). null = 지우기
+              required:
+              - baseVersion
+              - changes
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: integer
+                  assessment:
+                    $ref: '#/components/schemas/Assessment'
+                  overwritten:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        prevByName:
+                          type: string
+                    description: baseVersion 이후 다른 팀원이 고친 항목을 내가 덮어씀 → 화면에 알림
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - 2. 팀
+      summary: 직전 환자 정보 지우기
+      description: "**요구사항**: SFR-157  \n**화면**: S-04 직전 환자 정보"
+      operationId: delete_teams_current_draft
+      security: *id009
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /symptoms:
+    get:
+      tags:
+      - 3. 병원 정보·위치 (대원 앱)
+      summary: 증상 버튼 목록 S01~S16
+      description: "**요구사항**: SFR-108, 부록 B  \n**화면**: S-04 환자 정보 입력"
+      operationId: get_symptoms
+      security: *id009
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                    name:
+                      type: string
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /geocode:
+    get:
+      tags:
+      - 3. 병원 정보·위치 (대원 앱)
+      summary: 주소 → 좌표 (위치 실패·미동의)
+      description: "카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 후보 최대 5개.\n\n**요구사항**: SFR-009, INR-004  \n**화면**: S-04 · S-06 주소 입력  \n**오류 코드**: ADDRESS_NOT_FOUND"
+      operationId: get_geocode
+      security: *id009
+      x-error-codes:
+      - ADDRESS_NOT_FOUND
+      parameters:
+      - name: address
+        in: query
+        required: true
+        schema:
+          type: string
+        description: ''
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    address:
+                      type: string
+                      description: 정리된 주소
+                    location:
+                      $ref: '#/components/schemas/LatLng'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hospitals/nearby:
+    get:
+      tags:
+      - 3. 병원 정보·위치 (대원 앱)
+      summary: 주변 병원 (지도·오프라인 저장용)
+      description: "반경 안 전체 병원(지도용). 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다.\n\n**요구사항**: SFR-027, SFR-059, SFR-061, SFR-064  \n**화면**: S-06 지도 · S-11 오프라인"
+      operationId: get_hospitals_nearby
+      security: *id009
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+        description: ''
+      - name: lng
+        in: query
+        required: true
+        schema:
+          type: number
+        description: ''
+      - name: radiusKm
+        in: query
+        required: false
+        schema:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 30
+          - 40
+        description: ''
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HospitalCard'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hospitals/{hospitalId}:
+    get:
+      tags:
+      - 3. 병원 정보·위치 (대원 앱)
+      summary: 병원 상세
+      description: "**요구사항**: SFR-007, SFR-081  \n**화면**: S-07 병원 상세  \n**오류 코드**: NOT_FOUND"
+      operationId: get_hospitals__hospitalId
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: hospitalId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HospitalDetail'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 이송 건 만들기 + 병원에 동시 요청
+      description: "요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS\
+        \ + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이\
+        \ API를 부르지 않는다 (SFR-109).\n\n**요구사항**: SFR-109, SFR-104, SFR-129, SFR-157, SFR-161  \n**화면**: S-04 → S-05 응답 대기 / S-06  \n**오류 코드**: ACTIVE_TRANSPORT_EXISTS, ASSESSMENT_INCOMPLETE, NOT_IN_TEAM,\
+        \ VALIDATION_FAILED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**: CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS"
+      operationId: post_transports
+      security: *id009
+      x-state-events:
+      - CREATE_WITH_TARGETS
+      - CREATE_NO_TARGET
+      - FINISH_PREVIOUS
+      x-error-codes:
+      - ACTIVE_TRANSPORT_EXISTS
+      - ASSESSMENT_INCOMPLETE
+      - NOT_IN_TEAM
+      - VALIDATION_FAILED
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  description: 앱이 만든 UUID (중복 생성 방지)
+                prevTransportId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157)
+                finishPrevious:
+                  type: boolean
+                  description: 진행 중 건이 '이동 중'일 때 '이전 이송 끝내기'를 확인함 (SFR-104)
+                previousVersion:
+                  type: integer
+                  description: finishPrevious일 때 이전 건의 version
+                  nullable: true
+                radiusKm:
+                  type: integer
+                  enum:
+                  - 10
+                  - 20
+                  - 30
+                  - 40
+                location:
+                  allOf:
+                  - $ref: '#/components/schemas/LatLng'
+                  nullable: true
+                address:
+                  type: string
+                  description: 위치 미동의·실패 시 주소 (geocode 결과)
+                  nullable: true
+                locationConsent:
+                  type: boolean
+                assessment:
+                  $ref: '#/components/schemas/Assessment'
+              required:
+              - id
+              - radiusKm
+              - locationConsent
+              - assessment
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/current:
+    get:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 진행 중 이송 불러오기 (앱 재실행 복구)
+      description: "상태별 화면으로 바로 이동: requesting→S-05, fallback→S-06, phone_check→S-08, moving→S-09.\n\n**요구사항**: SFR-133  \n**화면**: 앱 시작 · 모든 이송 화면  \n**오류 코드**: NO_ACTIVE_TRANSPORT"
+      operationId: get_transports_current
+      security: *id009
+      x-error-codes:
+      - NO_ACTIVE_TRANSPORT
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}:
+    get:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 이송 건 보기
+      description: "우리 팀 이송 건이 아니면 404.\n\n**요구사항**: SFR-110  \n**화면**: S-05 · S-09  \n**오류 코드**: NOT_FOUND"
+      operationId: get_transports__transportId
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - &id011
+        name: transportId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/confirm:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 승인 병원 확정
+      description: "Idempotency-Key 헤더 필수. 첫 시도가 서버에 도착한 시각으로 5분을 판정. 성공하면 나머지 대기·승인 요청은 닫히고(other_hospital) 경로 안내 담당 단말을 정한다(운전 단말 10초).\n\n**요구사항**: SFR-111, SFR-134, SFR-160, SFR-125  \n**화면**: S-05\
+        \ 확정 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, APPROVAL_EXPIRED, APPROVAL_CANCELLED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**: CONFIRM"
+      operationId: post_transports__transportId__confirm
+      security: *id009
+      x-state-events:
+      - CONFIRM
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - APPROVAL_EXPIRED
+      - APPROVAL_CANCELLED
+      - REQUEST_NOT_APPROVED
+      parameters:
+      - *id011
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+        description: 확정 요청마다 앱이 만든 고유 값. 같은 값으로 다시 보내면 첫 결과를 그대로 돌려줌
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hospitalRequestId:
+                  type: integer
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - hospitalRequestId
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/fallback:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 기다리지 않고 예비로
+      description: "대기·승인 요청을 닫고(fallback) 병원 웹에 '요청 종료'.\n\n**요구사항**: SFR-112  \n**화면**: S-05 응답 대기  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**: GO_FALLBACK"
+      operationId: post_transports__transportId__fallback
+      security: *id009
+      x-state-events:
+      - GO_FALLBACK
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/recommendations:
+    get:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 예비 추천 목록
+      description: "**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND"
+      operationId: get_transports__transportId__recommendations
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - *id011
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  radiusKm:
+                    type: integer
+                    enum:
+                    - 10
+                    - 20
+                    - 30
+                    - 40
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HospitalCard'
+                    description: 필수 병상 기준 통과 + 제외 병원 뺀 상위 5곳, 이동시간순
+                  map:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HospitalCard'
+                    description: 반경 안 전체 (지도)
+                  noBedInfo:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HospitalCard'
+                    description: 수집 지역 밖
+                  emptyGuide:
+                    type: string
+                    enum:
+                    - expand_radius
+                    - call_nearby
+                    description: 후보 0건일 때 안내 (SFR-029)
+                    nullable: true
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/fallback-radius:
+    put:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 예비 추천 반경 넓히기 (요청은 안 보냄)
+      description: "추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.\n\n**요구사항**: SFR-029, SFR-012  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND,\
+        \ MAX_RADIUS, INVALID_TRANSITION"
+      operationId: put_transports__transportId__fallback_radius
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - MAX_RADIUS
+      - INVALID_TRANSITION
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                radiusKm:
+                  type: integer
+                  enum:
+                  - 10
+                  - 20
+                  - 30
+                  - 40
+                  description: 지금보다 한 단계 큰 값
+              required:
+              - radiusKm
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/rounds:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 다시 요청 (반경 넓히기 · 승인 취소 후)
+      description: "expand (fallback→requesting): 반경 한 단계, 이번 이송에서 아직 요청하지 않은 병원에만. 대상 0곳이면 422 NO_REQUEST_TARGET(상태 그대로). re_request (moving→requesting): 확정 병원이 승인 취소한 경우만, 현재 위치 기준·현재 반경, 제외 병원만 빼고, 직전\
+        \ 승인 병원에 '재확인' 표시. 경로 안내 유지.\n\n**요구사항**: SFR-131, SFR-128, SFR-156  \n**화면**: S-06 · S-09 승인 취소 경보  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, NO_REQUEST_TARGET,\
+        \ MAX_RADIUS, RE_REQUEST_NOT_ALLOWED  \n**상태 전이 사건**: EXPAND_ROUND, RE_REQUEST"
+      operationId: post_transports__transportId__rounds
+      security: *id009
+      x-state-events:
+      - EXPAND_ROUND
+      - RE_REQUEST
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - NO_REQUEST_TARGET
+      - MAX_RADIUS
+      - RE_REQUEST_NOT_ALLOWED
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                  - expand
+                  - re_request
+                radiusKm:
+                  type: integer
+                  enum:
+                  - 10
+                  - 20
+                  - 30
+                  - 40
+                  description: expand일 때 다음 단계 1칸
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+                location:
+                  allOf:
+                  - $ref: '#/components/schemas/LatLng'
+                  nullable: true
+              required:
+              - kind
+              - version
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/phone-check/start:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 추천 병원으로 전화 확인 시작
+      description: "fallback → phone_check, 대상 병원 기록. 팀원 화면에 transport.phone_target.\n\n**요구사항**: SFR-032, SFR-031  \n**화면**: S-06 → S-08 전화 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
+        \ VERSION_CONFLICT  \n**상태 전이 사건**: START_PHONE_CHECK"
+      operationId: post_transports__transportId__phone_check_start
+      security: *id009
+      x-state-events:
+      - START_PHONE_CHECK
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hospitalId:
+                  type: integer
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - hospitalId
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/phone-checks:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 전화 확인 결과 기록
+      description: "accepted → moving / no_answer·skipped(사유) → moving / rejected → 제외 병원 추가 후 다음 후보가 있으면 phone_check 유지(phoneTarget 바뀜), 없으면 fallback / dismissed(결과 미선택으로 닫기) → fallback. 통신 두절 중 기록은 /transports/sync로.\n\
+        \n**요구사항**: SFR-032, SFR-033, SFR-034, SFR-074, SFR-075  \n**화면**: S-08 전화 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED  \n**상태 전이 사건**: PHONE_ACCEPTED,\
+        \ PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED"
+      operationId: post_transports__transportId__phone_checks
+      security: *id009
+      x-state-events:
+      - PHONE_ACCEPTED
+      - PHONE_PROCEED
+      - PHONE_REJECTED_NEXT
+      - PHONE_REJECTED_LAST
+      - PHONE_DISMISSED
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - REASON_REQUIRED
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hospitalId:
+                  type: integer
+                  description: phoneTarget과 같아야 함
+                result:
+                  type: string
+                  enum:
+                  - accepted
+                  - no_answer
+                  - skipped
+                  - rejected
+                  - dismissed
+                reason:
+                  type: string
+                  enum: &id012
+                  - no_answer
+                  - busy
+                  - urgent
+                  - etc
+                  description: no_answer·skipped일 때 필수
+                  nullable: true
+                reasonText:
+                  type: string
+                  nullable: true
+                  maxLength: 30
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - hospitalId
+              - result
+              - version
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/nav-device:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 경로 안내 담당 단말 응답
+      description: "확정 뒤 운전 단말이 10초 안에 부르면 담당이 된다. 10초가 지나 서버가 확정한 대원 단말로 넘겼으면 NAV_DEVICE_ASSIGNED(보기 전용). 결과는 transport.nav_device.\n\n**요구사항**: SFR-132, SFR-133  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND,\
+        \ NAV_DEVICE_ASSIGNED, VERSION_CONFLICT"
+      operationId: post_transports__transportId__nav_device
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - NAV_DEVICE_ASSIGNED
+      - VERSION_CONFLICT
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceId:
+                  type: string
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - deviceId
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  navDeviceId:
+                    type: string
+                  isMe:
+                    type: boolean
+                    description: false면 보기 전용
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/assessments:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 변경 사항 보내기
+      description: "requesting·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.\n\n**요구사항**: SFR-121, SFR-105  \n**화면**: S-05 · S-09  \n**오류\
+        \ 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_CONFLICT, INVALID_TRANSITION  \n**상태 전이 사건**: ASSESSMENT_UPDATED"
+      operationId: post_transports__transportId__assessments
+      security: *id009
+      x-state-events:
+      - ASSESSMENT_UPDATED
+      x-error-codes:
+      - NOT_FOUND
+      - NOTHING_TO_SEND
+      - VERSION_CONFLICT
+      - INVALID_TRANSITION
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                baseSeq:
+                  type: integer
+                  description: 마지막으로 보낸 seq
+              required:
+              - baseSeq
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  seq:
+                    type: integer
+                  changedFields:
+                    type: array
+                    items:
+                      type: string
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/locations:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 위치 올리기 (5초마다, 담당 단말만)
+      description: "위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.\n\n**요구사항**: SFR-037, SFR-079, SER-002  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND, NOT_NAV_DEVICE"
+      operationId: post_transports__transportId__locations
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - NOT_NAV_DEVICE
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceId:
+                  type: string
+                points:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lat:
+                        type: number
+                      lng:
+                        type: number
+                      speedKmh:
+                        type: number
+                      recordedAt:
+                        type: string
+                        format: date-time
+              required:
+              - deviceId
+              - points
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/destination:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 목적지 변경 (이송 건당 1번)
+      description: "moving → requesting. 새 병원을 고르는 API가 아니다: 이전 목적지는 닫힘(dest_changed)·제외 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미 바꿨으면 '이송 취소 후 새로 요청' 안내.\n\n**요구사항**: SFR-077,\
+        \ SFR-156  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED  \n**상태 전이 사건**: CHANGE_DESTINATION"
+      operationId: post_transports__transportId__destination
+      security: *id009
+      x-state-events:
+      - CHANGE_DESTINATION
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - DESTINATION_CHANGE_USED
+      - REASON_REQUIRED
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum:
+                  - patient_change
+                  - road
+                  - hospital
+                  - etc
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+                location:
+                  allOf:
+                  - $ref: '#/components/schemas/LatLng'
+                  nullable: true
+              required:
+              - reason
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/arrive:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 도착 처리
+      description: "원본 위치 삭제, 익명 소요시간만 저장. 10분 동안 팀 작성 중 정보에 이번 환자 정보를 남긴다 (SFR-157).\n\n**요구사항**: SFR-038, SFR-080, SFR-039, SFR-144  \n**화면**: S-10 도착 처리  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
+        \ VERSION_CONFLICT  \n**상태 전이 사건**: ARRIVE"
+      operationId: post_transports__transportId__arrive
+      security: *id009
+      x-state-events:
+      - ARRIVE
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                method:
+                  type: string
+                  enum:
+                  - button
+                  - menu
+                  - hospital
+                  description: hospital = 병원 '도착 확인' 요청에 대원이 '도착 처리'를 누름
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - method
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  departedAt:
+                    type: string
+                    format: date-time
+                  arrivedAt:
+                    type: string
+                    format: date-time
+                  durationSec:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/cancel:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 이송 취소
+      description: "진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'.\n\n**요구사항**: SFR-076  \n**화면**: S-05 · S-06 · S-08 · S-09  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT\
+        \  \n**상태 전이 사건**: CANCEL"
+      operationId: post_transports__transportId__cancel
+      security: *id009
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/sync:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 통신 두절 중 기록 올리기
+      description: "오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든 건은 offlineCreated=true, fallbackReason=offline.\n\
+        \n**요구사항**: SFR-099, SFR-068, SFR-160  \n**화면**: S-11 오프라인 → 복구  \n**상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE"
+      operationId: post_transports_sync
+      security: *id009
+      x-state-events:
+      - CREATE_NO_TARGET
+      - PHONE_ACCEPTED
+      - PHONE_PROCEED
+      - PHONE_REJECTED_NEXT
+      - PHONE_REJECTED_LAST
+      - PHONE_DISMISSED
+      - ARRIVE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                records:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      clientRecordId:
+                        type: string
+                        format: uuid
+                        description: 기록마다 앱이 만든 값 → 같은 기록 두 번 반영 안 됨
+                      kind:
+                        type: string
+                        enum:
+                        - create_fallback
+                        - phone_check
+                        - arrive
+                      transportId:
+                        type: string
+                        format: uuid
+                      occurredAt:
+                        type: string
+                        format: date-time
+                        description: 단말 시각
+                      assessment:
+                        allOf:
+                        - $ref: '#/components/schemas/Assessment'
+                        description: create_fallback일 때
+                      radiusKm:
+                        type: integer
+                        enum:
+                        - 10
+                        - 20
+                        - 30
+                        - 40
+                      location:
+                        $ref: '#/components/schemas/LatLng'
+                      hospitalId:
+                        type: integer
+                        nullable: true
+                      result:
+                        type: string
+                        enum:
+                        - accepted
+                        - no_answer
+                        - skipped
+                        - rejected
+                        - dismissed
+                        nullable: true
+                      reason:
+                        type: string
+                        enum: *id012
+                        nullable: true
+                      method:
+                        type: string
+                        enum:
+                        - button
+                        - menu
+                        nullable: true
+                    required:
+                    - clientRecordId
+                    - kind
+                    - transportId
+                    - occurredAt
+                  description: 발생 순서대로
+              required:
+              - records
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        clientRecordId:
+                          type: string
+                        outcome:
+                          type: string
+                          enum:
+                          - applied
+                          - history_only
+                          - duplicate
+                          - rejected
+                        code:
+                          type: string
+                          description: rejected일 때 오류 코드
+                          nullable: true
+                  transport:
+                    allOf:
+                    - $ref: '#/components/schemas/Transport'
+                    nullable: true
+                    description: 반영 후 최신 상태
+                  alert:
+                    type: boolean
+                    description: 서버에 유효한 승인·확정이 있어 이력으로만 남김 → 경보
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/pc/register:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 라이선스 키로 PC 등록
+      description: "성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict), 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.\n\n**요구사항**: SFR-116, SFR-147, COR-012  \n**화면**: H-01 PC 등록\
+        \  \n**오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
+      operationId: post_hw_pc_register
+      security: *id001
+      x-error-codes:
+      - INVALID_LICENSE
+      - LICENSE_EXPIRED
+      - PC_LIMIT_REACHED
+      - TOO_MANY_ATTEMPTS
+      - ORIGIN_NOT_ALLOWED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                licenseKey:
+                  type: string
+                pcName:
+                  type: string
+                  maxLength: 40
+                replacePcId:
+                  type: integer
+                  description: 3대가 찼을 때 바꿀 PC
+                  nullable: true
+              required:
+              - licenseKey
+              - pcName
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hospital:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  pcId:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/session:
+    get:
+      tags:
+      - 5. 병원 웹
+      summary: 현재 PC·병원 정보
+      description: "**요구사항**: SFR-116, SFR-146, SFR-139  \n**화면**: H-01 · 상단 바  \n**오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED"
+      operationId: get_hw_session
+      security: &id013
+      - hospitalPc: []
+      x-error-codes:
+      - PC_NOT_REGISTERED
+      - LICENSE_EXPIRED
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hospital:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  pc:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  licenseDaysLeft:
+                    type: integer
+                  shift:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      staffName:
+                        type: string
+                      alarmOn:
+                        type: boolean
+                    description: 근무 전이면 null
+                    nullable: true
+                  paused:
+                    type: boolean
+                  pausedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  serverNow:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/shifts:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 근무 시작 (담당자 이름)
+      description: "**요구사항**: SFR-117  \n**화면**: H-01 근무 시작"
+      operationId: post_hw_shifts
+      security: *id013
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                staffName:
+                  type: string
+                  maxLength: 40
+              required:
+              - staffName
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shiftId:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/shifts/current/alarm-on:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 알림 켜기 (이때부터 요청 대상)
+      description: "브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다.\n\n**요구사항**: SFR-117, SFR-136  \n**화면**: H-01 근무 시작  \n**오류 코드**: NOT_FOUND"
+      operationId: post_hw_shifts_current_alarm_on
+      security: *id013
+      x-error-codes:
+      - NOT_FOUND
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                socketId:
+                  type: string
+                  description: 이 탭의 웹소켓 id → hospital:{id}:on 방에 넣음
+              required:
+              - socketId
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shiftId:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/shifts/current/end:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 근무 종료
+      description: "이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.\n\n**요구사항**: SFR-117  \n**화면**: H-02"
+      operationId: post_hw_shifts_current_end
+      security: *id013
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/pause:
+    put:
+      tags:
+      - 5. 병원 웹
+      summary: 잠시 요청 중지 / 다시 받기
+      description: "중지하면 대기 중인 요청은 '요청 중지'로 자동 거절(통계 제외, 제외 병원 아님). 병원 전체 PC에 hospital.pause_changed. 2시간째 pause_reminder.\n\n**요구사항**: SFR-139  \n**화면**: H-02 탭  \n**상태 전이 사건**: PAUSE_AUTO_REJECT"
+      operationId: put_hw_pause
+      security: *id013
+      x-state-events:
+      - PAUSE_AUTO_REJECT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paused:
+                  type: boolean
+              required:
+              - paused
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests:
+    get:
+      tags:
+      - 5. 병원 웹
+      summary: 요청 목록 (남은 시간 짧은 순)
+      description: "우리 병원 요청만. all의 닫힌·만료·거절 건은 결과만 주고 환자 정보 칸은 null.\n\n**요구사항**: SFR-135, SFR-155, SER-014  \n**화면**: H-02 요청 목록"
+      operationId: get_hw_requests
+      security: *id013
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - open
+          - all
+          description: open = 대기·승인 (기본) / all = 오늘 처리 이력 포함
+        description: ''
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HwRequestItem'
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                  serverNow:
+                    type: string
+                    format: date-time
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}:
+    get:
+      tags:
+      - 5. 병원 웹
+      summary: 요청 상세 (열람 기록 남김)
+      description: "다른 병원 요청이면 404. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.\n\n**요구사항**: SFR-118, SFR-137, SER-014  \n**화면**: H-02 요청 상세  \n**오류 코드**: NOT_FOUND, REQUEST_CLOSED"
+      operationId: get_hw_requests__requestId
+      security: *id013
+      x-error-codes:
+      - NOT_FOUND
+      - REQUEST_CLOSED
+      parameters:
+      - &id016
+        name: requestId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HwRequestDetail'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/approve:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 승인 (+메모)
+      description: "두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName. 대원 앱에 request.approved, 같은 병원 다른 PC에 request.changed.\n\n**요구사항**: SFR-119, SFR-140, SFR-154, SFR-153, SFR-160\
+        \  \n**화면**: H-02 요청 상세  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED  \n**상태\
+        \ 전이 사건**: APPROVE"
+      operationId: post_hw_requests__requestId__approve
+      security: *id013
+      x-state-events:
+      - APPROVE
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - ALREADY_RESPONDED
+      - REQUEST_EXPIRED
+      - REQUEST_CLOSED
+      - OVER_APPROVAL_CONFIRM_REQUIRED
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memo:
+                  type: string
+                  maxLength: 50
+                  nullable: true
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+                overApprovalConfirmed:
+                  type: boolean
+                  description: 과승인 확인을 눌렀으면 true
+              required:
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - approved
+                  respondedBy:
+                    type: string
+                  version:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/reject:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 거절 (사유 필수)
+      description: "제외 병원에 추가, 통계에 들어감.\n\n**요구사항**: SFR-119, SFR-126  \n**화면**: H-02 거절 사유  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED,\
+        \ REQUEST_CLOSED, REASON_REQUIRED  \n**상태 전이 사건**: REJECT"
+      operationId: post_hw_requests__requestId__reject
+      security: *id013
+      x-state-events:
+      - REJECT
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - ALREADY_RESPONDED
+      - REQUEST_EXPIRED
+      - REQUEST_CLOSED
+      - REASON_REQUIRED
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum: &id017
+                  - er_bed
+                  - icu_or
+                  - no_specialist
+                  - equipment
+                  - overcrowded
+                  - etc
+                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                etcText:
+                  type: string
+                  maxLength: 20
+                  nullable: true
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - reason
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - rejected
+                  version:
+                    type: integer
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/cancel-approval:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 승인 취소 (사유 필수)
+      description: "approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음.\n\n**요구사항**: SFR-128, SFR-130  \n**화면**: H-02 · H-03  \n**오류 코드**: NOT_FOUND,\
+        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**: CANCEL_APPROVAL"
+      operationId: post_hw_requests__requestId__cancel_approval
+      security: *id013
+      x-state-events:
+      - CANCEL_APPROVAL
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - REASON_REQUIRED
+      - REQUEST_NOT_APPROVED
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum: *id017
+                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                etcText:
+                  type: string
+                  maxLength: 20
+                  nullable: true
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - reason
+              - version
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/incoming:
+    get:
+      tags:
+      - 5. 병원 웹
+      summary: 도착 예정 환자
+      description: "**요구사항**: SFR-121, SFR-105, SFR-158  \n**화면**: H-03 도착 예정"
+      operationId: get_hw_incoming
+      security: *id013
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HwIncoming'
+                  serverNow:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/extra-memo:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 추가 메모 (1번)
+      description: "확정 요청에만. 대원 앱에 경보 hospital.extra_memo.\n\n**요구사항**: SFR-140  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT"
+      operationId: post_hw_requests__requestId__extra_memo
+      security: *id013
+      x-error-codes:
+      - NOT_FOUND
+      - EXTRA_MEMO_USED
+      - REQUEST_CLOSED
+      - VERSION_CONFLICT
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memo:
+                  type: string
+                  maxLength: 50
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - memo
+              - version
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/confirm-arrival:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 병원에서 도착 확인
+      description: "위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital).\n\
+        \n**요구사항**: SFR-144  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR  \n**상태 전이 사건**: ARRIVE"
+      operationId: post_hw_requests__requestId__confirm_arrival
+      security: *id013
+      x-state-events:
+      - ARRIVE
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - AMBULANCE_NOT_NEAR
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - version
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    enum:
+                    - arrived
+                    - asked_paramedic
+                    description: arrived = 바로 도착 처리 / asked_paramedic = 위치 없는 건이라 대원 앱에 확인 요청
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /hw/requests/{requestId}/unacceptable:
+    post:
+      tags:
+      - 5. 병원 웹
+      summary: 도착 후 수용 불가 (10분 안)
+      description: "대원 앱에 경보 transport.unacceptable. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev).\n\n**요구사항**: SFR-158  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
+        \ VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED  \n**상태 전이 사건**: UNACCEPTABLE"
+      operationId: post_hw_requests__requestId__unacceptable
+      security: *id013
+      x-state-events:
+      - UNACCEPTABLE
+      x-error-codes:
+      - NOT_FOUND
+      - INVALID_TRANSITION
+      - VERSION_REQUIRED
+      - VERSION_CONFLICT
+      - WINDOW_PASSED
+      - REASON_REQUIRED
+      parameters:
+      - *id016
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum: *id017
+                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                etcText:
+                  type: string
+                  maxLength: 20
+                  nullable: true
+                version:
+                  type: integer
+                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
+              required:
+              - reason
+              - version
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/auth/login:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 관리자 로그인 (비밀번호 + OTP)
+      description: "OTP를 아직 연결하지 않은 관리자(초기 데이터)는 403 OTP_SETUP_REQUIRED + details{setupToken(5분), otpauthUrl} → QR을 보여주고 /admin/auth/otp/enroll.\n\n**요구사항**: SFR-082, SFR-152  \n**화면**: A-01 로그인  \n**오류\
+        \ 코드**: INVALID_CREDENTIALS, INVALID_OTP, ACCOUNT_LOCKED, OTP_SETUP_REQUIRED, ORIGIN_NOT_ALLOWED"
+      operationId: post_admin_auth_login
+      security: *id001
+      x-error-codes:
+      - INVALID_CREDENTIALS
+      - INVALID_OTP
+      - ACCOUNT_LOCKED
+      - OTP_SETUP_REQUIRED
+      - ORIGIN_NOT_ALLOWED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                loginId:
+                  type: string
+                password:
+                  type: string
+                otp:
+                  type: string
+                  pattern: ^\d{6}$
+                  description: OTP를 연결한 뒤부터 필수
+              required:
+              - loginId
+              - password
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/auth/otp/enroll:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 첫 로그인 OTP 앱 연결
+      description: "성공하면 otp_enrolled_at 기록 후 바로 로그인.\n\n**요구사항**: SFR-152  \n**화면**: A-01 로그인  \n**오류 코드**: INVALID_OTP, TOKEN_EXPIRED"
+      operationId: post_admin_auth_otp_enroll
+      security: *id001
+      x-error-codes:
+      - INVALID_OTP
+      - TOKEN_EXPIRED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                setupToken:
+                  type: string
+                otp:
+                  type: string
+                  pattern: ^\d{6}$
+                  description: OTP 앱에 뜬 첫 코드
+              required:
+              - setupToken
+              - otp
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/signups:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 가입 승인 대기 목록
+      description: "**요구사항**: SFR-083  \n**화면**: A-01 가입 승인"
+      operationId: get_admin_signups
+      security: &id018
+      - adminAuth: []
+      parameters:
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SignupItem'
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/signups/{id}/photo:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 공무원증 사진 보기 (열람 기록)
+      description: "응답 image/jpeg, `Cache-Control: no-store`. 작업 이력에 열람 1건.\n\n**요구사항**: SFR-083, DAR-012, SER-015  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, PHOTO_DELETED"
+      operationId: get_admin_signups__id__photo
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      - PHOTO_DELETED
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 성공
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/signups/{id}/approve:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 가입 승인
+      description: "사진 즉시 삭제, 대원에게 account.signup_result + 푸시.\n\n**요구사항**: SFR-083, SFR-091  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND"
+      operationId: post_admin_signups__id__approve
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/signups/{id}/reject:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 가입 반려
+      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청.\n\n**요구사항**: SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      operationId: post_admin_signups__id__reject
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      - REASON_REQUIRED
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum:
+                  - photo_unclear
+                  - info_mismatch
+                  - agency_unverified
+                  - etc
+                  description: 사진 불명확 · 정보 불일치 · 소속 확인 불가 · 기타
+                etcText:
+                  type: string
+                  maxLength: 40
+                  nullable: true
+              required:
+              - reason
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/paramedics:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 대원 계정 검색
+      description: "**요구사항**: SFR-151  \n**화면**: A-01 대원 계정"
+      operationId: get_admin_paramedics
+      security: *id018
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        agencyName:
+                          type: string
+                        safetyCenter:
+                          type: string
+                        status:
+                          type: string
+                        hasActiveTransport:
+                          type: boolean
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/paramedics/{id}/suspend:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 대원 계정 정지 (즉시 로그아웃)
+      description: "모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended).\n\n**요구사항**: SFR-151, SER-016  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED\
+        \  \n**상태 전이 사건**: CANCEL"
+      operationId: post_admin_paramedics__id__suspend
+      security: *id018
+      x-state-events:
+      - CANCEL
+      x-error-codes:
+      - NOT_FOUND
+      - ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum:
+                  - retired
+                  - phone_lost
+                  - misuse
+                  - etc
+                  description: 퇴직 · 폰 분실 · 부정 사용 · 기타
+                etcText:
+                  type: string
+                  nullable: true
+                confirmCancelActive:
+                  type: boolean
+              required:
+              - reason
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/paramedics/{id}/unsuspend:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 정지 해제
+      description: "**요구사항**: SFR-151  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND"
+      operationId: post_admin_paramedics__id__unsuspend
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/paramedics/{id}/reset-password:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 비밀번호 초기화
+      description: "**요구사항**: SFR-021  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND"
+      operationId: post_admin_paramedics__id__reset_password
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tempPassword:
+                    type: string
+                    description: 한 번만 표시
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 병원 검색 (공공 데이터)
+      description: "**요구사항**: SFR-123  \n**화면**: A-03 병원 관리"
+      operationId: get_admin_hospitals
+      security: *id018
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ''
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminHospital'
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals/{id}/account:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 병원 계정 + 라이선스 키 발급
+      description: "**요구사항**: SFR-123, COR-013  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, ACCOUNT_EXISTS"
+      operationId: post_admin_hospitals__id__account
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      - ACCOUNT_EXISTS
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseKey:
+                    type: string
+                    description: 전체 키는 이 응답에서 한 번만
+                  expiresAt:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals/{id}/license-keys:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 키 재발급 (사유)
+      description: "이전 키 폐기 → 그 키로 등록한 PC 전부 pc.revoked{key_revoked}.\n\n**요구사항**: SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      operationId: post_admin_hospitals__id__license_keys
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      - REASON_REQUIRED
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 60
+              required:
+              - reason
+      responses:
+        '201':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenseKey:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/license-keys/{id}/revoke:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 키 폐기 (사유)
+      description: "키와 등록 PC 전부 즉시 무효, pc.revoked{key_revoked}. 작업 이력에 사유.\n\n**요구사항**: SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      operationId: post_admin_license_keys__id__revoke
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      - REASON_REQUIRED
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 60
+              required:
+              - reason
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals/{id}/suspend:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 병원 계정 정지 (모든 PC 차단)
+      description: "pc.revoked{account_suspended}. 대기 요청은 요청 대상에서 빠짐.\n\n**요구사항**: SFR-123  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      operationId: post_admin_hospitals__id__suspend
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals/{id}/pcs:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 등록 PC 목록
+      description: "**요구사항**: SFR-147  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      operationId: get_admin_hospitals__id__pcs
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    registeredAt:
+                      type: string
+                      format: date-time
+                    lastUsedAt:
+                      type: string
+                      format: date-time
+                    online:
+                      type: boolean
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/pcs/{id}:
+    delete:
+      tags:
+      - 6. 관리자 웹
+      summary: PC 해제
+      description: "그 PC에 pc.revoked{pc_released}.\n\n**요구사항**: SFR-147  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      operationId: delete_admin_pcs__id
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/hospitals/{id}/entrance:
+    put:
+      tags:
+      - 6. 관리자 웹
+      summary: 응급실 입구 좌표 지정
+      description: "**요구사항**: SFR-145  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      operationId: put_admin_hospitals__id__entrance
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LatLng'
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/notifications:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 관리자 알림
+      description: "**요구사항**: SFR-100, SFR-148  \n**화면**: A-02 모니터링"
+      operationId: get_admin_notifications
+      security: *id018
+      parameters:
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        kind:
+                          type: string
+                          enum:
+                          - collect_fail
+                          - signup
+                          - pc_change
+                          - key_expiring
+                          - odd_pc
+                        text:
+                          type: string
+                        occurrences:
+                          type: integer
+                        lastAt:
+                          type: string
+                          format: date-time
+                        read:
+                          type: boolean
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                  unread:
+                    type: integer
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/notifications/{id}/read:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 알림 읽음
+      description: "**요구사항**: SFR-100  \n**화면**: A-02 모니터링  \n**오류 코드**: NOT_FOUND"
+      operationId: post_admin_notifications__id__read
+      security: *id018
+      x-error-codes:
+      - NOT_FOUND
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: 성공 (본문 없음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/audit-logs:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 작업 이력 (수정·삭제 불가)
+      description: "**요구사항**: SFR-091  \n**화면**: A-02 모니터링"
+      operationId: get_admin_audit_logs
+      security: *id018
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: ''
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: ''
+      - *id014
+      - *id015
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                        admin:
+                          type: string
+                        action:
+                          type: string
+                        target:
+                          type: string
+                        reason:
+                          type: string
+                          nullable: true
+                  nextCursor:
+                    type: string
+                    description: 다음 페이지 커서, 마지막이면 null
+                    nullable: true
+                required:
+                - items
+                - nextCursor
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/stats/hospitals:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 병원 응답 통계
+      description: "**요구사항**: SFR-106, SFR-126  \n**화면**: A-02 모니터링"
+      operationId: get_admin_stats_hospitals
+      security: *id018
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          enum:
+          - 7
+          - 30
+        description: ''
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avgRequestToDepartSec:
+                    type: integer
+                    description: 핵심 지표
+                  hospitals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HospitalStat'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: 기계용 오류 코드 (오류 코드표)
+            message:
+              type: string
+              description: 사람이 읽는 한국어 메시지
+            details:
+              type: object
+              properties: {}
+              description: 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName},
+                OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[]
+              nullable: true
+          required:
+          - code
+          - message
+      required:
+      - error
+    LatLng:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+      required:
+      - lat
+      - lng
+    Tokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: 15분 유효 JWT
+        refreshToken:
+          type: string
+          description: 30일 유효, 서버 폐기 가능 (SER-016)
+    Me:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        rank:
+          type: string
+        agency:
+          type: string
+          description: 소방서 이름
+        safetyCenter:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+          - suspended
+        rejectReason:
+          type: string
+          enum:
+          - photo_unclear
+          - info_mismatch
+          - agency_unverified
+          - etc
+          - photo_expired
+          description: 반려 사유 (rejected일 때)
+          nullable: true
+        appliedAt:
+          type: string
+          format: date-time
+          description: 가입 신청(재신청) 시각
+        mustChangePassword:
+          type: boolean
+        hasPin:
+          type: boolean
+        teamId:
+          type: integer
+          description: 근무 중인 팀, 없으면 null
+          nullable: true
+        hasActiveTransport:
+          type: boolean
+          description: 팀에 진행 중 이송 (앱 잠금 건너뛰기 판단, SFR-150)
+    Member:
+      type: object
+      properties:
+        paramedicId:
+          type: integer
+        name:
+          type: string
+        rank:
+          type: string
+        role:
+          type: string
+          enum:
+          - driver
+          - care
+        isMe:
+          type: boolean
+    Team:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          description: 4자리 팀 코드
+        qrToken:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        maxMembers:
+          type: integer
+          example: 4
+    OnDutyParamedic:
+      type: object
+      properties:
+        paramedicId:
+          type: integer
+        name:
+          type: string
+        rank:
+          type: string
+        safetyCenter:
+          type: string
+        employeeNoTail:
+          type: string
+          description: 사번 끝 4자리 (동명이인 구분)
+        myMemo:
+          type: string
+          description: 나만 보는 메모 (SFR-143)
+          nullable: true
+        onDuty:
+          type: boolean
+        inTeam:
+          type: boolean
+          description: 이미 다른 팀 → 초대 불가
+        inviteStatus:
+          type: string
+          enum:
+          - none
+          - sent
+          - accepted
+    Assessment:
+      type: object
+      properties:
+        chiefComplaint:
+          type: string
+          description: 주 증상 (직접 입력, 필수)
+          maxLength: 100
+        symptomCode:
+          type: string
+          description: 증상 버튼 코드 S01~S16, 안 골랐으면 null
+          pattern: ^S\d{2}$
+          nullable: true
+        sex:
+          type: string
+          enum:
+          - M
+          - F
+          - U
+          description: U = 확인 불가
+        ageBand:
+          type: string
+          description: '예: 60s, under1, 1-14, 15-19, 90plus'
+        consciousness:
+          type: string
+          enum:
+          - alert
+          - verbal
+          - pain
+          - unresponsive
+          - unknown
+        bp:
+          type: string
+          description: '예: 160/95, 또는 unknown'
+        pulse:
+          type: integer
+          nullable: true
+        resp:
+          type: integer
+          nullable: true
+        spo2:
+          type: integer
+          nullable: true
+        painSite:
+          type: string
+          nullable: true
+          maxLength: 30
+        painScore:
+          type: integer
+          minimum: 0
+          maximum: 10
+          nullable: true
+        onset:
+          type: string
+          nullable: true
+        trauma:
+          type: string
+          enum:
+          - 'yes'
+          - 'no'
+          - unknown
+        traumaCause:
+          type: string
+          enum:
+          - traffic
+          - fall_high
+          - fall
+          - penetrating
+          - burn
+          - etc
+          nullable: true
+        history:
+          type: string
+          nullable: true
+        temp:
+          type: number
+          nullable: true
+        glucose:
+          type: integer
+          nullable: true
+        ktas:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+        unknownFields:
+          type: array
+          items:
+            type: string
+          description: '''확인 불가''로 보낸 항목 이름'
+      required:
+      - chiefComplaint
+      description: 환자 평가 (SFR-108). 이름·주민번호·연락처 필드는 없음 (SER-012)
+    Round:
+      type: object
+      properties:
+        roundNo:
+          type: integer
+        kind:
+          type: string
+          enum:
+          - first
+          - expand
+          - re_request
+          - dest_change
+        radiusKm:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 30
+          - 40
+        sentAt:
+          type: string
+          format: date-time
+        respondUntil:
+          type: string
+          format: date-time
+          description: sentAt + 2분 (서버 시각)
+        approvalValidUntil:
+          type: string
+          format: date-time
+          description: sentAt + 5분
+        targetCount:
+          type: integer
+          description: 요청을 보낸 병원 수
+        deliveredCount:
+          type: integer
+          description: '''받았음''을 돌려준 병원 수'
+        deliveryFinal:
+          type: boolean
+          description: 5초 판정 끝
+    AppHospitalRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        hospitalId:
+          type: integer
+        hospitalName:
+          type: string
+        lat:
+          type: number
+          description: 지도 표시 (SFR-149)
+        lng:
+          type: number
+        status:
+          type: string
+          enum: &id019
+          - waiting
+          - delivery_failed
+          - approved
+          - rejected
+          - expired
+          - closed
+          - confirmed
+          - arrived
+          - unacceptable
+        closeReason:
+          type: string
+          enum: &id020
+          - other_hospital
+          - fallback
+          - cancelled
+          - expired_approval
+          - approval_cancelled
+          - dest_changed
+          nullable: true
+        etaMin:
+          type: integer
+        etaSource:
+          type: string
+          enum:
+          - straight
+          - route
+          description: 직선 추정 → 길찾기로 갱신 (SFR-129)
+        erBeds:
+          type: string
+          description: '예: 4/10'
+        memo:
+          type: string
+          description: 병원 승인 메모
+          nullable: true
+        extraMemo:
+          type: string
+          description: 확정 뒤 추가 메모 (SFR-140)
+          nullable: true
+        reason:
+          type: string
+          enum: *id017
+          description: 거절·승인 취소 사유
+          nullable: true
+        reasonText:
+          type: string
+          description: 기타 사유 글
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        isClosest:
+          type: boolean
+          description: 승인 병원 중 가장 가까움
+        prevApprovedRecheck:
+          type: boolean
+          description: 직전 승인 · 재확인 (SFR-156)
+        version:
+          type: integer
+          description: hospital_request.version
+      description: 대원 앱에서 보는 병원 요청 1건 (환자 정보 없음)
+    Transport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - requesting
+          - fallback
+          - phone_check
+          - moving
+          - arrived
+          - cancelled
+          description: 상태 전이표 v0.2
+        version:
+          type: integer
+          description: transport 행이 바뀔 때마다 +1. 바꾸는 요청에 같이 보냄 (SFR-160)
+        serverNow:
+          type: string
+          format: date-time
+          description: 응답 시점 서버 시각 → 남은 시간 계산 기준 (SFR-110)
+        requestRadiusKm:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 30
+          - 40
+        fallbackRadiusKm:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 30
+          - 40
+        fallbackReason:
+          type: string
+          enum:
+          - no_target
+          - offline
+          - all_rejected
+          - expired_no_approval
+          - none_delivered
+          - approvals_cancelled
+          - user
+          - approval_window
+          - phone_rejected_last
+          - phone_dismissed
+          nullable: true
+        currentRound:
+          allOf:
+          - $ref: '#/components/schemas/Round'
+          nullable: true
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppHospitalRequest'
+          description: 현재 회차 + 확정 요청. 승인은 승인 시각 순 (SFR-110)
+        phoneTarget:
+          type: object
+          properties:
+            hospitalId:
+              type: integer
+            name:
+              type: string
+            erPhone:
+              type: string
+          description: 전화 확인 중인 병원 (phone_check일 때)
+          nullable: true
+        confirmedHospital:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            memo:
+              type: string
+              nullable: true
+            extraMemo:
+              type: string
+              nullable: true
+            entrance:
+              $ref: '#/components/schemas/LatLng'
+            requestStatus:
+              type: string
+              enum: *id019
+            closeReason:
+              type: string
+              enum: *id020
+              nullable: true
+          description: 이동 중 목적지. requestStatus=closed·closeReason=approval_cancelled면 '다시 요청' 버튼
+          nullable: true
+        canReRequest:
+          type: boolean
+          description: 확정 병원이 승인 취소함 → 다시 요청 가능 (부록 A20)
+        destinationChangeUsed:
+          type: boolean
+          description: 목적지 변경 1번 사용 (SFR-077)
+        navDeviceId:
+          type: string
+          description: 경로 안내 담당 단말
+          nullable: true
+        etaMin:
+          type: integer
+          description: 서버가 1분마다 다시 계산
+          nullable: true
+        departedAt:
+          type: string
+          format: date-time
+          description: 처음 출발 시각 (SFR-036)
+          nullable: true
+        lastSentAssessmentSeq:
+          type: integer
+        pendingChanges:
+          type: integer
+          description: '''변경 사항 보내기(n)''의 n'
+        excludedHospitalIds:
+          type: array
+          items:
+            type: integer
+        locationConsent:
+          type: boolean
+        address:
+          type: string
+          description: 위치 미동의 건 주소
+          nullable: true
+        offlineCreated:
+          type: boolean
+          description: 통신 두절 중 만든 건
+        createdAt:
+          type: string
+          format: date-time
+    HospitalCard:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        lat:
+          type: number
+          description: 지도 표시 (SFR-027)
+        lng:
+          type: number
+        address:
+          type: string
+        distanceKm:
+          type: number
+        etaMin:
+          type: integer
+          nullable: true
+        beds:
+          type: object
+          properties:
+            er:
+              type: string
+              description: '가용/전체, 예: 2/8'
+            icu:
+              type: string
+            or:
+              type: string
+        bedsSourceTime:
+          type: string
+          format: date-time
+          description: 공공 데이터 기준 시각
+        capabilityCount:
+          type: object
+          properties:
+            available:
+              type: integer
+            total:
+              type: integer
+          description: 중증질환 진료가능 항목 수 (SFR-002)
+        inRegion:
+          type: boolean
+          description: false면 '병상 정보 없음'
+        erPhone:
+          type: string
+        rank:
+          type: integer
+          description: 예비 추천 순위 1~5, 지도만이면 null
+          nullable: true
+        excluded:
+          type: boolean
+          description: 이번 이송 제외 병원
+    HospitalDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        address:
+          type: string
+        departments:
+          type: array
+          items:
+            type: string
+        erPhone:
+          type: string
+        mainPhone:
+          type: string
+        beds:
+          type: object
+          properties:
+            er:
+              type: object
+              properties:
+                avail:
+                  type: integer
+                total:
+                  type: integer
+            icu:
+              type: object
+              properties:
+                avail:
+                  type: integer
+                total:
+                  type: integer
+            or:
+              type: object
+              properties:
+                avail:
+                  type: integer
+                total:
+                  type: integer
+        bedsSourceTime:
+          type: string
+          format: date-time
+        capabilities:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 공공 데이터 표기 그대로
+              available:
+                type: boolean
+    HwRequestItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+          description: '예: R-102'
+        status:
+          type: string
+          enum: *id019
+        closeReason:
+          type: string
+          enum: *id020
+          nullable: true
+        chiefComplaint:
+          type: string
+          description: 열 수 있는 요청만. 닫힌 요청은 null (SER-014)
+          nullable: true
+        symptomCode:
+          type: string
+          nullable: true
+        etaMin:
+          type: integer
+          nullable: true
+        etaSource:
+          type: string
+          enum:
+          - straight
+          - route
+        respondUntil:
+          type: string
+          format: date-time
+        abnormalCount:
+          type: integer
+          description: 정상 범위 밖 항목 수
+          nullable: true
+        prevApprovedRecheck:
+          type: boolean
+        respondedBy:
+          type: string
+          nullable: true
+        updatedFields:
+          type: array
+          items:
+            type: string
+          description: 대기·승인 중 바뀐 항목 (SFR-105)
+        version:
+          type: integer
+      description: 병원 웹 요청 목록 1행 (구급대 소속은 표시하지 않음, D-98)
+    HwRequestDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+          enum: *id019
+        respondUntil:
+          type: string
+          format: date-time
+        serverNow:
+          type: string
+          format: date-time
+        assessment:
+          $ref: '#/components/schemas/Assessment'
+        abnormalFields:
+          type: array
+          items:
+            type: string
+          description: 빨간색 강조 대상 (부록 E)
+        updatedFields:
+          type: array
+          items:
+            type: string
+        etaMin:
+          type: integer
+        etaSource:
+          type: string
+          enum:
+          - straight
+          - route
+        prevApprovedRecheck:
+          type: boolean
+        ourHospital:
+          type: object
+          properties:
+            capability:
+              type: object
+              properties:
+                name:
+                  type: string
+                available:
+                  type: boolean
+              description: 증상을 골랐을 때만
+              nullable: true
+            beds:
+              type: object
+              properties:
+                er:
+                  type: string
+                icu:
+                  type: string
+                or:
+                  type: string
+        validApprovals:
+          type: integer
+          description: 우리 병원의 지금 유효한 승인 수 (과승인 경고용)
+        respondedBy:
+          type: string
+          nullable: true
+        memo:
+          type: string
+          nullable: true
+    HwIncoming:
+      type: object
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        summary:
+          type: string
+          description: '예: 남·60대 · S03 두통 (도착 후 1시간까지)'
+          nullable: true
+        status:
+          type: string
+          enum:
+          - confirmed
+          - arrived
+          - unacceptable
+        version:
+          type: integer
+        etaMin:
+          type: integer
+          nullable: true
+        hasLocation:
+          type: boolean
+          description: 위치 동의 건 → 200m 안에서만 도착 확인
+        changedFields:
+          type: array
+          items:
+            type: string
+        arrivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        canConfirmArrival:
+          type: boolean
+          description: 위치 있는 건은 입구 200m 안일 때만, 위치 없는 건은 항상
+        canMarkUnacceptable:
+          type: boolean
+          description: 도착 후 10분 안
+        extraMemoUsed:
+          type: boolean
+    SignupItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        rank:
+          type: string
+        agencyCode:
+          type: string
+        agencyName:
+          type: string
+        safetyCenter:
+          type: string
+        employeeNo:
+          type: string
+        consentAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        resubmitted:
+          type: boolean
+          description: 반려 후 재신청
+    AdminHospital:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        accountActive:
+          type: boolean
+        pcCount:
+          type: integer
+        pcLimit:
+          type: integer
+          example: 3
+        license:
+          type: object
+          properties:
+            id:
+              type: integer
+            prefix:
+              type: string
+              description: 앞 4자리
+            expiresAt:
+              type: string
+              format: date-time
+            daysLeft:
+              type: integer
+          nullable: true
+        entrance:
+          $ref: '#/components/schemas/LatLng'
+    HospitalStat:
+      type: object
+      properties:
+        hospitalId:
+          type: integer
+        name:
+          type: string
+        responseRate:
+          type: number
+        avgResponseSec:
+          type: integer
+        topRejectReason:
+          type: string
+          enum: *id017
+          nullable: true
+        approvalCancelRate:
+          type: number
+        unacceptableCount:
+          type: integer
+        avgRequestToFirstApprovalSec:
+          type: integer
+        sampleTooSmall:
+          type: boolean
+          description: 요청 10건 미만
+        rejectSpike:
+          type: boolean
+          description: 최근 7일 거절률이 30일보다 20%p 이상 높음
+  securitySchemes:
+    paramedicAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 대원 accessToken
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 관리자 accessToken (OTP 로그인)
+    hospitalPc:
+      type: apiKey
+      in: cookie
+      name: st_pc
+      description: 라이선스 키로 등록한 PC 토큰 (httpOnly · SameSite=Strict)
