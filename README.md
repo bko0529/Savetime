@@ -4,15 +4,16 @@
 
 | 파트 | 기술 | 담당 | 폴더 |
 |---|---|---|---|
-| 서버 · PM | Node.js / Express · PostgreSQL · Socket.IO | 백강욱 | `server/` |
+| 서버 · PM | Node.js 24 / Express 5 · PostgreSQL 16 · Socket.IO 4 | 백강욱 | `server/` |
 | 구급대원 앱 | React Native (Android + iOS) | 진아 | `app/` |
-| 병원 웹 + 관리자 웹 | Next.js | 승언 | `web/` |
+| 병원 웹 + 관리자 웹 | Next.js 16 | 승언 | `web/` |
 | 공통 타입 | TypeScript | 모두 | `shared/` |
 
 ## 폴더 구조
 ```
 savetime/
-├─ docs/design-v0.2/        설계 문서 (먼저 읽기)
+├─ docs/기술정의서.md        쓰는 기술·버전·이유 (먼저 읽기)
+├─ docs/design-v0.2/        설계 문서
 │   ├─ 1_상태전이표.md        이송 건 6개 상태 · 병원 요청 9개 상태
 │   ├─ 2_DB설계_설명.md       테이블 36개 설명
 │   ├─ 3_실시간통신설계.md     Socket.IO 이벤트 · 타이머
