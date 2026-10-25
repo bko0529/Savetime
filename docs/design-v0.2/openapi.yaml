@@ -4051,7 +4051,7 @@ components:
           nullable: true
         hasActiveTransport:
           type: boolean
-          description: 팀에 진행 중 이송 (앱 잠금 건너뛰기 판단, SFR-150)
+          description: 팀에 진행 중 이송 (근무 종료 확인 판단, SFR-113)
     Member:
       type: object
       properties:
