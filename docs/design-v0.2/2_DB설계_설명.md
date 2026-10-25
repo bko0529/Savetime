@@ -1,7 +1,8 @@
-# 세이브타임 DB 설계 (ERD) 설명 v0.2
+# 세이브타임 DB 설계 (ERD) 설명 v0.3
 
-- DB: PostgreSQL 16 · 테이블 34개 · `schema.sql` 한 파일로 생성 (실제 PostgreSQL 16에서 생성·제약 동작 확인 완료)
-- 기준: 요구사항분석서 v0.115 · 상태 전이표 v0.2
+- DB: PostgreSQL 16 · 테이블 39개 (v0.3에서 anonymous_route · rejection_record · feature_flag 추가) · `schema.sql` 한 파일로 생성 (실제 PostgreSQL 16에서 생성·제약 동작 확인 완료)
+- 기준: 요구사항분석서 v1.4 · 상태 전이표 v0.2
+- v0.3 변경 (CR-004): `paramedic.pin_*` 삭제(D-110) · `hospital.grade`·`emcls_code`, `transport.requested_grade`(D-120) · `transport.distance_m`, `transport_stat.distance_m`(D-113) · 거절 사유 `er_bed·or_room·ward·icu·no_specialist·equipment·etc`(D-115)
 - 그림: Figma "06 DB 설계" 페이지
 
 ## 실행 방법
@@ -24,7 +25,7 @@ psql -d savetime -f schema.sql
 | | team_invite | 목록 초대 (5분 만료) | SFR-159 |
 | | paramedic_memo | 나만 보는 한 줄 메모 | SFR-143 |
 | | team_draft | 팀이 같이 고치는 작성 중 환자 정보 (서버에 1개) | SFR-114 |
-| C 병원 | hospital | 병원 기본 정보, 응급실 입구 좌표, 잠시 요청 중지 | SFR-145, 139 |
+| C 병원 | hospital | 병원 기본 정보, 응급실 입구 좌표, 잠시 요청 중지, 병원 등급(1·2·3) | SFR-145, 139, 162 |
 | | license_key / hospital_pc | 라이선스 키, 등록 PC (병원당 3대) | SFR-116, 123, 146, 147 |
 | | hospital_shift | 근무 담당자 이름, 알림 켜기 | SFR-117 |
 | | bed_current | 병상 캐시 (병원당 최신 1행, 3분마다 갱신) | QUR-008, SFR-007 |
@@ -38,13 +39,16 @@ psql -d savetime -f schema.sql
 | | hospital_request | 병원 요청: 회차 하나에서 병원 한 곳에 보낸 요청 | 부록 A-2 |
 | | excluded_hospital | 이번 이송의 제외 병원 (규칙 하나로 계산) | SFR-086 |
 | | phone_check | 예비 흐름 전화 확인 결과 | SFR-032~034 |
-| | location_point | 이송 중 위치. 이송이 끝나면 바로 삭제 | SFR-037, SER-002 |
+| | location_point | 이송 중 위치. 이송이 끝나면 anonymous_route로 옮기고 바로 삭제 | SFR-037, SER-002 |
+| | anonymous_route | 익명 이송 경로 (대원·팀·이송 건 연결 없음, 3년 초안) | SFR-041, DAR-014 |
 | | idempotency_key | 같은 확정을 여러 번 보내도 한 번만 처리 | SFR-111 |
 | E 기록·통계 | request_view_log | 병원 열람 기록 | SFR-137 |
-| | response_stat / transport_stat | 응답·거절·소요시간 통계 (대원 계정과 연결 안 함) | SFR-106, 126, DAR-004 |
+| | response_stat / transport_stat | 응답·거절·소요시간·이동 거리 통계 (대원 계정과 연결 안 함) | SFR-106, 126, DAR-004 |
+| | rejection_record | 모든 출처의 거절 기록 (병원 웹·요청 중지·전화 확인·승인 취소·수용 불가) | SFR-126, D-115 |
 | F 관리자 | admin | 관리자 계정 (OTP) | SFR-082, 152 |
 | | admin_audit_log | 작업 이력. DB 규칙으로 수정·삭제 불가 | SFR-091 |
 | | admin_notification | 관리자 알림 (30분 안 같은 종류는 횟수만 증가) | SFR-100 |
+| H 운영 | feature_flag | 기능 토글 (journal_ai · voice_input · hospital_grade) | QUR-013 |
 | G 실시간 | event_log | 보낸 실시간 이벤트 기록 (재연결 때 놓친 것 다시 보내기, 24시간 보관) | 1-4 실시간 통신 설계 |
 
 ## DB가 직접 막아주는 규칙 (테스트 완료)
@@ -81,5 +85,6 @@ psql -d savetime -f schema.sql
 
 - 2분 만료, 5분 승인 해제: `request_round`의 시각과 서버 타이머로 처리
 - 두 PC 동시 응답, 동시 확정: `version` 값을 비교해서 먼저 온 것만 반영
-- 원본 위치 삭제: 도착·취소 때 `location_point` 삭제, `transport.origin_*`은 NULL로
+- 위치 익명화: 도착·취소 때 같은 트랜잭션에서 `location_point` → `anonymous_route` 1행(좌표 열·거리)으로 옮기고 삭제, `transport.distance_m` 기록, `transport.origin_*`은 NULL로 (SER-002)
+- 거절 기록: 병원 웹 거절·요청 중지·전화 확인 거절·승인 취소·수용 불가 때마다 `rejection_record` 1행 (D-115)
 - 환자 평가 보관 기간이 지나면 `assessment` 항목 삭제 (통계 행은 남김)
