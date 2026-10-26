@@ -1,17 +1,20 @@
 openapi: 3.0.3
 info:
   title: 세이브타임 API
-  version: 0.2.0
-  description: '세이브타임 서버 API v0.2 (Node.js/Express). 요구사항분석서 v0.115 · 상태 전이표 v0.2 · DB 스키마 v0.2 · 실시간 통신 설계 v0.2 기준.
+  version: 0.3.0
+  description: '세이브타임 서버 API v0.3 (Node.js/Express). 요구사항분석서 v1.4 · 상태 전이표 v0.2 ·
+    DB 스키마 v0.2 · 실시간 통신 설계 v0.2 기준.
 
 
     **공통 규칙**
 
     - 기본 주소: `/api/v1` · 형식: JSON (가입 신청·재신청만 multipart)
 
-    - 시간: ISO 8601, 모두 **서버 시각**. 모든 응답 헤더에 `X-Server-Now`, 시간이 중요한 응답 본문에는 `serverNow`. 2분·5분은 서버 수신 시각으로 판정
+    - 시간: ISO 8601, 모두 **서버 시각**. 모든 응답 헤더에 `X-Server-Now`, 시간이 중요한 응답 본문에는 `serverNow`.
+    2분·5분은 서버 수신 시각으로 판정
 
-    - 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(30일, 폐기 가능) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
+    - 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(근무 종료
+    때 폐기, 최대 14시간) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
 
     - **계정 상태는 요청마다 확인** (정지·탈퇴·PC 해제 후 10초 안 모든 요청 거부, SER-016). 토큰이 살아 있어도 401·403
 
@@ -19,7 +22,8 @@ info:
 
     - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
 
-    - 상태 변경: 상태 전이표 v0.2의 전이 함수를 거친다. 사용자 요청에는 `version` 필수(SFR-160). 검사 순서 = 표 → 상태 → 시간·사유 → 버전. 실패하면 409와 `error.details.current`(최신 상태)
+    - 상태 변경: 상태 전이표 v0.2의 전이 함수를 거친다. 사용자 요청에는 `version` 필수(SFR-160). 검사 순서 = 표 →
+    상태 → 시간·사유 → 버전. 실패하면 409와 `error.details.current`(최신 상태)
 
     - 확정은 `Idempotency-Key` 헤더, 이송 건 생성은 앱 UUID, 오프라인 기록은 `clientRecordId`로 중복 방지
 
@@ -29,7 +33,8 @@ info:
 
     - 각 API의 `x-state-events`는 거치는 상태 전이 사건 이름 (stateMachine.ts)
 
-    - 실시간 알림(웹소켓 이벤트)은 실시간 통신 설계 v0.2·events.ts에서 정의. 이벤트에는 환자 정보가 없으니 받으면 이 API로 상세를 가져온다
+    - 실시간 알림(웹소켓 이벤트)은 실시간 통신 설계 v0.2·events.ts에서 정의. 이벤트에는 환자 정보가 없으니 받으면 이 API로
+    상세를 가져온다
 
     '
 servers:
@@ -84,7 +89,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 가입 신청 (공무원증 사진)
-      description: "관리자 알림 '신규 가입 신청'이 생긴다.\n\n**요구사항**: SFR-017, SER-015, DAR-012  \n**화면**: S-02 가입 신청  \n**오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED"
+      description: "관리자 알림 '신규 가입 신청'이 생긴다.\n\n**요구사항**: SFR-017, SER-015, DAR-012\
+        \  \n**화면**: S-02 가입 신청  \n**오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND,\
+        \ LOGIN_ID_TAKEN, CONSENT_REQUIRED"
       operationId: post_auth_signup
       security: *id001
       x-error-codes:
@@ -156,7 +163,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 반려 후 다시 신청
-      description: "me.status가 rejected일 때만. 반려 사유(me.rejectReason)를 보고 고쳐서 다시 낸다 → pending.\n\n**요구사항**: SFR-083, SFR-017  \n**화면**: S-02 승인 대기  \n**오류 코드**: SIGNUP_NOT_REJECTED, CONSENT_REQUIRED, AGENCY_NOT_FOUND"
+      description: "me.status가 rejected일 때만. 반려 사유(me.rejectReason)를 보고 고쳐서 다시 낸다\
+        \ → pending.\n\n**요구사항**: SFR-083, SFR-017  \n**화면**: S-02 승인 대기  \n**오류 코드**:\
+        \ SIGNUP_NOT_REJECTED, CONSENT_REQUIRED, AGENCY_NOT_FOUND"
       operationId: put_me_signup
       security: &id009
       - paramedicAuth: []
@@ -204,8 +213,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 로그인
-      description: "5번 틀리면 10분 잠금. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려' 화면만 연다 (SFR-022·083).\n\n**요구사항**: SFR-018, SER-011  \n**화면**: S-02 로그인  \n**오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED,\
-        \ ACCOUNT_SUSPENDED"
+      description: "5번 틀리면 10분 잠금. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려'\
+        \ 화면만 연다 (SFR-022·083).\n\n**요구사항**: SFR-018, SER-011  \n**화면**: S-02 로그인\
+        \  \n**오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_SUSPENDED"
       operationId: post_auth_login
       security: *id001
       x-error-codes:
@@ -253,7 +263,8 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 토큰 재발급
-      description: "**요구사항**: SER-016  \n**화면**: (모든 화면)  \n**오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED, ACCOUNT_SUSPENDED"
+      description: "**요구사항**: SER-016  \n**화면**: (모든 화면)  \n**오류 코드**: TOKEN_REVOKED,\
+        \ TOKEN_EXPIRED, ACCOUNT_SUSPENDED"
       operationId: post_auth_refresh
       security: *id001
       x-error-codes:
@@ -289,8 +300,10 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 로그아웃 (팀에서 빠짐)
-      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport. 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝낸다.\n\n**요구사항**: SFR-070, SFR-113  \n**화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED\
-        \  \n**상태 전이 사건**: CANCEL"
+      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport.\
+        \ 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝낸다.\n\n**요구사항**: SFR-070, SFR-113  \n\
+        **화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이\
+        \ 사건**: CANCEL"
       operationId: post_auth_logout
       security: *id009
       x-state-events:
@@ -339,8 +352,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 회원 탈퇴
-      description: "탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인을 받고, 마지막 1명이면 이송 건을 취소(withdrawal)로 끝낸 뒤 계정·프로필 즉시 삭제.\n\n**요구사항**: SFR-071, SFR-113  \n**화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n\
-        **상태 전이 사건**: CANCEL"
+      description: "탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인을 받고, 마지막 1명이면 이송 건을 취소(withdrawal)로\
+        \ 끝낸 뒤 계정·프로필 즉시 삭제.\n\n**요구사항**: SFR-071, SFR-113  \n**화면**: S-12 설정  \n\
+        **오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이 사건**: CANCEL"
       operationId: delete_me
       security: *id009
       x-state-events:
@@ -363,7 +377,8 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 비밀번호 변경 (임시 비밀번호 후 필수)
-      description: "**요구사항**: SFR-021  \n**화면**: (비밀번호 변경)  \n**오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED"
+      description: "**요구사항**: SFR-021  \n**화면**: (비밀번호 변경)  \n**오류 코드**: INVALID_CREDENTIALS,\
+        \ VALIDATION_FAILED"
       operationId: put_me_password
       security: *id009
       x-error-codes:
@@ -386,78 +401,6 @@ paths:
       responses:
         '204':
           description: 성공 (본문 없음)
-        4XX:
-          description: 오류 (코드는 오류 코드표)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /me/pin:
-    put:
-      tags:
-      - 1. 대원 인증·계정
-      summary: 앱 잠금 PIN 설정·변경
-      description: "**요구사항**: SFR-150  \n**화면**: S-12 설정"
-      operationId: put_me_pin
-      security: *id009
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                pin:
-                  type: string
-                  pattern: ^\d{6}$
-              required:
-              - pin
-      responses:
-        '204':
-          description: 성공 (본문 없음)
-        4XX:
-          description: 오류 (코드는 오류 코드표)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /me/pin/verify:
-    post:
-      tags:
-      - 1. 대원 인증·계정
-      summary: PIN 확인 (5회 실패 시 로그아웃)
-      description: "생체 인증(지문·Face ID)은 폰 안에서 처리하고 서버를 부르지 않는다. 5번째 실패 → 토큰 폐기·팀에서 빠짐(마지막 1명이면 이송 취소 logout) + account.force_logout{pin_failed}.\n\n**요구사항**: SFR-150  \n**화면**: S-02 앱 잠금  \n**오류 코드**: PIN_LOCKED_OUT\
-        \  \n**상태 전이 사건**: CANCEL"
-      operationId: post_me_pin_verify
-      security: *id009
-      x-state-events:
-      - CANCEL
-      x-error-codes:
-      - PIN_LOCKED_OUT
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                pin:
-                  type: string
-              required:
-              - pin
-      responses:
-        '200':
-          description: 성공
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  remaining:
-                    type: integer
-                    description: 남은 시도 횟수
         4XX:
           description: 오류 (코드는 오류 코드표)
           content:
@@ -506,7 +449,8 @@ paths:
       tags:
       - 2. 팀
       summary: 팀 만들기 (근무 시작)
-      description: "14시간 자동 근무 종료 타이머가 걸린다.\n\n**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED"
+      description: "14시간 자동 근무 종료 타이머가 걸린다.\n\n**요구사항**: SFR-113  \n**화면**: S-03 근무\
+        \ 시작  \n**오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED"
       operationId: post_teams
       security: *id009
       x-error-codes:
@@ -544,7 +488,9 @@ paths:
       tags:
       - 2. 팀
       summary: 코드·QR로 참여
-      description: "code와 qrToken 중 하나만 보낸다. 운전은 팀에 1명. 이 시점 이후 이벤트만 받는다(joined_seq).\n\n**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: TEAM_NOT_FOUND, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM"
+      description: "code와 qrToken 중 하나만 보낸다. 운전은 팀에 1명. 이 시점 이후 이벤트만 받는다(joined_seq).\n\
+        \n**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: TEAM_NOT_FOUND, TEAM_FULL,\
+        \ DRIVER_TAKEN, ALREADY_IN_TEAM"
       operationId: post_teams_join
       security: *id009
       x-error-codes:
@@ -611,7 +557,8 @@ paths:
       tags:
       - 2. 팀
       summary: 내 역할 바꾸기
-      description: "**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: DRIVER_TAKEN, ACTIVE_TRANSPORT_EXISTS"
+      description: "**요구사항**: SFR-113  \n**화면**: S-03 근무 시작  \n**오류 코드**: DRIVER_TAKEN,\
+        \ ACTIVE_TRANSPORT_EXISTS"
       operationId: patch_teams_current_members_me
       security: *id009
       x-error-codes:
@@ -649,7 +596,9 @@ paths:
       tags:
       - 2. 팀
       summary: 근무 종료 (나만 팀에서 빠짐)
-      description: "진행 중 이송이 있으면 확인 필요. 마지막 1명이면 이송 건을 취소(duty_end)로 끝내고 팀 해제.\n\n**요구사항**: SFR-113  \n**화면**: S-03 · S-12  \n**오류 코드**: NOT_IN_TEAM, ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이 사건**: CANCEL"
+      description: "진행 중 이송이 있으면 확인 필요. 마지막 1명이면 이송 건을 취소(duty_end)로 끝내고 팀 해제.\n\n\
+        **요구사항**: SFR-113  \n**화면**: S-03 · S-12  \n**오류 코드**: NOT_IN_TEAM, ACTIVE_TRANSPORT_CONFIRM_REQUIRED\
+        \  \n**상태 전이 사건**: CANCEL"
       operationId: post_teams_current_leave
       security: *id009
       x-state-events:
@@ -730,7 +679,9 @@ paths:
       tags:
       - 2. 팀
       summary: 팀 초대 보내기 (5분 만료)
-      description: "받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.\n\n**요구사항**: SFR-159  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND"
+      description: "받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.\n\
+        \n**요구사항**: SFR-159  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: TEAM_FULL, TARGET_IN_TEAM,\
+        \ NOT_FOUND"
       operationId: post_teams_current_invites
       security: *id009
       x-error-codes:
@@ -772,7 +723,8 @@ paths:
       tags:
       - 2. 팀
       summary: 초대 수락 (역할 선택)
-      description: "나에게 온 초대가 아니면 404.\n\n**요구사항**: SFR-159, SFR-113  \n**화면**: (초대 알림)  \n**오류 코드**: NOT_FOUND, INVITE_EXPIRED, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM"
+      description: "나에게 온 초대가 아니면 404.\n\n**요구사항**: SFR-159, SFR-113  \n**화면**: (초대\
+        \ 알림)  \n**오류 코드**: NOT_FOUND, INVITE_EXPIRED, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM"
       operationId: post_invites__inviteId__accept
       security: *id009
       x-error-codes:
@@ -819,7 +771,8 @@ paths:
       tags:
       - 2. 팀
       summary: 초대 거절
-      description: "**요구사항**: SFR-159  \n**화면**: (초대 알림)  \n**오류 코드**: NOT_FOUND, INVITE_EXPIRED"
+      description: "**요구사항**: SFR-159  \n**화면**: (초대 알림)  \n**오류 코드**: NOT_FOUND,\
+        \ INVITE_EXPIRED"
       operationId: post_invites__inviteId__decline
       security: *id009
       x-error-codes:
@@ -882,7 +835,8 @@ paths:
       tags:
       - 2. 팀
       summary: 팀 작성 중 환자 정보 불러오기
-      description: "**요구사항**: SFR-114, SFR-157  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**: NOT_IN_TEAM"
+      description: "**요구사항**: SFR-114, SFR-157  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**:\
+        \ NOT_IN_TEAM"
       operationId: get_teams_current_draft
       security: *id009
       x-error-codes:
@@ -921,8 +875,10 @@ paths:
       tags:
       - 2. 팀
       summary: 팀 작성 중 환자 정보 고치기 (항목 단위 병합)
-      description: "버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated. 운전 역할이 주행 중(시속 10km 초과)이면 DRIVER_INPUT_LOCKED.\n\n**요구사항**: SFR-114, SFR-115  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**:\
-        \ NOT_IN_TEAM, DRIVER_INPUT_LOCKED, VALIDATION_FAILED"
+      description: "버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated.\
+        \ 운전 역할이 주행 중(시속 10km 초과)이면 DRIVER_INPUT_LOCKED.\n\n**요구사항**: SFR-114, SFR-115\
+        \  \n**화면**: S-04 환자 정보 입력  \n**오류 코드**: NOT_IN_TEAM, DRIVER_INPUT_LOCKED,\
+        \ VALIDATION_FAILED"
       operationId: patch_teams_current_draft
       security: *id009
       x-error-codes:
@@ -1023,7 +979,8 @@ paths:
       tags:
       - 3. 병원 정보·위치 (대원 앱)
       summary: 주소 → 좌표 (위치 실패·미동의)
-      description: "카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 후보 최대 5개.\n\n**요구사항**: SFR-009, INR-004  \n**화면**: S-04 · S-06 주소 입력  \n**오류 코드**: ADDRESS_NOT_FOUND"
+      description: "카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 후보 최대 5개.\n\n**요구사항**: SFR-009,\
+        \ INR-004  \n**화면**: S-04 · S-06 주소 입력  \n**오류 코드**: ADDRESS_NOT_FOUND"
       operationId: get_geocode
       security: *id009
       x-error-codes:
@@ -1061,7 +1018,8 @@ paths:
       tags:
       - 3. 병원 정보·위치 (대원 앱)
       summary: 주변 병원 (지도·오프라인 저장용)
-      description: "반경 안 전체 병원(지도용). 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다.\n\n**요구사항**: SFR-027, SFR-059, SFR-061, SFR-064  \n**화면**: S-06 지도 · S-11 오프라인"
+      description: "반경 안 전체 병원(지도용). 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다.\n\
+        \n**요구사항**: SFR-027, SFR-059, SFR-061, SFR-064  \n**화면**: S-06 지도 · S-11 오프라인"
       operationId: get_hospitals_nearby
       security: *id009
       parameters:
@@ -1108,7 +1066,8 @@ paths:
       tags:
       - 3. 병원 정보·위치 (대원 앱)
       summary: 병원 상세
-      description: "**요구사항**: SFR-007, SFR-081  \n**화면**: S-07 병원 상세  \n**오류 코드**: NOT_FOUND"
+      description: "**요구사항**: SFR-007, SFR-081  \n**화면**: S-07 병원 상세  \n**오류 코드**:\
+        \ NOT_FOUND"
       operationId: get_hospitals__hospitalId
       security: *id009
       x-error-codes:
@@ -1137,10 +1096,16 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 이송 건 만들기 + 병원에 동시 요청
-      description: "요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS\
-        \ + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이\
-        \ API를 부르지 않는다 (SFR-109).\n\n**요구사항**: SFR-109, SFR-104, SFR-129, SFR-157, SFR-161  \n**화면**: S-04 → S-05 응답 대기 / S-06  \n**오류 코드**: ACTIVE_TRANSPORT_EXISTS, ASSESSMENT_INCOMPLETE, NOT_IN_TEAM,\
-        \ VALIDATION_FAILED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**: CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS"
+      description: "요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님 · requestedGrade를\
+        \ 보냈으면 그 등급 이상)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라\
+        \ 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS\
+        \ + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를\
+        \ 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous).\
+        \ 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이 API를 부르지 않는다 (SFR-109).\n\n**요구사항**:\
+        \ SFR-109, SFR-162, SFR-104, SFR-129, SFR-157, SFR-161  \n**화면**: S-04 → S-05\
+        \ 응답 대기 / S-06  \n**오류 코드**: ACTIVE_TRANSPORT_EXISTS, ASSESSMENT_INCOMPLETE,\
+        \ NOT_IN_TEAM, VALIDATION_FAILED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT\
+        \  \n**상태 전이 사건**: CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS"
       operationId: post_transports
       security: *id009
       x-state-events:
@@ -1197,6 +1162,15 @@ paths:
                   type: boolean
                 assessment:
                   $ref: '#/components/schemas/Assessment'
+                requestedGrade:
+                  type: integer
+                  enum:
+                  - 1
+                  - 2
+                  - 3
+                  nullable: true
+                  description: '병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반
+                    병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)'
               required:
               - id
               - radiusKm
@@ -1220,7 +1194,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 진행 중 이송 불러오기 (앱 재실행 복구)
-      description: "상태별 화면으로 바로 이동: requesting→S-05, fallback→S-06, phone_check→S-08, moving→S-09.\n\n**요구사항**: SFR-133  \n**화면**: 앱 시작 · 모든 이송 화면  \n**오류 코드**: NO_ACTIVE_TRANSPORT"
+      description: "상태별 화면으로 바로 이동: requesting→S-05, fallback→S-06, phone_check→S-08,\
+        \ moving→S-09.\n\n**요구사항**: SFR-133  \n**화면**: 앱 시작 · 모든 이송 화면  \n**오류 코드**:\
+        \ NO_ACTIVE_TRANSPORT"
       operationId: get_transports_current
       security: *id009
       x-error-codes:
@@ -1243,7 +1219,8 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 이송 건 보기
-      description: "우리 팀 이송 건이 아니면 404.\n\n**요구사항**: SFR-110  \n**화면**: S-05 · S-09  \n**오류 코드**: NOT_FOUND"
+      description: "우리 팀 이송 건이 아니면 404.\n\n**요구사항**: SFR-110  \n**화면**: S-05 · S-09\
+        \  \n**오류 코드**: NOT_FOUND"
       operationId: get_transports__transportId
       security: *id009
       x-error-codes:
@@ -1274,8 +1251,11 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 승인 병원 확정
-      description: "Idempotency-Key 헤더 필수. 첫 시도가 서버에 도착한 시각으로 5분을 판정. 성공하면 나머지 대기·승인 요청은 닫히고(other_hospital) 경로 안내 담당 단말을 정한다(운전 단말 10초).\n\n**요구사항**: SFR-111, SFR-134, SFR-160, SFR-125  \n**화면**: S-05\
-        \ 확정 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, APPROVAL_EXPIRED, APPROVAL_CANCELLED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**: CONFIRM"
+      description: "Idempotency-Key 헤더 필수. 첫 시도가 서버에 도착한 시각으로 5분을 판정. 성공하면 나머지 대기·승인\
+        \ 요청은 닫히고(other_hospital) 경로 안내 담당 단말을 정한다(운전 단말 10초).\n\n**요구사항**: SFR-111,\
+        \ SFR-134, SFR-160, SFR-125  \n**화면**: S-05 확정 확인  \n**오류 코드**: NOT_FOUND,\
+        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, APPROVAL_EXPIRED,\
+        \ APPROVAL_CANCELLED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**: CONFIRM"
       operationId: post_transports__transportId__confirm
       security: *id009
       x-state-events:
@@ -1329,7 +1309,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 기다리지 않고 예비로
-      description: "대기·승인 요청을 닫고(fallback) 병원 웹에 '요청 종료'.\n\n**요구사항**: SFR-112  \n**화면**: S-05 응답 대기  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**: GO_FALLBACK"
+      description: "대기·승인 요청을 닫고(fallback) 병원 웹에 '요청 종료'.\n\n**요구사항**: SFR-112  \n\
+        **화면**: S-05 응답 대기  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
+        \ VERSION_CONFLICT  \n**상태 전이 사건**: GO_FALLBACK"
       operationId: post_transports__transportId__fallback
       security: *id009
       x-state-events:
@@ -1371,7 +1353,8 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 예비 추천 목록
-      description: "**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND"
+      description: "**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**:\
+        \ S-06 예비 추천  \n**오류 코드**: NOT_FOUND"
       operationId: get_transports__transportId__recommendations
       security: *id009
       x-error-codes:
@@ -1426,8 +1409,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 예비 추천 반경 넓히기 (요청은 안 보냄)
-      description: "추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.\n\n**요구사항**: SFR-029, SFR-012  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND,\
-        \ MAX_RADIUS, INVALID_TRANSITION"
+      description: "추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두\
+        \ 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.\n\n**요구사항**: SFR-029, SFR-012\
+        \  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND, MAX_RADIUS, INVALID_TRANSITION"
       operationId: put_transports__transportId__fallback_radius
       security: *id009
       x-error-codes:
@@ -1471,9 +1455,13 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 다시 요청 (반경 넓히기 · 승인 취소 후)
-      description: "expand (fallback→requesting): 반경 한 단계, 이번 이송에서 아직 요청하지 않은 병원에만. 대상 0곳이면 422 NO_REQUEST_TARGET(상태 그대로). re_request (moving→requesting): 확정 병원이 승인 취소한 경우만, 현재 위치 기준·현재 반경, 제외 병원만 빼고, 직전\
-        \ 승인 병원에 '재확인' 표시. 경로 안내 유지.\n\n**요구사항**: SFR-131, SFR-128, SFR-156  \n**화면**: S-06 · S-09 승인 취소 경보  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, NO_REQUEST_TARGET,\
-        \ MAX_RADIUS, RE_REQUEST_NOT_ALLOWED  \n**상태 전이 사건**: EXPAND_ROUND, RE_REQUEST"
+      description: "expand (fallback→requesting): 반경 한 단계, 이번 이송에서 아직 요청하지 않은 병원에만.\
+        \ 대상 0곳이면 422 NO_REQUEST_TARGET(상태 그대로). re_request (moving→requesting): 확정\
+        \ 병원이 승인 취소한 경우만, 현재 위치 기준·현재 반경, 제외 병원만 빼고, 직전 승인 병원에 '재확인' 표시. 경로 안내 유지.\n\
+        \n**요구사항**: SFR-131, SFR-128, SFR-156  \n**화면**: S-06 · S-09 승인 취소 경보  \n\
+        **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
+        \ NO_REQUEST_TARGET, MAX_RADIUS, RE_REQUEST_NOT_ALLOWED  \n**상태 전이 사건**: EXPAND_ROUND,\
+        \ RE_REQUEST"
       operationId: post_transports__transportId__rounds
       security: *id009
       x-state-events:
@@ -1537,8 +1525,10 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 추천 병원으로 전화 확인 시작
-      description: "fallback → phone_check, 대상 병원 기록. 팀원 화면에 transport.phone_target.\n\n**요구사항**: SFR-032, SFR-031  \n**화면**: S-06 → S-08 전화 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
-        \ VERSION_CONFLICT  \n**상태 전이 사건**: START_PHONE_CHECK"
+      description: "fallback → phone_check, 대상 병원 기록. 팀원 화면에 transport.phone_target.\n\
+        \n**요구사항**: SFR-032, SFR-031  \n**화면**: S-06 → S-08 전화 확인  \n**오류 코드**: NOT_FOUND,\
+        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**:\
+        \ START_PHONE_CHECK"
       operationId: post_transports__transportId__phone_check_start
       security: *id009
       x-state-events:
@@ -1583,9 +1573,13 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 전화 확인 결과 기록
-      description: "accepted → moving / no_answer·skipped(사유) → moving / rejected → 제외 병원 추가 후 다음 후보가 있으면 phone_check 유지(phoneTarget 바뀜), 없으면 fallback / dismissed(결과 미선택으로 닫기) → fallback. 통신 두절 중 기록은 /transports/sync로.\n\
-        \n**요구사항**: SFR-032, SFR-033, SFR-034, SFR-074, SFR-075  \n**화면**: S-08 전화 확인  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED  \n**상태 전이 사건**: PHONE_ACCEPTED,\
-        \ PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED"
+      description: "accepted → moving / no_answer·skipped(사유) → moving / rejected\
+        \ → 제외 병원 추가 후 다음 후보가 있으면 phone_check 유지(phoneTarget 바뀜), 없으면 fallback / dismissed(결과\
+        \ 미선택으로 닫기) → fallback. 통신 두절 중 기록은 /transports/sync로.\n\n**요구사항**: SFR-032,\
+        \ SFR-033, SFR-034, SFR-074, SFR-075  \n**화면**: S-08 전화 확인  \n**오류 코드**: NOT_FOUND,\
+        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED\
+        \  \n**상태 전이 사건**: PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST,\
+        \ PHONE_DISMISSED"
       operationId: post_transports__transportId__phone_checks
       security: *id009
       x-state-events:
@@ -1658,8 +1652,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 경로 안내 담당 단말 응답
-      description: "확정 뒤 운전 단말이 10초 안에 부르면 담당이 된다. 10초가 지나 서버가 확정한 대원 단말로 넘겼으면 NAV_DEVICE_ASSIGNED(보기 전용). 결과는 transport.nav_device.\n\n**요구사항**: SFR-132, SFR-133  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND,\
-        \ NAV_DEVICE_ASSIGNED, VERSION_CONFLICT"
+      description: "확정 뒤 운전 단말이 10초 안에 부르면 담당이 된다. 10초가 지나 서버가 확정한 대원 단말로 넘겼으면 NAV_DEVICE_ASSIGNED(보기\
+        \ 전용). 결과는 transport.nav_device.\n\n**요구사항**: SFR-132, SFR-133  \n**화면**:\
+        \ S-09 경로 안내  \n**오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, VERSION_CONFLICT"
       operationId: post_transports__transportId__nav_device
       security: *id009
       x-error-codes:
@@ -1707,8 +1702,10 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 변경 사항 보내기
-      description: "requesting·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.\n\n**요구사항**: SFR-121, SFR-105  \n**화면**: S-05 · S-09  \n**오류\
-        \ 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_CONFLICT, INVALID_TRANSITION  \n**상태 전이 사건**: ASSESSMENT_UPDATED"
+      description: "requesting·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정\
+        \ 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.\n\n**요구사항**: SFR-121,\
+        \ SFR-105  \n**화면**: S-05 · S-09  \n**오류 코드**: NOT_FOUND, NOTHING_TO_SEND,\
+        \ VERSION_CONFLICT, INVALID_TRANSITION  \n**상태 전이 사건**: ASSESSMENT_UPDATED"
       operationId: post_transports__transportId__assessments
       security: *id009
       x-state-events:
@@ -1757,7 +1754,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 위치 올리기 (5초마다, 담당 단말만)
-      description: "위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.\n\n**요구사항**: SFR-037, SFR-079, SER-002  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND, NOT_NAV_DEVICE"
+      description: "위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.\n\
+        \n**요구사항**: SFR-037, SFR-079, SER-002  \n**화면**: S-09 경로 안내  \n**오류 코드**:\
+        \ NOT_FOUND, NOT_NAV_DEVICE"
       operationId: post_transports__transportId__locations
       security: *id009
       x-error-codes:
@@ -1805,8 +1804,11 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 목적지 변경 (이송 건당 1번)
-      description: "moving → requesting. 새 병원을 고르는 API가 아니다: 이전 목적지는 닫힘(dest_changed)·제외 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미 바꿨으면 '이송 취소 후 새로 요청' 안내.\n\n**요구사항**: SFR-077,\
-        \ SFR-156  \n**화면**: S-09 경로 안내  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED  \n**상태 전이 사건**: CHANGE_DESTINATION"
+      description: "moving → requesting. 새 병원을 고르는 API가 아니다: 이전 목적지는 닫힘(dest_changed)·제외\
+        \ 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미\
+        \ 바꿨으면 '이송 취소 후 새로 요청' 안내.\n\n**요구사항**: SFR-077, SFR-156  \n**화면**: S-09 경로\
+        \ 안내  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
+        \ DESTINATION_CHANGE_USED, REASON_REQUIRED  \n**상태 전이 사건**: CHANGE_DESTINATION"
       operationId: post_transports__transportId__destination
       security: *id009
       x-state-events:
@@ -1862,8 +1864,10 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 도착 처리
-      description: "원본 위치 삭제, 익명 소요시간만 저장. 10분 동안 팀 작성 중 정보에 이번 환자 정보를 남긴다 (SFR-157).\n\n**요구사항**: SFR-038, SFR-080, SFR-039, SFR-144  \n**화면**: S-10 도착 처리  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
-        \ VERSION_CONFLICT  \n**상태 전이 사건**: ARRIVE"
+      description: "원본 위치 삭제, 익명 소요시간만 저장. 10분 동안 팀 작성 중 정보에 이번 환자 정보를 남긴다 (SFR-157).\n\
+        \n**요구사항**: SFR-038, SFR-080, SFR-039, SFR-144  \n**화면**: S-10 도착 처리  \n**오류\
+        \ 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT\
+        \  \n**상태 전이 사건**: ARRIVE"
       operationId: post_transports__transportId__arrive
       security: *id009
       x-state-events:
@@ -1911,6 +1915,8 @@ paths:
                     format: date-time
                   durationSec:
                     type: integer
+                  distanceKm:
+                    type: number
         4XX:
           description: 오류 (코드는 오류 코드표)
           content:
@@ -1922,8 +1928,9 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 이송 취소
-      description: "진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'.\n\n**요구사항**: SFR-076  \n**화면**: S-05 · S-06 · S-08 · S-09  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT\
-        \  \n**상태 전이 사건**: CANCEL"
+      description: "진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'.\n\n**요구사항**:\
+        \ SFR-076  \n**화면**: S-05 · S-06 · S-08 · S-09  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION,\
+        \ VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**: CANCEL"
       operationId: post_transports__transportId__cancel
       security: *id009
       x-state-events:
@@ -1965,8 +1972,12 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 통신 두절 중 기록 올리기
-      description: "오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든 건은 offlineCreated=true, fallbackReason=offline.\n\
-        \n**요구사항**: SFR-099, SFR-068, SFR-160  \n**화면**: S-11 오프라인 → 복구  \n**상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE"
+      description: "오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은\
+        \ 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든\
+        \ 건은 offlineCreated=true, fallbackReason=offline.\n\n**요구사항**: SFR-099, SFR-068,\
+        \ SFR-160  \n**화면**: S-11 오프라인 → 복구  \n**상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED,\
+        \ PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED,\
+        \ ARRIVE"
       operationId: post_transports_sync
       security: *id009
       x-state-events:
@@ -2094,8 +2105,10 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 라이선스 키로 PC 등록
-      description: "성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict), 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.\n\n**요구사항**: SFR-116, SFR-147, COR-012  \n**화면**: H-01 PC 등록\
-        \  \n**오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
+      description: "성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict),\
+        \ 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.\n\n**요구사항**:\
+        \ SFR-116, SFR-147, COR-012  \n**화면**: H-01 PC 등록  \n**오류 코드**: INVALID_LICENSE,\
+        \ LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
       operationId: post_hw_pc_register
       security: *id001
       x-error-codes:
@@ -2151,7 +2164,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 현재 PC·병원 정보
-      description: "**요구사항**: SFR-116, SFR-146, SFR-139  \n**화면**: H-01 · 상단 바  \n**오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED"
+      description: "**요구사항**: SFR-116, SFR-146, SFR-139  \n**화면**: H-01 · 상단 바  \n\
+        **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED"
       operationId: get_hw_session
       security: &id013
       - hospitalPc: []
@@ -2249,7 +2263,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 알림 켜기 (이때부터 요청 대상)
-      description: "브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다.\n\n**요구사항**: SFR-117, SFR-136  \n**화면**: H-01 근무 시작  \n**오류 코드**: NOT_FOUND"
+      description: "브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에\
+        \ 쓴다.\n\n**요구사항**: SFR-117, SFR-136  \n**화면**: H-01 근무 시작  \n**오류 코드**: NOT_FOUND"
       operationId: post_hw_shifts_current_alarm_on
       security: *id013
       x-error-codes:
@@ -2287,7 +2302,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 근무 종료
-      description: "이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.\n\n**요구사항**: SFR-117  \n**화면**: H-02"
+      description: "이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.\n\n**요구사항**:\
+        \ SFR-117  \n**화면**: H-02"
       operationId: post_hw_shifts_current_end
       security: *id013
       responses:
@@ -2304,7 +2320,9 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 잠시 요청 중지 / 다시 받기
-      description: "중지하면 대기 중인 요청은 '요청 중지'로 자동 거절(통계 제외, 제외 병원 아님). 병원 전체 PC에 hospital.pause_changed. 2시간째 pause_reminder.\n\n**요구사항**: SFR-139  \n**화면**: H-02 탭  \n**상태 전이 사건**: PAUSE_AUTO_REJECT"
+      description: "중지하면 대기 중인 요청은 '요청 중지'로 자동 거절(통계 제외, 제외 병원 아님). 병원 전체 PC에 hospital.pause_changed.\
+        \ 2시간째 pause_reminder.\n\n**요구사항**: SFR-139  \n**화면**: H-02 탭  \n**상태 전이 사건**:\
+        \ PAUSE_AUTO_REJECT"
       operationId: put_hw_pause
       security: *id013
       x-state-events:
@@ -2334,7 +2352,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 요청 목록 (남은 시간 짧은 순)
-      description: "우리 병원 요청만. all의 닫힌·만료·거절 건은 결과만 주고 환자 정보 칸은 null.\n\n**요구사항**: SFR-135, SFR-155, SER-014  \n**화면**: H-02 요청 목록"
+      description: "우리 병원 요청만. all의 닫힌·만료·거절 건은 결과만 주고 환자 정보 칸은 null.\n\n**요구사항**:\
+        \ SFR-135, SFR-155, SER-014  \n**화면**: H-02 요청 목록"
       operationId: get_hw_requests
       security: *id013
       parameters:
@@ -2383,7 +2402,9 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 요청 상세 (열람 기록 남김)
-      description: "다른 병원 요청이면 404. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.\n\n**요구사항**: SFR-118, SFR-137, SER-014  \n**화면**: H-02 요청 상세  \n**오류 코드**: NOT_FOUND, REQUEST_CLOSED"
+      description: "다른 병원 요청이면 404. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED\
+        \ + details.status.\n\n**요구사항**: SFR-118, SFR-137, SER-014  \n**화면**: H-02\
+        \ 요청 상세  \n**오류 코드**: NOT_FOUND, REQUEST_CLOSED"
       operationId: get_hw_requests__requestId
       security: *id013
       x-error-codes:
@@ -2414,8 +2435,11 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 승인 (+메모)
-      description: "두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName. 대원 앱에 request.approved, 같은 병원 다른 PC에 request.changed.\n\n**요구사항**: SFR-119, SFR-140, SFR-154, SFR-153, SFR-160\
-        \  \n**화면**: H-02 요청 상세  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED  \n**상태\
+      description: "두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName.\
+        \ 대원 앱에 request.approved, 같은 병원 다른 PC에 request.changed.\n\n**요구사항**: SFR-119,\
+        \ SFR-140, SFR-154, SFR-153, SFR-160  \n**화면**: H-02 요청 상세  \n**오류 코드**: NOT_FOUND,\
+        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED,\
+        \ REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED  \n**상태\
         \ 전이 사건**: APPROVE"
       operationId: post_hw_requests__requestId__approve
       security: *id013
@@ -2478,8 +2502,10 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 거절 (사유 필수)
-      description: "제외 병원에 추가, 통계에 들어감.\n\n**요구사항**: SFR-119, SFR-126  \n**화면**: H-02 거절 사유  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED,\
-        \ REQUEST_CLOSED, REASON_REQUIRED  \n**상태 전이 사건**: REJECT"
+      description: "제외 병원에 추가, 통계에 들어감.\n\n**요구사항**: SFR-119, SFR-126  \n**화면**: H-02\
+        \ 거절 사유  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
+        \ ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, REASON_REQUIRED  \n\
+        **상태 전이 사건**: REJECT"
       operationId: post_hw_requests__requestId__reject
       security: *id013
       x-state-events:
@@ -2504,14 +2530,17 @@ paths:
               properties:
                 reason:
                   type: string
-                  enum: &id017
+                  enum:
                   - er_bed
-                  - icu_or
+                  - or_room
+                  - ward
+                  - icu
                   - no_specialist
                   - equipment
-                  - overcrowded
                   - etc
-                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                  description: er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu
+                    중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) ·
+                    etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
                 etcText:
                   type: string
                   maxLength: 20
@@ -2547,8 +2576,11 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 승인 취소 (사유 필수)
-      description: "approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음.\n\n**요구사항**: SFR-128, SFR-130  \n**화면**: H-02 · H-03  \n**오류 코드**: NOT_FOUND,\
-        \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**: CANCEL_APPROVAL"
+      description: "approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed).\
+        \ 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음.\n\n**요구사항**: SFR-128, SFR-130\
+        \  \n**화면**: H-02 · H-03  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
+        \ VERSION_CONFLICT, REASON_REQUIRED, REQUEST_NOT_APPROVED  \n**상태 전이 사건**:\
+        \ CANCEL_APPROVAL"
       operationId: post_hw_requests__requestId__cancel_approval
       security: *id013
       x-state-events:
@@ -2571,8 +2603,17 @@ paths:
               properties:
                 reason:
                   type: string
-                  enum: *id017
-                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                  enum:
+                  - er_bed
+                  - or_room
+                  - ward
+                  - icu
+                  - no_specialist
+                  - equipment
+                  - etc
+                  description: er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu
+                    중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) ·
+                    etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
                 etcText:
                   type: string
                   maxLength: 20
@@ -2626,7 +2667,9 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 추가 메모 (1번)
-      description: "확정 요청에만. 대원 앱에 경보 hospital.extra_memo.\n\n**요구사항**: SFR-140  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT"
+      description: "확정 요청에만. 대원 앱에 경보 hospital.extra_memo.\n\n**요구사항**: SFR-140  \n\
+        **화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED,\
+        \ VERSION_CONFLICT"
       operationId: post_hw_requests__requestId__extra_memo
       security: *id013
       x-error-codes:
@@ -2666,8 +2709,11 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 병원에서 도착 확인
-      description: "위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital).\n\
-        \n**요구사항**: SFR-144  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR  \n**상태 전이 사건**: ARRIVE"
+      description: "위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital,\
+        \ 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested\
+        \ → 대원이 arrive(method=hospital).\n\n**요구사항**: SFR-144  \n**화면**: H-03 도착 예정\
+        \  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
+        \ AMBULANCE_NOT_NEAR  \n**상태 전이 사건**: ARRIVE"
       operationId: post_hw_requests__requestId__confirm_arrival
       security: *id013
       x-state-events:
@@ -2705,7 +2751,8 @@ paths:
                     enum:
                     - arrived
                     - asked_paramedic
-                    description: arrived = 바로 도착 처리 / asked_paramedic = 위치 없는 건이라 대원 앱에 확인 요청
+                    description: arrived = 바로 도착 처리 / asked_paramedic = 위치 없는 건이라
+                      대원 앱에 확인 요청
         4XX:
           description: 오류 (코드는 오류 코드표)
           content:
@@ -2717,8 +2764,10 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 도착 후 수용 불가 (10분 안)
-      description: "대원 앱에 경보 transport.unacceptable. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev).\n\n**요구사항**: SFR-158  \n**화면**: H-03 도착 예정  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
-        \ VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED  \n**상태 전이 사건**: UNACCEPTABLE"
+      description: "대원 앱에 경보 transport.unacceptable. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동\
+        \ 제외(unacceptable_prev).\n\n**요구사항**: SFR-158  \n**화면**: H-03 도착 예정  \n**오류\
+        \ 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
+        \ WINDOW_PASSED, REASON_REQUIRED  \n**상태 전이 사건**: UNACCEPTABLE"
       operationId: post_hw_requests__requestId__unacceptable
       security: *id013
       x-state-events:
@@ -2741,8 +2790,17 @@ paths:
               properties:
                 reason:
                   type: string
-                  enum: *id017
-                  description: er_bed 응급실 병상 없음 · icu_or 중환자실/수술실 없음 · no_specialist 해당 전문의 부재 · equipment 장비 문제(CT 등) · overcrowded 환자 과밀 · etc 기타(etcText 20자)
+                  enum:
+                  - er_bed
+                  - or_room
+                  - ward
+                  - icu
+                  - no_specialist
+                  - equipment
+                  - etc
+                  description: er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu
+                    중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) ·
+                    etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
                 etcText:
                   type: string
                   maxLength: 20
@@ -2767,8 +2825,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 관리자 로그인 (비밀번호 + OTP)
-      description: "OTP를 아직 연결하지 않은 관리자(초기 데이터)는 403 OTP_SETUP_REQUIRED + details{setupToken(5분), otpauthUrl} → QR을 보여주고 /admin/auth/otp/enroll.\n\n**요구사항**: SFR-082, SFR-152  \n**화면**: A-01 로그인  \n**오류\
-        \ 코드**: INVALID_CREDENTIALS, INVALID_OTP, ACCOUNT_LOCKED, OTP_SETUP_REQUIRED, ORIGIN_NOT_ALLOWED"
+      description: "OTP를 아직 연결하지 않은 관리자(초기 데이터)는 403 OTP_SETUP_REQUIRED + details{setupToken(5분),\
+        \ otpauthUrl} → QR을 보여주고 /admin/auth/otp/enroll.\n\n**요구사항**: SFR-082, SFR-152\
+        \  \n**화면**: A-01 로그인  \n**오류 코드**: INVALID_CREDENTIALS, INVALID_OTP, ACCOUNT_LOCKED,\
+        \ OTP_SETUP_REQUIRED, ORIGIN_NOT_ALLOWED"
       operationId: post_admin_auth_login
       security: *id001
       x-error-codes:
@@ -2813,7 +2873,8 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 첫 로그인 OTP 앱 연결
-      description: "성공하면 otp_enrolled_at 기록 후 바로 로그인.\n\n**요구사항**: SFR-152  \n**화면**: A-01 로그인  \n**오류 코드**: INVALID_OTP, TOKEN_EXPIRED"
+      description: "성공하면 otp_enrolled_at 기록 후 바로 로그인.\n\n**요구사항**: SFR-152  \n**화면**:\
+        \ A-01 로그인  \n**오류 코드**: INVALID_OTP, TOKEN_EXPIRED"
       operationId: post_admin_auth_otp_enroll
       security: *id001
       x-error-codes:
@@ -2855,7 +2916,7 @@ paths:
       summary: 가입 승인 대기 목록
       description: "**요구사항**: SFR-083  \n**화면**: A-01 가입 승인"
       operationId: get_admin_signups
-      security: &id018
+      security: &id017
       - adminAuth: []
       parameters:
       - *id014
@@ -2890,9 +2951,11 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 공무원증 사진 보기 (열람 기록)
-      description: "응답 image/jpeg, `Cache-Control: no-store`. 작업 이력에 열람 1건.\n\n**요구사항**: SFR-083, DAR-012, SER-015  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, PHOTO_DELETED"
+      description: "응답 image/jpeg, `Cache-Control: no-store`. 작업 이력에 열람 1건.\n\n**요구사항**:\
+        \ SFR-083, DAR-012, SER-015  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND,\
+        \ PHOTO_DELETED"
       operationId: get_admin_signups__id__photo
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       - PHOTO_DELETED
@@ -2926,9 +2989,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 가입 승인
-      description: "사진 즉시 삭제, 대원에게 account.signup_result + 푸시.\n\n**요구사항**: SFR-083, SFR-091  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND"
+      description: "사진 즉시 삭제, 대원에게 account.signup_result + 푸시.\n\n**요구사항**: SFR-083,\
+        \ SFR-091  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND"
       operationId: post_admin_signups__id__approve
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -2951,9 +3015,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 가입 반려
-      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청.\n\n**요구사항**: SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청.\n\n**요구사항**:\
+        \ SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
       operationId: post_admin_signups__id__reject
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       - REASON_REQUIRED
@@ -3000,7 +3065,7 @@ paths:
       summary: 대원 계정 검색
       description: "**요구사항**: SFR-151  \n**화면**: A-01 대원 계정"
       operationId: get_admin_paramedics
-      security: *id018
+      security: *id017
       parameters:
       - name: q
         in: query
@@ -3053,10 +3118,11 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 대원 계정 정지 (즉시 로그아웃)
-      description: "모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended).\n\n**요구사항**: SFR-151, SER-016  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED\
-        \  \n**상태 전이 사건**: CANCEL"
+      description: "모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면\
+        \ 이송 취소(suspended).\n\n**요구사항**: SFR-151, SER-016  \n**화면**: A-01 대원 계정  \n\
+        **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이 사건**: CANCEL"
       operationId: post_admin_paramedics__id__suspend
-      security: *id018
+      security: *id017
       x-state-events:
       - CANCEL
       x-error-codes:
@@ -3106,7 +3172,7 @@ paths:
       summary: 정지 해제
       description: "**요구사항**: SFR-151  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND"
       operationId: post_admin_paramedics__id__unsuspend
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3131,7 +3197,7 @@ paths:
       summary: 비밀번호 초기화
       description: "**요구사항**: SFR-021  \n**화면**: A-01 대원 계정  \n**오류 코드**: NOT_FOUND"
       operationId: post_admin_paramedics__id__reset_password
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3164,7 +3230,7 @@ paths:
       summary: 병원 검색 (공공 데이터)
       description: "**요구사항**: SFR-123  \n**화면**: A-03 병원 관리"
       operationId: get_admin_hospitals
-      security: *id018
+      security: *id017
       parameters:
       - name: q
         in: query
@@ -3204,9 +3270,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 병원 계정 + 라이선스 키 발급
-      description: "**요구사항**: SFR-123, COR-013  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, ACCOUNT_EXISTS"
+      description: "**요구사항**: SFR-123, COR-013  \n**화면**: A-03 병원 관리  \n**오류 코드**:\
+        \ NOT_FOUND, ACCOUNT_EXISTS"
       operationId: post_admin_hospitals__id__account
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       - ACCOUNT_EXISTS
@@ -3241,9 +3308,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 키 재발급 (사유)
-      description: "이전 키 폐기 → 그 키로 등록한 PC 전부 pc.revoked{key_revoked}.\n\n**요구사항**: SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      description: "이전 키 폐기 → 그 키로 등록한 PC 전부 pc.revoked{key_revoked}.\n\n**요구사항**:\
+        \ SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
       operationId: post_admin_hospitals__id__license_keys
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       - REASON_REQUIRED
@@ -3289,9 +3357,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 키 폐기 (사유)
-      description: "키와 등록 PC 전부 즉시 무효, pc.revoked{key_revoked}. 작업 이력에 사유.\n\n**요구사항**: SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      description: "키와 등록 PC 전부 즉시 무효, pc.revoked{key_revoked}. 작업 이력에 사유.\n\n**요구사항**:\
+        \ SFR-146  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
       operationId: post_admin_license_keys__id__revoke
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       - REASON_REQUIRED
@@ -3327,9 +3396,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 병원 계정 정지 (모든 PC 차단)
-      description: "pc.revoked{account_suspended}. 대기 요청은 요청 대상에서 빠짐.\n\n**요구사항**: SFR-123  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      description: "pc.revoked{account_suspended}. 대기 요청은 요청 대상에서 빠짐.\n\n**요구사항**:\
+        \ SFR-123  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
       operationId: post_admin_hospitals__id__suspend
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3354,7 +3424,7 @@ paths:
       summary: 등록 PC 목록
       description: "**요구사항**: SFR-147  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
       operationId: get_admin_hospitals__id__pcs
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3396,9 +3466,10 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: PC 해제
-      description: "그 PC에 pc.revoked{pc_released}.\n\n**요구사항**: SFR-147  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      description: "그 PC에 pc.revoked{pc_released}.\n\n**요구사항**: SFR-147  \n**화면**:\
+        \ A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
       operationId: delete_admin_pcs__id
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3423,7 +3494,7 @@ paths:
       summary: 응급실 입구 좌표 지정
       description: "**요구사항**: SFR-145  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
       operationId: put_admin_hospitals__id__entrance
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3452,9 +3523,11 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 관리자 알림
-      description: "**요구사항**: SFR-100, SFR-148  \n**화면**: A-02 모니터링"
+      description: "**요구사항**: SFR-100, SFR-148  \n**화면**: A-02 모니터링\n\nkind: collect_fail\
+        \ · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota · integrity(일\
+        \ 단위 정합성 점검, QUR-014)"
       operationId: get_admin_notifications
-      security: *id018
+      security: *id017
       parameters:
       - *id014
       - *id015
@@ -3512,7 +3585,7 @@ paths:
       summary: 알림 읽음
       description: "**요구사항**: SFR-100  \n**화면**: A-02 모니터링  \n**오류 코드**: NOT_FOUND"
       operationId: post_admin_notifications__id__read
-      security: *id018
+      security: *id017
       x-error-codes:
       - NOT_FOUND
       parameters:
@@ -3537,7 +3610,7 @@ paths:
       summary: 작업 이력 (수정·삭제 불가)
       description: "**요구사항**: SFR-091  \n**화면**: A-02 모니터링"
       operationId: get_admin_audit_logs
-      security: *id018
+      security: *id017
       parameters:
       - name: from
         in: query
@@ -3600,7 +3673,7 @@ paths:
       summary: 병원 응답 통계
       description: "**요구사항**: SFR-106, SFR-126  \n**화면**: A-02 모니터링"
       operationId: get_admin_stats_hospitals
-      security: *id018
+      security: *id017
       parameters:
       - name: days
         in: query
@@ -3632,6 +3705,260 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /request-targets/preview:
+    get:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 요청 대상 미리보기
+      description: "'병원에 요청'을 누르기 전에 지금 조건으로 요청이 갈 병원 수. 0곳이면 앱은 요청 버튼 대신 '등급 바꾸기'·'반경\
+        \ 넓히기'를 보여준다.\n\n**요구사항**: SFR-163, SFR-109  \n**화면**: S-04 하단"
+      operationId: get_request_targets_preview
+      security: *id009
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: lng
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: radiusKm
+        in: query
+        required: true
+        schema:
+          type: integer
+          enum:
+          - 10
+          - 20
+          - 30
+          - 40
+      - name: grade
+        in: query
+        required: false
+        schema:
+          type: integer
+          enum:
+          - 1
+          - 2
+          - 3
+      - name: prevTransportId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: 제외 병원 이어받기
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  byGrade:
+                    type: object
+                    properties:
+                      '1':
+                        type: integer
+                      '2':
+                        type: integer
+                      '3':
+                        type: integer
+                  serverNow:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /transports/{transportId}/journal-draft:
+    get:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: 구급활동일지 초안 (자동 항목)
+      description: "이송 종료(도착·취소) 후 10분 안에 팀원이 부른다(종료 뒤 팀 연결을 기억하는 시간, DAR-013). 앱은\
+        \ 받은 초안을 단말에 7일 보관하고 그 뒤 다시 부르지 않는다. 종료 전이면 409 TRANSPORT_NOT_ENDED, 10분이\
+        \ 지나면 404.\n\n**요구사항**: SFR-164, DAR-015  \n**화면**: S-13 구급활동일지  \n**오류 코드**:\
+        \ NOT_FOUND, TRANSPORT_NOT_ENDED"
+      operationId: get_transports__transportId__journal_draft
+      security: *id009
+      x-error-codes:
+      - NOT_FOUND
+      - TRANSPORT_NOT_ENDED
+      parameters:
+      - name: transportId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalDraft'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /journal/ai-organize:
+    post:
+      tags:
+      - 4. 이송 (대원 앱 · 핵심)
+      summary: AI 일지 정리 (제안)
+      description: "대원 메모·음성 입력 글을 일지 항목별로 나눈 제안을 돌려준다. 서버가 식별정보(이름·전화번호·주민번호 형태·주소)를\
+        \ 지운 뒤 AI로 보내고, 원문·응답은 저장하지 않는다(SER-017). 제한시간 10초(INR-006). 기능 토글 journalAi가\
+        \ 꺼져 있으면 403 FEATURE_DISABLED.\n\n**요구사항**: SFR-167, SER-017, INR-006, QUR-013\
+        \  \n**화면**: S-13  \n**오류 코드**: FEATURE_DISABLED, AI_UNAVAILABLE, VALIDATION_FAILED"
+      operationId: post_journal_ai_organize
+      security: *id009
+      x-error-codes:
+      - FEATURE_DISABLED
+      - AI_UNAVAILABLE
+      - VALIDATION_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  maxLength: 2000
+              required:
+              - text
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: object
+                    properties:
+                      chiefComplaint:
+                        type: string
+                        nullable: true
+                      history:
+                        type: string
+                        nullable: true
+                      treatment:
+                        type: string
+                        nullable: true
+                      medicalDirection:
+                        type: string
+                        nullable: true
+                      other:
+                        type: string
+                        nullable: true
+                  removedIdentifiers:
+                    type: integer
+                    description: 지운 식별정보 개수 (내용은 돌려주지 않음)
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /config:
+    get:
+      tags:
+      - 1. 대원 인증·계정
+      summary: 앱·웹 설정 (기능 토글)
+      description: '로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013).
+
+
+        **요구사항**: QUR-013, SFR-142'
+      operationId: get_config
+      security: []
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  featureFlags: &id018
+                    type: object
+                    properties:
+                      journalAi:
+                        type: boolean
+                      voiceInput:
+                        type: boolean
+                      hospitalGrade:
+                        type: boolean
+                  minAppVersion:
+                    type: string
+                  serverNow:
+                    type: string
+                    format: date-time
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/feature-flags:
+    get:
+      tags:
+      - 6. 관리자 웹
+      summary: 기능 토글 보기
+      description: "**요구사항**: QUR-013  \n**화면**: A-02"
+      operationId: get_admin_feature_flags
+      security: *id017
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema: *id018
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - 6. 관리자 웹
+      summary: 기능 토글 바꾸기
+      description: "작업 이력에 남김(SFR-091). 1분 안 반영.\n\n**요구사항**: QUR-013, SFR-091  \n\
+        **화면**: A-02"
+      operationId: put_admin_feature_flags
+      security: *id017
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *id018
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema: *id018
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     Error:
@@ -3649,8 +3976,11 @@ components:
             details:
               type: object
               properties: {}
-              description: 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName},
-                OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[]
+              description: 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신
+                Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED
+                → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName},
+                OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED
+                → fields[]
               nullable: true
           required:
           - code
@@ -3721,7 +4051,7 @@ components:
           nullable: true
         hasActiveTransport:
           type: boolean
-          description: 팀에 진행 중 이송 (앱 잠금 건너뛰기 판단, SFR-150)
+          description: 팀에 진행 중 이송 (근무 종료 확인 판단, SFR-113)
     Member:
       type: object
       properties:
@@ -3972,7 +4302,14 @@ components:
           nullable: true
         reason:
           type: string
-          enum: *id017
+          enum:
+          - er_bed
+          - or_room
+          - ward
+          - icu
+          - no_specialist
+          - equipment
+          - etc
           description: 거절·승인 취소 사유
           nullable: true
         reasonText:
@@ -4086,7 +4423,8 @@ components:
               type: string
               enum: *id020
               nullable: true
-          description: 이동 중 목적지. requestStatus=closed·closeReason=approval_cancelled면 '다시 요청' 버튼
+          description: 이동 중 목적지. requestStatus=closed·closeReason=approval_cancelled면
+            '다시 요청' 버튼
           nullable: true
         canReRequest:
           type: boolean
@@ -4128,6 +4466,19 @@ components:
         createdAt:
           type: string
           format: date-time
+        requestedGrade:
+          type: integer
+          enum:
+          - 1
+          - 2
+          - 3
+          nullable: true
+          description: '병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관).
+            null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)'
+        distanceKm:
+          type: number
+          nullable: true
+          description: 이동 거리 (종료 후, 구급활동일지용, SFR-041)
     HospitalCard:
       type: object
       properties:
@@ -4181,6 +4532,13 @@ components:
         excluded:
           type: boolean
           description: 이번 이송 제외 병원
+        grade:
+          type: integer
+          enum:
+          - 1
+          - 2
+          - 3
+          description: 병원 등급 (부록 F)
     HospitalDetail:
       type: object
       properties:
@@ -4239,6 +4597,13 @@ components:
                 description: 공공 데이터 표기 그대로
               available:
                 type: boolean
+        grade:
+          type: integer
+          enum:
+          - 1
+          - 2
+          - 3
+          description: 병원 등급 (부록 F)
     HwRequestItem:
       type: object
       properties:
@@ -4467,7 +4832,14 @@ components:
           type: integer
         topRejectReason:
           type: string
-          enum: *id017
+          enum:
+          - er_bed
+          - or_room
+          - ward
+          - icu
+          - no_specialist
+          - equipment
+          - etc
           nullable: true
         approvalCancelRate:
           type: number
@@ -4481,6 +4853,139 @@ components:
         rejectSpike:
           type: boolean
           description: 최근 7일 거절률이 30일보다 20%p 이상 높음
+        rejectBySource:
+          type: object
+          description: 거절 사유 건수, 출처별 (SFR-106)
+          properties:
+            hospitalWeb:
+              type: object
+              additionalProperties:
+                type: integer
+            paused:
+              type: object
+              additionalProperties:
+                type: integer
+            phoneCheck:
+              type: object
+              additionalProperties:
+                type: integer
+            approvalCancelled:
+              type: object
+              additionalProperties:
+                type: integer
+            unacceptable:
+              type: object
+              additionalProperties:
+                type: integer
+    JournalDraft:
+      type: object
+      description: 구급활동일지 초안의 자동 항목 (부록 G). 서버는 따로 저장하지 않고 이송 건 기록에서 그때 만든다. 환자 성명·주소
+        등은 없음 — 앱이 단말에서만 입력·보관 (DAR-015)
+      properties:
+        transportId:
+          type: string
+          format: uuid
+        agencyName:
+          type: string
+        safetyCenter:
+          type: string
+        crew:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              rank:
+                type: string
+              role:
+                type: string
+                enum:
+                - driver
+                - care
+        departedAt:
+          type: string
+          format: date-time
+          nullable: true
+        arrivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        distanceKm:
+          type: number
+          nullable: true
+        sex:
+          type: string
+          nullable: true
+        ageBand:
+          type: string
+          nullable: true
+        symptoms:
+          type: array
+          items:
+            type: string
+        chiefComplaint:
+          type: string
+          nullable: true
+        onsetAt:
+          type: string
+          nullable: true
+        consciousness:
+          type: string
+          enum:
+          - A
+          - V
+          - P
+          - U
+          nullable: true
+        vitals:
+          type: object
+          properties:
+            sbp:
+              type: integer
+            dbp:
+              type: integer
+            pulse:
+              type: integer
+            resp:
+              type: integer
+            temp:
+              type: number
+            spo2:
+              type: integer
+            glucose:
+              type: integer
+        history:
+          type: string
+          nullable: true
+        ktas:
+          type: integer
+          nullable: true
+        hospitalName:
+          type: string
+          nullable: true
+        reTransferReasons:
+          type: array
+          items:
+            type: object
+            properties:
+              hospitalName:
+                type: string
+              reason:
+                type: string
+                enum:
+                - er_bed
+                - or_room
+                - ward
+                - icu
+                - no_specialist
+                - equipment
+                - etc
+          description: 재이송 사유 (거절 기록에서)
+        notTransportedReason:
+          type: string
+          nullable: true
+          description: 취소 사유 (미이송)
   securitySchemes:
     paramedicAuth:
       type: http

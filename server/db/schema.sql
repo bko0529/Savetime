@@ -1,5 +1,6 @@
 -- =====================================================================
--- 세이브타임 DB 스키마 v0.2 (PostgreSQL 16)  ·  요구사항분석서 v0.115 · 상태 전이표 v0.2 기준
+-- 세이브타임 DB 스키마 v0.3 (PostgreSQL 16)  ·  요구사항분석서 v1.4 · 상태 전이표 v0.2 기준
+-- v0.3: 앱 잠금 PIN 삭제(D-110), 병원 등급(D-120), 거절 사유 일지 분류·전체 축적(D-115), 익명 이송 경로(D-113), 기능 토글(D-122)
 -- 그룹: A 계정·인증 / B 팀 / C 병원 / D 이송(핵심) / E 기록·통계 / F 관리자
 -- 규칙: 시간은 모두 timestamptz(서버 시각), 삭제 대신 상태값·deleted_at 사용
 -- =====================================================================
@@ -51,8 +52,6 @@ CREATE TABLE paramedic (                               -- 구급대원
   safety_center varchar(60)  NOT NULL,                 -- 소속 안전센터
   employee_no   varchar(30)  NOT NULL,                 -- 사번 (동명이인 구분)
   status        paramedic_status NOT NULL DEFAULT 'pending',
-  pin_hash      text,                                  -- 앱 잠금 PIN 6자리 (SFR-150)
-  pin_failed    int          NOT NULL DEFAULT 0,
   failed_count  int          NOT NULL DEFAULT 0,
   locked_until  timestamptz,
   created_at    timestamptz  NOT NULL DEFAULT now(),
@@ -163,6 +162,8 @@ CREATE TABLE hospital (
   in_region       boolean       NOT NULL DEFAULT true, -- 수집 지역 밖이면 '병상 정보 없음'
   account_active  boolean       NOT NULL DEFAULT false,-- 병원 계정 발급·정지
   requests_paused boolean       NOT NULL DEFAULT false,-- 잠시 요청 중지 (SFR-139, 병원 전체에 적용)
+  emcls_code      varchar(10),                         -- 공공 데이터 응급의료기관 종별 코드 원본 (INR-001)
+  grade           smallint      NOT NULL DEFAULT 3 CHECK (grade IN (1,2,3)),  -- 1 대학병원급 · 2 종합병원급 · 3 일반 병원 (부록 F, SFR-162)
   paused_at       timestamptz                          -- 2시간 알림용
 );
 
@@ -246,6 +247,7 @@ CREATE TABLE transport (                               -- 이송 건
   prev_transport_id     uuid             REFERENCES transport(id),  -- 직전 건 (제외 병원 이어받기)
   status                transport_status NOT NULL DEFAULT 'requesting',
   request_radius_km     smallint         NOT NULL DEFAULT 20 CHECK (request_radius_km IN (10,20,30,40)),
+  requested_grade       smallint         CHECK (requested_grade IN (1,2,3)),  -- NULL = 등급 안 고름(전체). 고른 등급 이상에만 요청 (SFR-162)
   fallback_radius_km    smallint         NOT NULL DEFAULT 20 CHECK (fallback_radius_km IN (10,20,30,40)),
   origin_lat            numeric(9,6),                   -- 원본 위치: 이송 끝나면 NULL
   origin_lng            numeric(9,6),
@@ -261,6 +263,7 @@ CREATE TABLE transport (                               -- 이송 건
   departed_at           timestamptz,                    -- 처음 출발 시각, 다시 요청·목적지 변경 뒤에도 유지 (SFR-036)
   last_activity_at      timestamptz      NOT NULL DEFAULT now(), -- 2시간 활동 없음 자동 종료 (SFR-086, 위치 기록 제외)
   arrived_at            timestamptz,
+  distance_m            int,                             -- 이동 거리 (종료 때 계산, 구급활동일지, SFR-041)
   arrival_method        varchar(16) CHECK (arrival_method IN ('button','menu','hospital','finish_previous')),
   cancelled_at          timestamptz,
   cancel_reason         varchar(20) CHECK (cancel_reason IN ('user','auto_inactive','duty_end','logout','withdrawal','suspended','offline_superseded')),
@@ -333,7 +336,7 @@ CREATE TABLE hospital_request (                        -- 병원 요청: 회차 
   extra_memo        varchar(50),                       -- 확정 뒤 추가 메모 1번 (SFR-140)
   extra_memo_at     timestamptz,
   prev_approved_recheck boolean NOT NULL DEFAULT false, -- '직전 승인 · 재확인' (SFR-156)
-  reason            varchar(20) CHECK (reason IN ('er_bed','icu_or','no_specialist','equipment','overcrowded','etc','paused')),  -- 거절·승인 취소·수용 불가 사유 (paused = 요청 중지 자동 거절)
+  reason            varchar(20) CHECK (reason IN ('er_bed','or_room','ward','icu','no_specialist','equipment','etc','paused')),  -- 거절·승인 취소·수용 불가 사유 (paused = 요청 중지 자동 거절)
   reason_text       varchar(20),                       -- '기타' 글 (SFR-119)
   closed_reason     varchar(20) CHECK (closed_reason IN ('other_hospital','fallback','cancelled','expired_approval','approval_cancelled','dest_changed')),
   arrived_at        timestamptz,                       -- 열람 1시간·수용 불가 10분 기준
@@ -358,7 +361,7 @@ CREATE TABLE phone_check (                             -- 예비 흐름 전화 �
   hospital_id  bigint       NOT NULL REFERENCES hospital(id),
   result       phone_result NOT NULL,
   reason       varchar(16) CHECK (reason IN ('no_answer','busy','urgent','etc')),  -- 연결 실패·확인 생략 사유
-  reject_reason varchar(16) CHECK (reject_reason IN ('er_bed','icu_or','no_specialist','equipment','overcrowded','etc')),  -- 거절 사유 (선택, SFR-044)
+  reject_reason varchar(16) CHECK (reject_reason IN ('er_bed','or_room','ward','icu','no_specialist','equipment','etc')),  -- 거절 사유 (선택, SFR-044)
   reason_text  varchar(30),                            -- '기타' 글
   -- 기록한 대원 칸 없음: 전화 결과·거절 기록은 계정과 연결하지 않음 (DAR-004)
   offline     boolean      NOT NULL DEFAULT false,  -- 통신 두절 중 기록 후 복구 때 전송
@@ -366,7 +369,7 @@ CREATE TABLE phone_check (                             -- 예비 흐름 전화 �
   created_at   timestamptz  NOT NULL DEFAULT now()
 );
 
-CREATE TABLE location_point (                          -- 이송 중 위치 (담당 단말, 5초마다). 이송 끝나면 바로 삭제
+CREATE TABLE location_point (                          -- 이송 중 위치 (담당 단말, 5초마다). 이송 끝나면 anonymous_route로 옮기고 바로 삭제 (SER-002)
   transport_id uuid         NOT NULL REFERENCES transport(id) ON DELETE CASCADE,
   device_id    varchar(80)  NOT NULL,
   lat          numeric(9,6) NOT NULL,
@@ -404,6 +407,30 @@ CREATE TABLE response_stat (                           -- 응답·거절 통계 
   round_sent_at timestamptz NOT NULL
 );
 
+CREATE TABLE anonymous_route (                         -- 익명 이송 경로: 대원·팀·이송 건 연결 없음 (DAR-014, 3년 초안)
+  id           bigserial    PRIMARY KEY,
+  hospital_id  bigint       REFERENCES hospital(id),
+  departed_at  timestamptz,
+  ended_at     timestamptz  NOT NULL,
+  cancelled    boolean      NOT NULL DEFAULT false,
+  distance_m   int          NOT NULL,
+  points       jsonb        NOT NULL,                  -- [[lat, lng, 출발 후 초, 속도km/h], ...]
+  created_at   timestamptz  NOT NULL DEFAULT now()
+);
+CREATE INDEX ON anonymous_route (hospital_id, ended_at);
+
+CREATE TABLE rejection_record (                        -- 모든 출처의 거절을 쌓음 (SFR-126, D-115). 계정과 연결하지 않음
+  id           bigserial    PRIMARY KEY,
+  hospital_id  bigint       NOT NULL REFERENCES hospital(id),
+  source       varchar(20)  NOT NULL CHECK (source IN ('hospital_web','paused','phone_check','approval_cancelled','unacceptable')),
+  reason       varchar(16)  CHECK (reason IN ('er_bed','or_room','ward','icu','no_specialist','equipment','etc','paused')),
+  reason_text  varchar(30),
+  symptom_code char(3),                                -- NULL = 미선택
+  requested_grade smallint  CHECK (requested_grade IN (1,2,3)),
+  created_at   timestamptz  NOT NULL DEFAULT now()
+);
+CREATE INDEX ON rejection_record (hospital_id, created_at);
+
 CREATE TABLE transport_stat (                          -- 익명 소요시간 (원본 위치 대신)
   id                 bigserial   PRIMARY KEY,
   hospital_id        bigint      REFERENCES hospital(id),
@@ -411,7 +438,8 @@ CREATE TABLE transport_stat (                          -- 익명 소요시간 (�
   request_to_depart_sec  int,                          -- 핵심 지표 '요청 → 출발'
   departed_at        timestamptz,
   arrived_at         timestamptz,
-  duration_sec       int
+  duration_sec       int,
+  distance_m         int
 );
 
 -- =====================================================================
@@ -433,7 +461,7 @@ CREATE RULE view_log_no_delete AS ON DELETE TO request_view_log DO INSTEAD NOTHI
 
 CREATE TABLE admin_notification (                      -- 관리자 알림 (같은 종류 30분 안 재발생은 횟수만)
   id          bigserial   PRIMARY KEY,
-  kind        varchar(30) NOT NULL,                    -- collect_fail / signup / pc_change / key_expiring / odd_pc
+  kind        varchar(30) NOT NULL,                    -- collect_fail / signup / pc_change / key_expiring(30·7·1일) / odd_pc / api_quota / integrity(QUR-014)
   ref_id      bigint,
   occurrences int         NOT NULL DEFAULT 1,
   first_at    timestamptz NOT NULL DEFAULT now(),
@@ -458,3 +486,14 @@ CREATE TABLE event_log (
 );
 CREATE INDEX ON event_log (room, seq);
 -- 24시간 지난 행은 수집기가 지움. payload에는 환자 평가 정보를 넣지 않음 (ID·개수·시각만, SER-014)
+
+-- =====================================================================
+-- H. 운영 (v0.3)
+-- =====================================================================
+CREATE TABLE feature_flag (                            -- 기능 토글 (QUR-013). 앱·웹은 GET /config로 1분마다 읽음
+  key         varchar(40)  PRIMARY KEY,                -- journal_ai / voice_input / hospital_grade
+  enabled     boolean      NOT NULL DEFAULT false,
+  updated_at  timestamptz  NOT NULL DEFAULT now(),
+  updated_by  bigint       REFERENCES admin(id)
+);
+INSERT INTO feature_flag (key, enabled) VALUES ('journal_ai', false), ('voice_input', true), ('hospital_grade', true);

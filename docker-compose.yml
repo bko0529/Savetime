@@ -1,0 +1,27 @@
+# 로컬 개발용: PostgreSQL 16 + Redis 7 (기술정의서 v0.8 · 7. 환경)
+# 실행: docker compose up -d   /  초기화: docker compose down -v && docker compose up -d
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: savetime
+      POSTGRES_PASSWORD: savetime_local   # 로컬 전용. 운영 비밀번호는 서버 .env에만
+      POSTGRES_DB: savetime
+      TZ: UTC
+    ports: ["5432:5432"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro   # 처음 만들 때 한 번 실행
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U savetime"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]   # AOF 켬 (기술정의서 T-08)
+    ports: ["6379:6379"]
+    volumes:
+      - redis-data:/data
+volumes:
+  db-data:
+  redis-data:

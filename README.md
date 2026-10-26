@@ -12,18 +12,20 @@
 ## 폴더 구조
 ```
 savetime/
-├─ docs/기술정의서.md        쓰는 기술·버전·이유 (먼저 읽기)
+├─ docs/개발준비.md         개발 시작 가이드 (처음 받으면 여기부터)
+├─ docs/기술정의서.md        쓰는 기술·버전·이유 (v0.8)
 ├─ docs/design-v0.2/        설계 문서
 │   ├─ 1_상태전이표.md        이송 건 6개 상태 · 병원 요청 9개 상태
-│   ├─ 2_DB설계_설명.md       테이블 36개 설명
+│   ├─ 2_DB설계_설명.md       테이블 39개 설명
 │   ├─ 3_실시간통신설계.md     Socket.IO 이벤트 · 타이머
-│   ├─ 4_API명세.md          API 83개 요약 · 오류 코드
+│   ├─ 4_API명세.md          API 87개 요약 · 오류 코드
 │   └─ openapi.yaml          API 전체 명세 (editor.swagger.io 에 붙여 넣으면 보기 좋음)
 ├─ server/
 │   ├─ src/domain/stateMachine.ts       상태 전이 (서버에 그대로 사용)
 │   ├─ src/domain/stateMachine.test.ts  테스트 31개
 │   ├─ db/schema.sql                    DB 생성 SQL (PostgreSQL 16)
 │   └─ .env.example                     환경 변수 예시
+├─ docker-compose.yml       로컬 PostgreSQL 16 + Redis 7
 ├─ shared/events.ts         서버·앱·웹이 같이 쓰는 실시간 이벤트 타입
 ├─ app/                     구급대원 앱 (예정)
 ├─ web/                     병원·관리자 웹 (예정)
@@ -34,6 +36,12 @@ savetime/
 ```bash
 git clone https://github.com/bko0529/savetime.git
 cd savetime
+```
+
+## 로컬 DB·Redis 켜기
+```bash
+docker compose up -d            # 처음 한 번 schema.sql로 테이블 39개 생성
+cp server/.env.example server/.env
 ```
 
 ## 테스트 돌려 보기 (서버)
@@ -54,4 +62,4 @@ python tools/crosscheck.py   # 상태·DB·실시간·API 34개 항목 대조
 2. **환자 이름·주민번호·전화번호는 어디에도 저장하지 않아요.** 실시간 이벤트에도 환자 정보는 넣지 않아요.
 3. **병원 웹에는 요청한 구급대 소속을 보여주지 않아요.**
 4. 상태를 바꾸는 코드는 반드시 `stateMachine.ts`의 함수를 거쳐요. 표에 없는 전이는 전부 거부돼요.
-5. `main`에 바로 올리지 말고 브랜치를 만들어 PR로 합쳐요 (브랜치 규칙은 2-3 단계에서 정해요).
+5. `main`에 바로 올리지 말고 브랜치를 만들어 PR로 합쳐요. 브랜치 이름·커밋·PR 규칙은 `docs/개발준비.md` 4장.

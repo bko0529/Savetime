@@ -1,6 +1,18 @@
-# 세이브타임 API 명세 v0.2
+# 세이브타임 API 명세 v0.3
 
-요구사항분석서 v0.115 · 상태 전이표 v0.2 · DB 스키마 v0.2 · 실시간 통신 설계 v0.2 기준 · 상세 스키마는 `openapi.yaml` / `API명세_문서.html`
+요구사항분석서 v1.4 · 상태 전이표 v0.2 · DB 스키마 v0.2 · 실시간 통신 설계 v0.2 기준 · 상세 스키마는 `openapi.yaml` / `API명세_문서.html`
+
+## v0.2 → v0.3 바뀐 점 (요구사항 v1.4, CR-004)
+
+| 바뀐 점 | 근거 |
+|---|---|
+| 앱 잠금 API 2개 삭제(`PUT /me/pin`, `POST /me/pin/verify`), 갱신 토큰은 근무 종료 때 폐기(최대 14시간) | D-110, SER-007 |
+| 병원 등급: `POST /transports`에 `requestedGrade`(1·2·3, 없으면 전체), 병원 카드·상세에 `grade`, 새 API `GET /request-targets/preview` | D-120, SFR-162·163 |
+| 구급활동일지: 새 API `GET /transports/{id}/journal-draft`(종료 후 10분 안, 서버 저장 없음), `POST /journal/ai-organize`(식별정보 지우고 AI 제안), 도착 응답에 `distanceKm` | D-111·112, SFR-164·167, SER-017 |
+| 거절 사유 목록 변경: `er_bed · or_room · ward · icu · no_specialist · equipment · etc` (환자 과밀 → 응급실 병상 부족에 포함, 일지 재이송 사유와 대응) | D-115 |
+| 통계 `rejectBySource`(출처별 거절 사유) | D-115, SFR-106 |
+| 기능 토글: `GET /config`, `GET·PUT /admin/feature-flags` | D-122, QUR-013 |
+| 관리자 알림 kind에 `integrity`(일 단위 정합성 점검) | QUR-014 |
 
 ## v0.1 → v0.2 바뀐 점
 
@@ -23,7 +35,7 @@
 
 - 기본 주소: `/api/v1` · 형식: JSON (가입 신청·재신청만 multipart)
 - 시간: ISO 8601, 모두 **서버 시각**. 모든 응답 헤더에 `X-Server-Now`, 시간이 중요한 응답 본문에는 `serverNow`. 2분·5분은 서버 수신 시각으로 판정
-- 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(30일, 폐기 가능) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
+- 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(근무 종료 때 폐기, 최대 14시간) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
 - **계정 상태는 요청마다 확인** (정지·탈퇴·PC 해제 후 10초 안 모든 요청 거부, SER-016). 토큰이 살아 있어도 401·403
 - 병원·관리자 웹: 상태를 바꾸는 요청은 `Origin` 헤더가 허용 목록일 때만 (CSRF 방어)
 - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
@@ -34,7 +46,7 @@
 - 각 API의 `x-state-events`는 거치는 상태 전이 사건 이름 (stateMachine.ts)
 - 실시간 알림(웹소켓 이벤트)은 실시간 통신 설계 v0.2·events.ts에서 정의. 이벤트에는 환자 정보가 없으니 받으면 이 API로 상세를 가져온다
 
-## API 목록 (83개)
+## API 목록 (87개)
 
 ### 1. 대원 인증·계정
 
@@ -48,10 +60,9 @@
 | POST | `/auth/logout` | 로그아웃 (팀에서 빠짐) | 대원 | CANCEL | S-12 설정 | SFR-070, SFR-113 |
 | GET | `/me` | 내 정보 | 대원 | - | S-02 승인 대기 · 앱 시작 | SFR-022, SFR-083 |
 | PUT | `/me/password` | 비밀번호 변경 (임시 비밀번호 후 필수) | 대원 | - | (비밀번호 변경) | SFR-021 |
-| PUT | `/me/pin` | 앱 잠금 PIN 설정·변경 | 대원 | - | S-12 설정 | SFR-150 |
-| POST | `/me/pin/verify` | PIN 확인 (5회 실패 시 로그아웃) | 대원 | CANCEL | S-02 앱 잠금 | SFR-150 |
 | PUT | `/me/push-device` | 푸시 토큰 등록 | 대원 | - | 앱 시작 | SFR-130, COR-009 |
 | DELETE | `/me` | 회원 탈퇴 | 대원 | CANCEL | S-12 설정 | SFR-071, SFR-113 |
+| GET | `/config` | 앱·웹 설정 (기능 토글·최소 버전) | 없음 | - | 앱 시작 · 웹 시작 | QUR-013, SFR-142 |
 
 ### 2. 팀
 
@@ -85,6 +96,7 @@
 | 메서드 | 주소 | 하는 일 | 인증 | 상태 전이 | 화면 | 요구사항 |
 |---|---|---|---|---|---|---|
 | POST | `/transports` | 이송 건 만들기 + 병원에 동시 요청 | 대원 | CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS | S-04 → S-05 응답 대기 / S-06 | SFR-109, SFR-104, SFR-129, SFR-157, SFR-161 |
+| GET | `/request-targets/preview` | 요청 대상 미리보기 (반경·등급별 병원 수) | 대원 | - | S-04 하단 | SFR-163, SFR-109 |
 | GET | `/transports/current` | 진행 중 이송 불러오기 (앱 재실행 복구) | 대원 | - | 앱 시작 · 모든 이송 화면 | SFR-133 |
 | GET | `/transports/{transportId}` | 이송 건 보기 | 대원 | - | S-05 · S-09 | SFR-110 |
 | POST | `/transports/{transportId}/confirm` | 승인 병원 확정 | 대원 | CONFIRM | S-05 확정 확인 | SFR-111, SFR-134, SFR-160, SFR-125 |
@@ -100,6 +112,8 @@
 | POST | `/transports/{transportId}/destination` | 목적지 변경 (이송 건당 1번) | 대원 | CHANGE_DESTINATION | S-09 경로 안내 | SFR-077, SFR-156 |
 | POST | `/transports/{transportId}/arrive` | 도착 처리 | 대원 | ARRIVE | S-10 도착 처리 | SFR-038, SFR-080, SFR-039, SFR-144 |
 | POST | `/transports/{transportId}/cancel` | 이송 취소 | 대원 | CANCEL | S-05 · S-06 · S-08 · S-09 | SFR-076 |
+| GET | `/transports/{transportId}/journal-draft` | 구급활동일지 초안 자동 항목 (종료 후 10분 안) | 대원 | - | S-13 구급활동일지 | SFR-164, DAR-015 |
+| POST | `/journal/ai-organize` | AI 일지 정리 제안 (식별정보 제거 후) | 대원 | - | S-13 구급활동일지 | SFR-167, SER-017 |
 | POST | `/transports/sync` | 통신 두절 중 기록 올리기 | 대원 | CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE | S-11 오프라인 → 복구 | SFR-099, SFR-068, SFR-160 |
 
 ### 5. 병원 웹
@@ -148,6 +162,8 @@
 | POST | `/admin/notifications/{id}/read` | 알림 읽음 | 관리자 | - | A-02 모니터링 | SFR-100 |
 | GET | `/admin/audit-logs` | 작업 이력 (수정·삭제 불가) | 관리자 | - | A-02 모니터링 | SFR-091 |
 | GET | `/admin/stats/hospitals` | 병원 응답 통계 | 관리자 | - | A-02 모니터링 | SFR-106, SFR-126 |
+| GET | `/admin/feature-flags` | 기능 토글 보기 | 관리자 | - | A-02 모니터링 | QUR-013 |
+| PUT | `/admin/feature-flags` | 기능 토글 바꾸기 (작업 이력) | 관리자 | - | A-02 모니터링 | QUR-013, SFR-091 |
 
 ## 오류 코드
 
@@ -162,6 +178,7 @@
 | 401 | `TOKEN_EXPIRED` | 토큰 만료 → refresh |
 | 401 | `TOKEN_REVOKED` | 토큰 폐기 → 다시 로그인 |
 | 403 | `ACCOUNT_SUSPENDED` | 정지된 계정 |
+| 403 | `FEATURE_DISABLED` | 기능 토글로 꺼진 기능 → 버튼 숨김 |
 | 403 | `DRIVER_INPUT_LOCKED` | 운전 중 입력 잠금 |
 | 403 | `LICENSE_EXPIRED` | 라이선스 키 만료 → 관리자에게 재발급 요청 |
 | 403 | `NOT_APPROVED` | 가입 승인 전 계정 |
@@ -200,6 +217,7 @@
 | 409 | `SIGNUP_NOT_REJECTED` | 반려된 계정만 재신청 가능 |
 | 409 | `TARGET_IN_TEAM` | 초대 대상이 이미 다른 팀 |
 | 409 | `TEAM_FULL` | 팀 4명 꽉 참 |
+| 409 | `TRANSPORT_NOT_ENDED` | 이송이 끝나기 전에는 일지 초안 없음 |
 | 409 | `VERSION_CONFLICT` | 그사이 다른 사람이 바꿈 → details.current로 화면 갱신 |
 | 409 | `WINDOW_PASSED` | 도착 후 10분이 지나 수용 불가를 못 누름 |
 | 410 | `PHOTO_DELETED` | 공무원증 사진이 이미 삭제됨 |
@@ -208,17 +226,17 @@
 | 422 | `NO_REQUEST_TARGET` | 반경 넓히기 대상 0곳 (상태 그대로) → 다음 단계 반경 안내 |
 | 422 | `REASON_REQUIRED` | 사유 필수 |
 | 423 | `ACCOUNT_LOCKED` | 5번 실패 → 10분 잠금 |
-| 423 | `PIN_LOCKED_OUT` | PIN 5번 실패 → 로그아웃 |
 | 423 | `TOO_MANY_ATTEMPTS` | 라이선스 키 5번 실패 → 잠금 |
+| 503 | `AI_UNAVAILABLE` | AI 응답 실패·10초 초과 → 초안 그대로, '지금은 정리할 수 없어요' |
 
 ## 화면 → API 대조표
 
 | 화면 | 부르는 API |
 |---|---|
 | S-01 | (서버 호출 없음 · 폰 권한만) |
-| S-02 | `GET /agencies/{code}` · `POST /auth/signup` · `PUT /me/signup` · `POST /auth/login` · `GET /me` · `POST /me/pin/verify` |
+| S-02 | `GET /agencies/{code}` · `POST /auth/signup` · `PUT /me/signup` · `POST /auth/login` · `GET /me` |
 | S-03 | `POST /teams` · `POST /teams/join` · `GET /teams/current` · `PATCH /teams/current/members/me` · `POST /teams/current/leave` · `GET /paramedics/on-duty` · `POST /teams/current/invites` · `PUT /memos/{paramedicId}` |
-| S-04 | `GET /teams/current/draft` · `PATCH /teams/current/draft` · `DELETE /teams/current/draft` · `GET /symptoms` · `GET /geocode` · `POST /transports` |
+| S-04 | `GET /teams/current/draft` · `PATCH /teams/current/draft` · `DELETE /teams/current/draft` · `GET /symptoms` · `GET /geocode` · `GET /request-targets/preview` · `POST /transports` |
 | S-05 | `POST /transports` · `GET /transports/{transportId}` · `POST /transports/{transportId}/confirm` · `POST /transports/{transportId}/fallback` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/cancel` |
 | S-06 | `GET /geocode` · `GET /hospitals/nearby` · `POST /transports` · `GET /transports/{transportId}/recommendations` · `PUT /transports/{transportId}/fallback-radius` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/cancel` |
 | S-07 | `GET /hospitals/{hospitalId}` |
@@ -226,12 +244,13 @@
 | S-09 | `GET /transports/{transportId}` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/nav-device` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/locations` · `POST /transports/{transportId}/destination` · `POST /transports/{transportId}/cancel` |
 | S-10 | `POST /transports/{transportId}/arrive` |
 | S-11 | `GET /hospitals/nearby` · `POST /transports/sync` |
-| S-12 | `POST /auth/logout` · `PUT /me/pin` · `DELETE /me` · `POST /teams/current/leave` |
+| S-12 | `POST /auth/logout` · `DELETE /me` · `POST /teams/current/leave` |
+| S-13 | `GET /transports/{transportId}/journal-draft` · `POST /journal/ai-organize` |
 | H-01 | `POST /hw/pc/register` · `GET /hw/session` · `POST /hw/shifts` · `POST /hw/shifts/current/alarm-on` |
 | H-02 | `POST /hw/shifts/current/end` · `PUT /hw/pause` · `GET /hw/requests` · `GET /hw/requests/{requestId}` · `POST /hw/requests/{requestId}/approve` · `POST /hw/requests/{requestId}/reject` · `POST /hw/requests/{requestId}/cancel-approval` |
 | H-03 | `POST /hw/requests/{requestId}/cancel-approval` · `GET /hw/incoming` · `POST /hw/requests/{requestId}/extra-memo` · `POST /hw/requests/{requestId}/confirm-arrival` · `POST /hw/requests/{requestId}/unacceptable` |
 | A-01 | `POST /admin/auth/login` · `POST /admin/auth/otp/enroll` · `GET /admin/signups` · `GET /admin/signups/{id}/photo` · `POST /admin/signups/{id}/approve` · `POST /admin/signups/{id}/reject` · `GET /admin/paramedics` · `POST /admin/paramedics/{id}/suspend` · `POST /admin/paramedics/{id}/unsuspend` · `POST /admin/paramedics/{id}/reset-password` |
-| A-02 | `GET /admin/notifications` · `POST /admin/notifications/{id}/read` · `GET /admin/audit-logs` · `GET /admin/stats/hospitals` |
+| A-02 | `GET /admin/notifications` · `POST /admin/notifications/{id}/read` · `GET /admin/audit-logs` · `GET /admin/stats/hospitals` · `GET /admin/feature-flags` · `PUT /admin/feature-flags` |
 | A-03 | `GET /admin/hospitals` · `POST /admin/hospitals/{id}/account` · `POST /admin/hospitals/{id}/license-keys` · `POST /admin/license-keys/{id}/revoke` · `POST /admin/hospitals/{id}/suspend` · `GET /admin/hospitals/{id}/pcs` · `DELETE /admin/pcs/{id}` · `PUT /admin/hospitals/{id}/entrance` |
 
 ## 예시: 핵심 한 바퀴
