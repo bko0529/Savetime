@@ -1,0 +1,6 @@
+# API 키가 커밋에 섞이면 여기서 막는다 (SER-001)
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks가 없어 커밋을 막습니다. docs/개발준비.md 3번을 보고 설치하세요." >&2
+  exit 1
+fi
+gitleaks git --pre-commit --staged --redact --no-banner
