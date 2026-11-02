@@ -26,6 +26,21 @@ jobs:
   test:
     name: 테스트
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: savetime
+          POSTGRES_PASSWORD: savetime_local
+          POSTGRES_DB: savetime
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U savetime"
+          --health-interval 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -2,6 +2,7 @@
 -- 세이브타임 DB 스키마 v0.3 (PostgreSQL 16)  ·  요구사항분석서 v1.4 · 상태 전이표 v0.2 기준
 -- v0.3: 앱 잠금 PIN 삭제(D-110), 병원 등급(D-120), 거절 사유 일지 분류·전체 축적(D-115), 익명 이송 경로(D-113), 기능 토글(D-122)
 -- 그룹: A 계정·인증 / B 팀 / C 병원 / D 이송(핵심) / E 기록·통계 / F 관리자
+-- 이 파일은 지금 DB 구조를 한눈에 보는 문서. 실제 변경은 db/migrations/에 번호 붙은 파일로 하고 여기도 같이 고친다.
 -- 규칙: 시간은 모두 timestamptz(서버 시각), 삭제 대신 상태값·deleted_at 사용
 -- =====================================================================
 CREATE EXTENSION IF NOT EXISTS pgcrypto;  -- gen_random_uuid()
@@ -164,7 +165,8 @@ CREATE TABLE hospital (
   requests_paused boolean       NOT NULL DEFAULT false,-- 잠시 요청 중지 (SFR-139, 병원 전체에 적용)
   emcls_code      varchar(10),                         -- 공공 데이터 응급의료기관 종별 코드 원본 (INR-001)
   grade           smallint      NOT NULL DEFAULT 3 CHECK (grade IN (1,2,3)),  -- 1 대학병원급 · 2 종합병원급 · 3 일반 병원 (부록 F, SFR-162)
-  paused_at       timestamptz                          -- 2시간 알림용
+  paused_at       timestamptz,                         -- 2시간 알림용
+  departments     text[]        NOT NULL DEFAULT '{}'  -- 진료과 (SFR-007)
 );
 
 CREATE TABLE license_key (                             -- 라이선스 키 (SFR-123, 146)
@@ -203,7 +205,8 @@ CREATE TABLE bed_current (                             -- 병상 캐시: 병원�
   er_avail int, er_total int, icu_avail int, icu_total int, or_avail int, or_total int,
   source_time  timestamptz NOT NULL,                   -- 공공 데이터 기준 시각 ('기준 14:02')
   collected_at timestamptz NOT NULL DEFAULT now(),
-  raw          jsonb
+  raw          jsonb,
+  excluded     boolean     NOT NULL DEFAULT false      -- 이상치라 추천에서 제외 (SFR-088)
 );
 
 CREATE TABLE bed_history (                             -- 병상 이력 30일 (DAR-007, 2단계 분석용)
@@ -217,6 +220,35 @@ CREATE TABLE capability_item (                         -- 중증질환 진료가
   code  varchar(20) PRIMARY KEY,
   name  varchar(80) NOT NULL
 );
+
+INSERT INTO capability_item (code, name) VALUES
+  ('mkioskty1', '[재관류중재술] 심근경색'),
+  ('mkioskty2', '[재관류중재술] 뇌경색'),
+  ('mkioskty3', '[뇌출혈수술] 거미막하출혈'),
+  ('mkioskty4', '[뇌출혈수술] 거미막하출혈 외'),
+  ('mkioskty5', '[대동맥응급] 흉부'),
+  ('mkioskty6', '[대동맥응급] 복부'),
+  ('mkioskty7', '[담낭담관질환] 담낭질환'),
+  ('mkioskty8', '[담낭담관질환] 담도포함질환'),
+  ('mkioskty9', '[복부응급수술] 비외상'),
+  ('mkioskty10', '[장중첩/폐색] 영유아'),
+  ('mkioskty11', '[응급내시경] 성인 위장관'),
+  ('mkioskty12', '[응급내시경] 영유아 위장관'),
+  ('mkioskty13', '[응급내시경] 성인 기관지'),
+  ('mkioskty14', '[응급내시경] 영유아 기관지'),
+  ('mkioskty15', '[저체중출생아] 집중치료'),
+  ('mkioskty16', '[산부인과응급] 분만'),
+  ('mkioskty17', '[산부인과응급] 산과수술'),
+  ('mkioskty18', '[산부인과응급] 부인과수술'),
+  ('mkioskty19', '[중증화상] 전문치료'),
+  ('mkioskty20', '[사지접합] 수족지접합'),
+  ('mkioskty21', '[사지접합] 수족지접합 외'),
+  ('mkioskty22', '[응급투석] HD'),
+  ('mkioskty23', '[응급투석] CRRT'),
+  ('mkioskty24', '[정신과적응급] 폐쇄병동입원'),
+  ('mkioskty25', '[안과적수술] 응급'),
+  ('mkioskty26', '[영상의학혈관중재] 성인'),
+  ('mkioskty27', '[영상의학혈관중재] 영유아');
 
 CREATE TABLE hospital_capability (
   hospital_id  bigint      NOT NULL REFERENCES hospital(id),
@@ -497,3 +529,36 @@ CREATE TABLE feature_flag (                            -- 기능 토글 (QUR-013
   updated_by  bigint       REFERENCES admin(id)
 );
 INSERT INTO feature_flag (key, enabled) VALUES ('journal_ai', false), ('voice_input', true), ('hospital_grade', true);
+
+-- =====================================================================
+-- I. 수집기 기록 (SFR-023, 088, 090)
+-- =====================================================================
+CREATE TABLE collect_log (                             -- 시·도별 수집 결과 1회 1행 (SFR-023)
+  id             bigserial   PRIMARY KEY,
+  region         varchar(20) NOT NULL,
+  started_at     timestamptz NOT NULL DEFAULT now(),
+  finished_at    timestamptz,
+  success        boolean     NOT NULL,
+  source_time    timestamptz,                          -- 공공 데이터 기준 시각. 실패하면 비움
+  hospital_count int,
+  error_code     varchar(40),                          -- 오류 문구는 넣지 않음: 요청 주소에 API 키가 들어 있을 수 있음 (SER-001)
+  kind           varchar(20) NOT NULL DEFAULT 'beds' CHECK (kind IN ('beds','hospitals','capabilities'))
+);
+CREATE INDEX ON collect_log (kind, region, started_at DESC);
+
+CREATE TABLE bed_anomaly_log (                         -- 이상치 기록 (SFR-088)
+  id          bigserial   PRIMARY KEY,
+  public_id   varchar(20) NOT NULL,                    -- 좌표가 없으면 hospital 행을 못 만들어서 공공 기관 ID로 남김 (DAR-009)
+  reason      varchar(20) NOT NULL CHECK (reason IN ('avail_over_total','negative','no_coords')),
+  detected_at timestamptz NOT NULL DEFAULT now(),
+  detail      jsonb
+);
+CREATE INDEX ON bed_anomaly_log (detected_at);
+
+CREATE TABLE api_call_daily (                          -- 외부 API 하루 호출 수 (SFR-090). 실시간 값은 Redis, 여기는 기록용
+  api        varchar(20) NOT NULL,
+  day        date        NOT NULL,
+  calls      int         NOT NULL DEFAULT 0 CHECK (calls >= 0),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (api, day)
+);

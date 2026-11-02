@@ -13,6 +13,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces",
+    "migrate": "npm run migrate -w server",
+    "collect:hospitals": "npm run collect:hospitals -w server",
     "test": "npm test --workspaces"
   },
   "devDependencies": {

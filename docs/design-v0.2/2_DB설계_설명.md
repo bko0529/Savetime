@@ -1,6 +1,6 @@
 # 세이브타임 DB 설계 (ERD) 설명 v0.3
 
-- DB: PostgreSQL 16 · 테이블 39개 (v0.3에서 anonymous_route · rejection_record · feature_flag 추가) · `schema.sql` 한 파일로 생성 (실제 PostgreSQL 16에서 생성·제약 동작 확인 완료)
+- DB: PostgreSQL 16 · 테이블 42개 (v0.3에서 anonymous_route · rejection_record · feature_flag 추가, S1에서 collect_log · bed_anomaly_log · api_call_daily 추가) · `server/db/migrations/`로 생성, `schema.sql`은 전체 구조를 보는 문서 (실제 PostgreSQL 16에서 생성·제약 동작 확인 완료)
 - 기준: 요구사항분석서 v1.4 · 상태 전이표 v0.2
 - v0.3 변경 (CR-004): `paramedic.pin_*` 삭제(D-110) · `hospital.grade`·`emcls_code`, `transport.requested_grade`(D-120) · `transport.distance_m`, `transport_stat.distance_m`(D-113) · 거절 사유 `er_bed·or_room·ward·icu·no_specialist·equipment·etc`(D-115)
 - 그림: Figma "06 DB 설계" 페이지
@@ -8,8 +8,8 @@
 ## 실행 방법
 
 ```bash
-createdb savetime
-psql -d savetime -f schema.sql
+docker compose up -d
+npm run migrate
 ```
 
 ## 그룹별 테이블
@@ -48,6 +48,9 @@ psql -d savetime -f schema.sql
 | F 관리자 | admin | 관리자 계정 (OTP) | SFR-082, 152 |
 | | admin_audit_log | 작업 이력. DB 규칙으로 수정·삭제 불가 | SFR-091 |
 | | admin_notification | 관리자 알림 (30분 안 같은 종류는 횟수만 증가) | SFR-100 |
+| I 수집기 기록 | collect_log | 시·도별 수집 성공·실패·기준 시각 | SFR-023 |
+| | bed_anomaly_log | 병상 이상치 기록 (공공 기관 ID 기준) | SFR-088 |
+| | api_call_daily | 외부 API 하루 호출 수 기록 | SFR-090 |
 | H 운영 | feature_flag | 기능 토글 (journal_ai · voice_input · hospital_grade) | QUR-013 |
 | G 실시간 | event_log | 보낸 실시간 이벤트 기록 (재연결 때 놓친 것 다시 보내기, 24시간 보관) | 1-4 실시간 통신 설계 |
 
