@@ -4,6 +4,7 @@ import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 
 const config = loadConfig();
 const logger = pino({ level: config.NODE_ENV === 'production' ? 'info' : 'debug' });
@@ -27,13 +28,37 @@ const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
 
+// 수집기가 들어오기 전까지 주기 작업이 도는지 확인하는 용도
+const scheduledJobs: ScheduledJob[] = [
+  {
+    name: 'ops-heartbeat',
+    everyMs: 60_000,
+    run: async () => {
+      logger.info({ port: config.PORT }, '주기 작업 실행');
+    },
+  },
+];
+
+// 관리자 서버는 주기 작업을 맡지 않는다 (T-11).
+const jobRunners: JobRunner[] =
+  config.APP_ROLE === 'main'
+    ? scheduledJobs.map((job) => startScheduledJob(job, { url: config.REDIS_URL }, logger))
+    : [];
+
 // 서버를 1대씩 교체하는 배포(COR-016)에서 처리 중인 요청을 끝내고 내려가게 한다.
+const SHUTDOWN_TIMEOUT_MS = 30_000;
 let closing = false;
 function shutdown(signal: string): void {
   if (closing) return;
   closing = true;
   logger.info({ signal }, '서버 종료 시작');
+  // Redis가 끊기면 워커가 닫히지 못해 배포가 멈춘다. 끊긴 작업은 다른 서버가 이어받는다.
+  setTimeout(() => {
+    logger.error('제한 시간 안에 종료하지 못해 강제로 끝냅니다');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS).unref();
   server.close(async () => {
+    await Promise.allSettled(jobRunners.map((runner) => runner.close()));
     await Promise.allSettled([pool.end(), redis.quit()]);
     process.exit(0);
   });

@@ -10,6 +10,7 @@
     "typecheck": "tsc -p . --noEmit",
     "start": "node dist/index.js",
     "dev": "tsc -p . && node --env-file=.env dist/index.js",
+    "migrate": "node --env-file-if-exists=.env ../node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m db/migrations",
     "test": "tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {
@@ -21,9 +22,11 @@
     "typescript": "^6.0.0"
   },
   "dependencies": {
+    "bullmq": "^5.81.5",
     "express": "^5.3.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
+    "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"

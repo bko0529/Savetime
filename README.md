@@ -17,7 +17,7 @@ savetime/
 ├─ docs/요구사항분석서.xlsx   요구사항 원장 (v1.4.2, 버전은 표지 탭에서 확인)
 ├─ docs/design-v0.2/        설계 문서
 │   ├─ 1_상태전이표.md        이송 건 6개 상태 · 병원 요청 9개 상태
-│   ├─ 2_DB설계_설명.md       테이블 39개 설명
+│   ├─ 2_DB설계_설명.md       테이블 42개 설명
 │   ├─ 3_실시간통신설계.md     Socket.IO 이벤트 · 타이머
 │   ├─ 4_API명세.md          API 88개 요약 · 오류 코드
 │   └─ openapi.yaml          API 전체 명세 (editor.swagger.io 에 붙여 넣으면 보기 좋음)
@@ -41,15 +41,16 @@ cd savetime
 
 ## 로컬 DB·Redis 켜기
 ```bash
-docker compose up -d            # 처음 한 번 schema.sql로 테이블 39개 생성
+docker compose up -d
 cp server/.env.example server/.env
+npm install                     # 저장소 맨 위에서
+npm run migrate                 # 테이블 42개 생성
 ```
 
 ## 테스트 돌려 보기 (서버)
 ```bash
-npm install       # 저장소 맨 위에서
 cd server
-npm test          # 상태 전이 31개 + 서버 뼈대 10개
+npm test          # DB·Redis를 켜 둔 상태로. 상태 전이 31개 + 서버 뼈대 10개 + 마이그레이션 4개 + 주기 작업 4개
 ```
 
 ## 설계 점검
