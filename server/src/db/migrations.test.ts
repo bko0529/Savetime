@@ -1,34 +1,14 @@
 // 마이그레이션 결과가 schema.sql과 같은지 임시 DB에서 비교한다. 개발 DB는 건드리지 않는다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { runner } from 'node-pg-migrate';
 import pg from 'pg';
-import { TEST_DATABASE_URL } from '../testing/services.js';
+import { withTempDatabase } from '../testing/services.js';
 
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../db/migrations', import.meta.url));
 const SCHEMA_FILE = fileURLToPath(new URL('../../db/schema.sql', import.meta.url));
-
-function urlFor(database: string): string {
-  const url = new URL(TEST_DATABASE_URL);
-  url.pathname = `/${database}`;
-  return url.toString();
-}
-
-async function withTempDatabase(use: (url: string) => Promise<void>): Promise<void> {
-  const name = `migrate_test_${randomBytes(6).toString('hex')}`;
-  const admin = new pg.Client({ connectionString: TEST_DATABASE_URL });
-  await admin.connect();
-  await admin.query(`CREATE DATABASE ${name}`);
-  try {
-    await use(urlFor(name));
-  } finally {
-    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-    await admin.end();
-  }
-}
 
 async function query<T extends pg.QueryResultRow>(url: string, sql: string): Promise<T[]> {
   const client = new pg.Client({ connectionString: url });

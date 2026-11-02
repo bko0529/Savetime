@@ -5,6 +5,8 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   APP_ROLE: z.enum(['main', 'admin']).default('main'),
+  PUBLIC_DATA_API_KEY: z.string().optional(),
+  COLLECT_REGIONS: z.string().optional(), // 쉼표로 구분. 비우면 전국 17개 (T-07)
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

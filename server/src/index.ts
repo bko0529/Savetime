@@ -4,6 +4,8 @@ import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { createFetchBeds } from './modules/collector/publicApi.js';
+import { ALL_REGIONS, COLLECT_EVERY_MS, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 
 const config = loadConfig();
@@ -28,16 +30,23 @@ const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
 
-// 수집기가 들어오기 전까지 주기 작업이 도는지 확인하는 용도
-const scheduledJobs: ScheduledJob[] = [
-  {
-    name: 'ops-heartbeat',
-    everyMs: 60_000,
+// 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
+const scheduledJobs: ScheduledJob[] = [];
+if (config.PUBLIC_DATA_API_KEY) {
+  const fetchBeds = createFetchBeds(config.PUBLIC_DATA_API_KEY);
+  const regions = config.COLLECT_REGIONS
+    ? config.COLLECT_REGIONS.split(',').map((region) => region.trim())
+    : ALL_REGIONS;
+  scheduledJobs.push({
+    name: 'collect-beds',
+    everyMs: COLLECT_EVERY_MS,
     run: async () => {
-      logger.info({ port: config.PORT }, '주기 작업 실행');
+      await runCollectRound({ pool, fetchBeds, regions, logger });
     },
-  },
-];
+  });
+} else {
+  logger.warn('PUBLIC_DATA_API_KEY가 없어 병상 수집을 켜지 않습니다');
+}
 
 // 관리자 서버는 주기 작업을 맡지 않는다 (T-11).
 const jobRunners: JobRunner[] =
