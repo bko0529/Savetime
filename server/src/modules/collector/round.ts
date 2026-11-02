@@ -67,26 +67,44 @@ async function saveSuccess(
   startedAt: Date,
   beds: BedRow[],
 ): Promise<void> {
-  const rows = beds.map((bed) => ({ ...bed, raw: JSON.stringify(bed.raw) }));
+  const rows = beds.map((bed) => ({
+    ...bed,
+    raw: JSON.stringify(bed.raw),
+    detail: {
+      er: [bed.erAvail, bed.erTotal],
+      icu: [bed.icuAvail, bed.icuTotal],
+      or: [bed.orAvail, bed.orTotal],
+    },
+  }));
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // 이상치가 처음 생길 때만 남긴다. 3분마다 같은 기록이 쌓이지 않게 한다.
+    await client.query(
+      `INSERT INTO bed_anomaly_log (public_id, reason, detail)
+       SELECT x."publicId", 'avail_over_total', x.detail
+         FROM jsonb_to_recordset($1::jsonb) AS x("publicId" varchar, excluded boolean, detail jsonb)
+         JOIN hospital h ON h.public_id = x."publicId"
+         LEFT JOIN bed_current c ON c.hospital_id = h.id
+        WHERE x.excluded AND NOT coalesce(c.excluded, false)`,
+      [JSON.stringify(rows)],
+    );
     const saved = await client.query(
       `INSERT INTO bed_current AS c
          (hospital_id, er_avail, er_total, icu_avail, icu_total, or_avail, or_total,
           source_time, collected_at, raw, excluded)
        SELECT h.id, x."erAvail", x."erTotal", x."icuAvail", x."icuTotal", x."orAvail", x."orTotal",
-              x."sourceTime", now(), x.raw::jsonb, false
+              x."sourceTime", now(), x.raw::jsonb, x.excluded
          FROM jsonb_to_recordset($1::jsonb) AS x(
                 "publicId" varchar, "erAvail" int, "erTotal" int, "icuAvail" int, "icuTotal" int,
-                "orAvail" int, "orTotal" int, "sourceTime" timestamptz, raw text)
+                "orAvail" int, "orTotal" int, "sourceTime" timestamptz, raw text, excluded boolean)
          JOIN hospital h ON h.public_id = x."publicId"
        ON CONFLICT (hospital_id) DO UPDATE SET
          er_avail = excluded.er_avail, er_total = excluded.er_total,
          icu_avail = excluded.icu_avail, icu_total = excluded.icu_total,
          or_avail = excluded.or_avail, or_total = excluded.or_total,
          source_time = excluded.source_time, collected_at = excluded.collected_at,
-         raw = excluded.raw
+         raw = excluded.raw, excluded = excluded.excluded
        RETURNING hospital_id`,
       [JSON.stringify(rows)],
     );
@@ -139,6 +157,8 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
     const startedAt = new Date();
     try {
       const beds = await fetchBeds(region, signal);
+      // 시·도 이름이 틀려도 공공 API는 0건을 정상으로 돌려준다. 성공으로 남기면 못 알아챈다.
+      if (beds.length === 0) throw new CollectError('EMPTY_REGION');
       await saveSuccess(pool, region, startedAt, beds);
       result.succeeded += 1;
     } catch (err) {

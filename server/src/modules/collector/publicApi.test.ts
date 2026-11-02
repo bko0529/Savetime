@@ -16,7 +16,6 @@ const bedItem = {
   hvs17: 8,
   hvoc: 4,
   hvs22: 4,
-  hv6: -1,
   hvidate: 20261102103000,
 };
 
@@ -40,6 +39,33 @@ test('중환자실 필드가 없는 병원은 그 항목만 비운다', () => {
   const [row] = parseBeds([{ ...bedItem, hvicc: undefined, hvs17: undefined }]);
   assert.equal(row.icuAvail, undefined);
   assert.equal(row.erAvail, 14);
+});
+
+test('일반 값 없는 큰 병원도 진료과별 중환자실을 더해서 센다 (단국대 사례)', () => {
+  const { hvicc, hvs17, ...base } = bedItem;
+  assert.deepEqual([hvicc, hvs17], [6, 8]);
+  const [row] = parseBeds([{ ...base, hv3: 1, hv6: 1, hv9: 1, hvs07: 13, hvs12: 13, hvs14: 20 }]);
+  assert.deepEqual([row.icuAvail, row.icuTotal], [3, 46]);
+});
+
+test('신생아·소아·음압격리 중환자실은 세지 않는다', () => {
+  const { hvicc, hvs17, ...base } = bedItem;
+  assert.deepEqual([hvicc, hvs17], [6, 8]);
+  const [row] = parseBeds([{ ...base, hvncc: 4, hv32: 2, hv35: 1, hvs08: 25, hvs18: 6 }]);
+  assert.deepEqual([row.icuAvail, row.icuTotal], [undefined, undefined]);
+});
+
+test('음수는 그 병상만 0개로 보고 병원은 제외하지 않는다 (백제병원 사례)', () => {
+  const [row] = parseBeds([{ ...bedItem, hvicc: -2, hv6: 3, hvs17: 26, hvs12: 5, hvec: -23 }]);
+  assert.equal(row.icuAvail, 3);
+  assert.equal(row.erAvail, 0);
+  assert.equal(row.excluded, false);
+});
+
+test('가용이 전체보다 많으면 병원을 추천에서 제외한다 (SFR-088)', () => {
+  assert.equal(parseBeds([bedItem])[0].excluded, false);
+  assert.equal(parseBeds([{ ...bedItem, hvec: 15, hvs01: 10 }])[0].excluded, true);
+  assert.equal(parseBeds([{ ...bedItem, hvoc: 5, hvs22: 4 }])[0].excluded, true);
 });
 
 test('형식이 깨진 병원은 빼고 나머지는 살린다', () => {

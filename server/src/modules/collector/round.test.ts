@@ -15,7 +15,7 @@ const logger = pino({ level: 'silent' });
 const SCHEMA_FILE = fileURLToPath(new URL('../../../db/schema.sql', import.meta.url));
 
 function bedsFor(region: string, erAvail: number, sourceTime: string): BedRow[] {
-  return [{ publicId: region, erAvail, erTotal: 20, sourceTime, raw: { region } }];
+  return [{ publicId: region, erAvail, erTotal: 20, sourceTime, raw: { region }, excluded: false }];
 }
 
 async function withPool(use: (pool: pg.Pool) => Promise<void>): Promise<void> {
@@ -148,6 +148,53 @@ test('hospital에 없는 병원은 건너뛰고 수집은 성공으로 남긴다
     assert.equal(await erAvail(pool, '충청남도'), 4);
     const { rows } = await pool.query('SELECT hospital_count FROM collect_log');
     assert.equal(rows[0].hospital_count, 1);
+  });
+});
+
+test('이상치는 처음 생길 때 1건만 남기고, 값이 돌아오면 제외를 푼다', async () => {
+  await withPool(async (pool) => {
+    let excluded = true;
+    const fetchBeds: FetchBeds = async (region) => [
+      {
+        publicId: region,
+        erAvail: excluded ? 15 : 5,
+        erTotal: 10,
+        sourceTime: '2026-11-02T14:03:00+09:00',
+        raw: {},
+        excluded,
+      },
+    ];
+    const round = (): Promise<unknown> =>
+      runCollectRound({ pool, fetchBeds, regions: ['충청남도'], logger });
+    const state = async (): Promise<boolean> =>
+      (await pool.query('SELECT excluded FROM bed_current')).rows[0].excluded;
+
+    await round();
+    await round();
+    assert.equal(await state(), true);
+    const logs = await pool.query('SELECT public_id, reason, detail FROM bed_anomaly_log');
+    assert.deepEqual(logs.rows, [
+      {
+        public_id: '충청남도',
+        reason: 'avail_over_total',
+        detail: { er: [15, 10], icu: [null, null], or: [null, null] },
+      },
+    ]);
+
+    excluded = false;
+    await round();
+    assert.equal(await state(), false);
+  });
+});
+
+test('0건이 오면 시·도 이름 오류일 수 있어 실패로 기록한다', async () => {
+  await withPool(async (pool) => {
+    const fetchBeds: FetchBeds = async () => [];
+    const result = await runCollectRound({ pool, fetchBeds, regions: ['강원도'], logger });
+
+    assert.deepEqual(result, { succeeded: 0, failed: 1, notStarted: 0 });
+    const { rows } = await pool.query('SELECT error_code FROM collect_log');
+    assert.equal(rows[0].error_code, 'EMPTY_REGION');
   });
 });
 
