@@ -5,6 +5,7 @@ import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createFetchBeds } from './modules/collector/publicApi.js';
+import { createApiQuota } from './modules/collector/quota.js';
 import { ALL_REGIONS, COLLECT_EVERY_MS, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 
@@ -33,7 +34,13 @@ const server = app.listen(config.PORT, () => {
 // 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
 const scheduledJobs: ScheduledJob[] = [];
 if (config.PUBLIC_DATA_API_KEY) {
-  const fetchBeds = createFetchBeds(config.PUBLIC_DATA_API_KEY);
+  const quota = createApiQuota({
+    redis,
+    pool,
+    logger,
+    limit: config.PUBLIC_DATA_DAILY_LIMIT,
+  });
+  const fetchBeds = createFetchBeds(config.PUBLIC_DATA_API_KEY, quota.take);
   const regions = config.COLLECT_REGIONS
     ? config.COLLECT_REGIONS.split(',').map((region) => region.trim())
     : ALL_REGIONS;
@@ -41,7 +48,7 @@ if (config.PUBLIC_DATA_API_KEY) {
     name: 'collect-beds',
     everyMs: COLLECT_EVERY_MS,
     run: async () => {
-      await runCollectRound({ pool, fetchBeds, regions, logger });
+      await runCollectRound({ pool, fetchBeds, quota, regions, logger });
     },
   });
 } else {

@@ -3,6 +3,7 @@ import type pg from 'pg';
 import type { Logger } from 'pino';
 import type { BedRow } from './parseBeds.js';
 import { CollectError, type FetchBeds } from './publicApi.js';
+import type { ApiQuota } from './quota.js';
 
 export const ALL_REGIONS = [
   '서울특별시',
@@ -31,6 +32,7 @@ const CONCURRENT_REGIONS = 4;
 export interface RoundDeps {
   pool: pg.Pool;
   fetchBeds: FetchBeds;
+  quota: ApiQuota;
   regions: string[];
   logger: Logger;
   deadlineMs?: number;
@@ -148,10 +150,16 @@ async function saveFailure(
 }
 
 export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
-  const { pool, fetchBeds, regions, logger, deadlineMs = ROUND_DEADLINE_MS } = deps;
+  const { pool, fetchBeds, quota, regions, logger, deadlineMs = ROUND_DEADLINE_MS } = deps;
+  // 한도를 다 쓰면 저장된 데이터로만 서비스한다 (SFR-090)
+  if (await quota.isExhausted()) {
+    return { succeeded: 0, failed: 0, notStarted: regions.length };
+  }
+
   const signal = AbortSignal.timeout(deadlineMs);
   const pending = await orderRegions(pool, regions);
   const result: RoundResult = { succeeded: 0, failed: 0, notStarted: 0 };
+  let quotaReached = false;
 
   const collectRegion = async (region: string): Promise<void> => {
     const startedAt = new Date();
@@ -163,6 +171,7 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
       result.succeeded += 1;
     } catch (err) {
       const code = err instanceof CollectError ? err.code : 'SAVE_FAILED';
+      if (code === 'QUOTA_EXCEEDED') quotaReached = true;
       if (code === 'SAVE_FAILED') {
         logger.error({ region, message: (err as Error).message }, '병상 저장 실패');
       }
@@ -174,7 +183,7 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
 
   // 4곳이 끝날 때마다 묶어서 기다리지 않고, 한 곳이 끝나면 바로 다음 시·도를 시작한다.
   const worker = async (): Promise<void> => {
-    while (!signal.aborted) {
+    while (!signal.aborted && !quotaReached) {
       const region = pending.shift();
       if (!region) return;
       await collectRegion(region);
@@ -183,6 +192,7 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
   await Promise.all(Array.from({ length: CONCURRENT_REGIONS }, worker));
 
   result.notStarted = pending.length;
+  await quota.save();
   logger.info(result, '병상 수집 회차 종료');
   return result;
 }

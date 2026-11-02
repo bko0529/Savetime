@@ -59,7 +59,12 @@ async function fetchOnce(url: URL, signal: AbortSignal, fetchFn: typeof fetch): 
   return parseBeds(toItems(parsed.response.body));
 }
 
-export function createFetchBeds(serviceKey: string, fetchFn: typeof fetch = fetch): FetchBeds {
+// beforeCall은 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
+export function createFetchBeds(
+  serviceKey: string,
+  beforeCall: () => Promise<void>,
+  fetchFn: typeof fetch = fetch,
+): FetchBeds {
   return async (region, signal) => {
     const url = new URL(BEDS_URL);
     url.search = new URLSearchParams({
@@ -70,11 +75,13 @@ export function createFetchBeds(serviceKey: string, fetchFn: typeof fetch = fetc
       _type: 'json',
     }).toString();
 
+    await beforeCall();
     try {
       return await fetchOnce(url, signal, fetchFn);
     } catch (err) {
       // 마감이 지났으면 다시 해도 소용없다. 그 밖의 실패는 1회 다시 조회한다 (SFR-024).
       if (signal.aborted) throw err;
+      await beforeCall();
       return fetchOnce(url, signal, fetchFn);
     }
   };
