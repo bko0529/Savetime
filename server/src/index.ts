@@ -4,9 +4,14 @@ import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
-import { createFetchBeds } from './modules/collector/publicApi.js';
+import {
+  COLLECT_CAPABILITIES_EVERY_MS,
+  runCapabilityCollect,
+} from './modules/collector/capabilities.js';
+import { COLLECT_HOSPITALS_EVERY_MS, runHospitalCollect } from './modules/collector/hospitals.js';
+import { createFetchBeds, createFetchItems } from './modules/collector/publicApi.js';
 import { createApiQuota } from './modules/collector/quota.js';
-import { ALL_REGIONS, COLLECT_EVERY_MS, runCollectRound } from './modules/collector/round.js';
+import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 
 const config = loadConfig();
@@ -41,16 +46,28 @@ if (config.PUBLIC_DATA_API_KEY) {
     limit: config.PUBLIC_DATA_DAILY_LIMIT,
   });
   const fetchBeds = createFetchBeds(config.PUBLIC_DATA_API_KEY, quota.take);
-  const regions = config.COLLECT_REGIONS
-    ? config.COLLECT_REGIONS.split(',').map((region) => region.trim())
-    : ALL_REGIONS;
-  scheduledJobs.push({
-    name: 'collect-beds',
-    everyMs: COLLECT_EVERY_MS,
-    run: async () => {
-      await runCollectRound({ pool, fetchBeds, quota, regions, logger });
+  const fetchItems = createFetchItems(config.PUBLIC_DATA_API_KEY, quota.take);
+  const regions = regionsFrom(config.COLLECT_REGIONS);
+  const deps = { pool, fetchItems, quota, regions, logger };
+  scheduledJobs.push(
+    {
+      name: 'collect-beds',
+      everyMs: COLLECT_EVERY_MS,
+      run: async () => {
+        await runCollectRound({ pool, fetchBeds, quota, regions, logger });
+      },
     },
-  });
+    {
+      name: 'collect-hospitals',
+      everyMs: COLLECT_HOSPITALS_EVERY_MS,
+      run: () => runHospitalCollect(deps),
+    },
+    {
+      name: 'collect-capabilities',
+      everyMs: COLLECT_CAPABILITIES_EVERY_MS,
+      run: () => runCapabilityCollect(deps),
+    },
+  );
 } else {
   logger.warn('PUBLIC_DATA_API_KEY가 없어 병상 수집을 켜지 않습니다');
 }

@@ -2,6 +2,7 @@
 import type pg from 'pg';
 import type { Logger } from 'pino';
 import type { BedRow } from './parseBeds.js';
+import { runPool } from './pool.js';
 import { CollectError, type FetchBeds } from './publicApi.js';
 import type { ApiQuota } from './quota.js';
 
@@ -24,6 +25,11 @@ export const ALL_REGIONS = [
   '경상남도',
   '제주특별자치도',
 ];
+
+// 설정값은 쉼표로 구분한다. 비우면 전국 17개 (T-07)
+export function regionsFrom(value: string | undefined): string[] {
+  return value ? value.split(',').map((region) => region.trim()) : ALL_REGIONS;
+}
 
 export const COLLECT_EVERY_MS = 180_000;
 const ROUND_DEADLINE_MS = 150_000;
@@ -53,7 +59,7 @@ async function orderRegions(pool: pg.Pool, regions: string[]): Promise<string[]>
        LEFT JOIN LATERAL (
          SELECT max(started_at) AS last_success
            FROM collect_log
-          WHERE region = r.region AND success
+          WHERE kind = 'beds' AND region = r.region AND success
        ) l ON true
       ORDER BY l.last_success ASC NULLS FIRST, r.position`,
     [regions],
@@ -136,16 +142,17 @@ async function saveSuccess(
   }
 }
 
-async function saveFailure(
+export async function saveFailure(
   pool: pg.Pool,
   region: string,
   startedAt: Date,
   errorCode: string,
+  kind: 'beds' | 'hospitals' | 'capabilities' = 'beds',
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO collect_log (region, started_at, finished_at, success, error_code)
-     VALUES ($1, $2, now(), false, $3)`,
-    [region, startedAt, errorCode],
+    `INSERT INTO collect_log (kind, region, started_at, finished_at, success, error_code)
+     VALUES ($1, $2, $3, now(), false, $4)`,
+    [kind, region, startedAt, errorCode],
   );
 }
 
@@ -182,16 +189,12 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
   };
 
   // 4곳이 끝날 때마다 묶어서 기다리지 않고, 한 곳이 끝나면 바로 다음 시·도를 시작한다.
-  const worker = async (): Promise<void> => {
-    while (!signal.aborted && !quotaReached) {
-      const region = pending.shift();
-      if (!region) return;
-      await collectRegion(region);
-    }
-  };
-  await Promise.all(Array.from({ length: CONCURRENT_REGIONS }, worker));
-
-  result.notStarted = pending.length;
+  result.notStarted = await runPool(
+    pending,
+    CONCURRENT_REGIONS,
+    () => signal.aborted || quotaReached,
+    collectRegion,
+  );
   await quota.save();
   logger.info(result, '병상 수집 회차 종료');
   return result;

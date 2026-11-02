@@ -2,10 +2,16 @@
 import { z } from 'zod';
 import { parseBeds, type BedRow } from './parseBeds.js';
 
-const BEDS_URL =
-  'https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire';
+const BASE_URL = 'https://apis.data.go.kr/B552657/ErmctInfoInqireService';
+const BEDS_OPERATION = 'getEmrrmRltmUsefulSckbdInfoInqire';
 const REQUEST_TIMEOUT_MS = 10_000;
 const NUM_OF_ROWS = '1000'; // 시·도 하나를 한 번의 호출로 받는다
+
+export type FetchItems = (
+  operation: string,
+  params: Record<string, string>,
+  signal: AbortSignal,
+) => Promise<unknown[]>;
 
 export type FetchBeds = (region: string, signal: AbortSignal) => Promise<BedRow[]>;
 
@@ -37,7 +43,7 @@ function toItems(body: z.infer<typeof responseSchema>['response']['body']): unkn
   return Array.isArray(item) ? item : [item];
 }
 
-async function fetchOnce(url: URL, signal: AbortSignal, fetchFn: typeof fetch): Promise<BedRow[]> {
+async function fetchOnce(url: URL, signal: AbortSignal, fetchFn: typeof fetch): Promise<unknown[]> {
   let res: Response;
   try {
     res = await fetchFn(url, {
@@ -56,23 +62,24 @@ async function fetchOnce(url: URL, signal: AbortSignal, fetchFn: typeof fetch): 
   }
   const { resultCode } = parsed.response.header;
   if (resultCode !== '00') throw new CollectError(`RESULT_${resultCode}`);
-  return parseBeds(toItems(parsed.response.body));
+  return toItems(parsed.response.body);
 }
 
 // beforeCall은 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
-export function createFetchBeds(
+// beforeCall은 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
+export function createFetchItems(
   serviceKey: string,
   beforeCall: () => Promise<void>,
   fetchFn: typeof fetch = fetch,
-): FetchBeds {
-  return async (region, signal) => {
-    const url = new URL(BEDS_URL);
+): FetchItems {
+  return async (operation, params, signal) => {
+    const url = new URL(`${BASE_URL}/${operation}`);
     url.search = new URLSearchParams({
       serviceKey,
-      STAGE1: region,
       pageNo: '1',
       numOfRows: NUM_OF_ROWS,
       _type: 'json',
+      ...params,
     }).toString();
 
     await beforeCall();
@@ -85,4 +92,14 @@ export function createFetchBeds(
       return fetchOnce(url, signal, fetchFn);
     }
   };
+}
+
+export function createFetchBeds(
+  serviceKey: string,
+  beforeCall: () => Promise<void>,
+  fetchFn: typeof fetch = fetch,
+): FetchBeds {
+  const fetchItems = createFetchItems(serviceKey, beforeCall, fetchFn);
+  return async (region, signal) =>
+    parseBeds(await fetchItems(BEDS_OPERATION, { STAGE1: region }, signal));
 }

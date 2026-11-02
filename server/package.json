@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "dev": "tsc -p . && node --env-file=.env dist/index.js",
     "migrate": "node --env-file-if-exists=.env ../node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m db/migrations",
+    "collect:hospitals": "tsc -p . && node --env-file-if-exists=.env dist/scripts/collectHospitals.js",
     "test": "tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {

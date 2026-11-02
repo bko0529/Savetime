@@ -7,7 +7,7 @@ const schema = z.object({
   APP_ROLE: z.enum(['main', 'admin']).default('main'),
   PUBLIC_DATA_API_KEY: z.string().optional(),
   PUBLIC_DATA_DAILY_LIMIT: z.coerce.number().int().positive().default(10_000),
-  COLLECT_REGIONS: z.string().optional(), // 쉼표로 구분. 비우면 전국 17개 (T-07)
+  COLLECT_REGIONS: z.string().optional(),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

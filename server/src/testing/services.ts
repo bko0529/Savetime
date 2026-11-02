@@ -1,5 +1,7 @@
 // 실제 DB·Redis를 쓰는 테스트의 접속 주소. docker compose와 CI가 같은 값을 쓴다.
 import { randomBytes } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 export const TEST_DATABASE_URL =
@@ -25,4 +27,23 @@ export async function withTempDatabase(use: (url: string) => Promise<void>): Pro
     await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
     await admin.end();
   }
+}
+
+// 임시 DB에 마이그레이션을 순서대로 적용하고 연결을 넘겨준다.
+export async function withSchemaPool(use: (pool: pg.Pool) => Promise<void>): Promise<void> {
+  await withTempDatabase(async (url) => {
+    const pool = new pg.Pool({ connectionString: url });
+    // 테스트 끝에 임시 DB를 지울 때 닫히는 중이던 연결이 끊겨도 실패로 보지 않는다
+    pool.on('error', () => {});
+    try {
+      const dir = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
+      for (const file of (await readdir(dir)).sort()) {
+        const sql = await readFile(`${dir}${file}`, 'utf8');
+        await pool.query(sql.split('-- Down Migration')[0]);
+      }
+      await use(pool);
+    } finally {
+      await pool.end();
+    }
+  });
 }

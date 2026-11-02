@@ -74,14 +74,14 @@ test('마이그레이션을 두 번 실행해도 아무 일도 일어나지 않�
     await migrate(url, 'up');
     await migrate(url, 'up');
     const rows = await query<{ count: string }>(url, 'SELECT count(*) FROM pgmigrations');
-    assert.equal(rows[0].count, '2');
+    assert.equal(rows[0].count, '3');
   });
 });
 
-test('0002는 되돌렸다가 다시 적용할 수 있다', async () => {
+test('0002·0003은 되돌렸다가 다시 적용할 수 있다', async () => {
   await withTempDatabase(async (url) => {
     await migrate(url, 'up');
-    await migrate(url, 'down', 1);
+    await migrate(url, 'down', 2);
     const tables = await query(url, `SELECT 1 FROM pg_tables WHERE tablename = 'collect_log'`);
     assert.equal(tables.length, 0);
     await migrate(url, 'up');
