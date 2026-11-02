@@ -4598,14 +4598,17 @@ components:
           type: number
         address:
           type: string
+          nullable: true
         departments:
           type: array
           items:
             type: string
         erPhone:
           type: string
+          nullable: true
         mainPhone:
           type: string
+          nullable: true
         beds:
           type: object
           properties:
@@ -4614,27 +4617,42 @@ components:
               properties:
                 avail:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
                 total:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
             icu:
               type: object
               properties:
                 avail:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
                 total:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
             or:
               type: object
               properties:
                 avail:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
                 total:
                   type: integer
+                  nullable: true
+                  description: 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089)
         bedsSourceTime:
           type: string
           format: date-time
+          nullable: true
+          description: 공공 데이터 기준 시각. 병상 데이터가 없으면 null
         capabilities:
           type: array
+          description: 공공 데이터가 '정보미제공'인 항목은 목록에 없음
           items:
             type: object
             properties:

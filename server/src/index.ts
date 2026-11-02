@@ -24,8 +24,12 @@ const redis = new Redis(config.REDIS_URL, { lazyConnect: false });
 pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오류'));
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
+// 로그인은 S2에 생긴다. 그때까지 인증이 없으니 운영에서는 켜지 않고, S2에 인증을 붙이며 이 조건을 없앤다.
+const openWithoutLogin = config.APP_ROLE === 'main' && config.NODE_ENV !== 'production';
+
 const app = createApp({
   logger,
+  hospitalDetailPool: openWithoutLogin ? pool : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),
