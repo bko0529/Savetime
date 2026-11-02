@@ -50,6 +50,28 @@ tags:
 - name: 5. 병원 웹
 - name: 6. 관리자 웹
 paths:
+  /health:
+    get:
+      servers:
+      - url: /
+        description: 운영 점검용. /api/v1 밖
+      summary: 서버 상태 점검
+      description: 로드밸런서와 외부 상태 점검이 쓴다. DB·Redis 연결을 확인하고 하나라도 실패하면 503 (QUR-009, COR-016)
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: 정상
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: DB 또는 Redis 연결 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
   /agencies/{code}:
     get:
       tags:
@@ -3961,6 +3983,30 @@ paths:
                 $ref: '#/components/schemas/Error'
 components:
   schemas:
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - error
+        checks:
+          type: object
+          properties:
+            db:
+              type: string
+              enum:
+              - ok
+              - error
+            redis:
+              type: string
+              enum:
+              - ok
+              - error
+      required:
+      - status
+      - checks
     Error:
       type: object
       properties:

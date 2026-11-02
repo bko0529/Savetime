@@ -1,14 +1,31 @@
 {
   "name": "@savetime/server",
   "private": true,
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc -p .",
-    "test": "tsc -p . && node --test dist/domain/stateMachine.test.js"
+    "typecheck": "tsc -p . --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsc -p . && node --env-file=.env dist/index.js",
+    "test": "tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {
-    "typescript": "^6.0.0",
-    "@types/node": "^24.0.0"
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "typescript": "^6.0.0"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "ioredis": "^5.11.1",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
   }
 }

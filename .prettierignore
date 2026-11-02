@@ -1,0 +1,10 @@
+dist/
+node_modules/
+package-lock.json
+docs/
+*.md
+*.yaml
+*.yml
+# 표 모양을 맞춘 설계 코드라 자동 정리하지 않는다
+server/src/domain/
+shared/
