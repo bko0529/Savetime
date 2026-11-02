@@ -103,5 +103,5 @@ test('환경 변수가 빠지면 이름만 알려 주고 값은 보여 주지 �
 test('환경 변수 기본값과 숫자 변환', () => {
   const config = loadConfig({ DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', PORT: '5000' });
   assert.equal(config.PORT, 5000);
-  assert.equal(config.NODE_ENV, 'development');
+  assert.equal(config.NODE_ENV, 'production');
 });

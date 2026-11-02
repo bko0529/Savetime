@@ -89,7 +89,7 @@
 | GET | `/symptoms` | 증상 버튼 목록 S01~S16 | 대원 | - | S-04 환자 정보 입력 | SFR-108, 부록 B |
 | GET | `/geocode` | 주소 → 좌표 (위치 실패·미동의) | 대원 | - | S-04 · S-06 주소 입력 | SFR-009, INR-004 |
 | GET | `/hospitals/nearby` | 주변 병원 (지도·오프라인 저장용) | 대원 | - | S-06 지도 · S-11 오프라인 | SFR-027, SFR-059, SFR-061, SFR-064 |
-| GET | `/hospitals/{hospitalId}` | 병원 상세 | 대원 | - | S-07 병원 상세 | SFR-007, SFR-081 |
+| GET | `/hospitals/{hospitalId}` | 병원 상세 (값이 없는 병상은 null. S2 로그인 전까지 개발 환경에서만 인증 없이 열림) | 대원 | - | S-07 병원 상세 | SFR-007, SFR-081 |
 
 ### 4. 이송 (대원 앱 · 핵심)
 
