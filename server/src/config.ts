@@ -2,7 +2,8 @@
 import { z } from 'zod';
 
 const schema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // 값을 빠뜨린 서버가 개발 모드로 켜지면 인증 없는 API가 열린다. 빠뜨리면 운영으로 본다.
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   APP_ROLE: z.enum(['main', 'admin']).default('main'),
   PUBLIC_DATA_API_KEY: z.string().optional(),

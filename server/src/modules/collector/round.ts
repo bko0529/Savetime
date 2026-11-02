@@ -1,6 +1,8 @@
 // 병상 수집 한 회차 (SFR-023). 회차가 겹치지 않는 것은 주기 작업 틀이 보장한다.
 import type pg from 'pg';
 import type { Logger } from 'pino';
+import { withTransaction } from '../../db/transaction.js';
+import { recordFailure } from './collectLog.js';
 import type { BedRow } from './parseBeds.js';
 import { runPool } from './pool.js';
 import { CollectError, type FetchBeds } from './publicApi.js';
@@ -28,7 +30,8 @@ export const ALL_REGIONS = [
 
 // 설정값은 쉼표로 구분한다. 비우면 전국 17개 (T-07)
 export function regionsFrom(value: string | undefined): string[] {
-  return value ? value.split(',').map((region) => region.trim()) : ALL_REGIONS;
+  const regions = (value ?? '').split(',').map((region) => region.trim());
+  return regions.some(Boolean) ? regions.filter(Boolean) : ALL_REGIONS;
 }
 
 export const COLLECT_EVERY_MS = 180_000;
@@ -84,9 +87,7 @@ async function saveSuccess(
       or: [bed.orAvail, bed.orTotal],
     },
   }));
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  await withTransaction(pool, async (client) => {
     // 이상치가 처음 생길 때만 남긴다. 3분마다 같은 기록이 쌓이지 않게 한다.
     await client.query(
       `INSERT INTO bed_anomaly_log (public_id, reason, detail)
@@ -133,27 +134,7 @@ async function saveSuccess(
                (SELECT max(t) FROM unnest($3::timestamptz[]) AS t), $4)`,
       [region, startedAt, sourceTimes, saved.rows.length],
     );
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function saveFailure(
-  pool: pg.Pool,
-  region: string,
-  startedAt: Date,
-  errorCode: string,
-  kind: 'beds' | 'hospitals' | 'capabilities' = 'beds',
-): Promise<void> {
-  await pool.query(
-    `INSERT INTO collect_log (kind, region, started_at, finished_at, success, error_code)
-     VALUES ($1, $2, $3, now(), false, $4)`,
-    [kind, region, startedAt, errorCode],
-  );
+  });
 }
 
 export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
@@ -177,13 +158,9 @@ export async function runCollectRound(deps: RoundDeps): Promise<RoundResult> {
       await saveSuccess(pool, region, startedAt, beds);
       result.succeeded += 1;
     } catch (err) {
-      const code = err instanceof CollectError ? err.code : 'SAVE_FAILED';
-      if (code === 'QUOTA_EXCEEDED') quotaReached = true;
-      if (code === 'SAVE_FAILED') {
-        logger.error({ region, message: (err as Error).message }, '병상 저장 실패');
-      }
       // 한 시·도가 실패해도 나머지는 계속한다. 기존 값과 기준 시각은 그대로 남는다.
-      await saveFailure(pool, region, startedAt, code);
+      const code = await recordFailure(pool, logger, 'beds', region, startedAt, err);
+      if (code === 'QUOTA_EXCEEDED') quotaReached = true;
       result.failed += 1;
     }
   };

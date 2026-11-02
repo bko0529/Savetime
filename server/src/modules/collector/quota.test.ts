@@ -9,7 +9,7 @@ import pg from 'pg';
 import { pino, type Logger } from 'pino';
 import { TEST_REDIS_URL, withTempDatabase } from '../../testing/services.js';
 import type { BedRow } from './parseBeds.js';
-import { createFetchBeds } from './publicApi.js';
+import { createFetchBeds, createFetchItems } from './publicApi.js';
 import { createApiQuota, type ApiQuotaOptions } from './quota.js';
 import { runCollectRound } from './round.js';
 
@@ -120,6 +120,16 @@ test('호출 수를 DB에 남기고, Redis가 비어도 그 수부터 이어서 
   });
 });
 
+test('공공 API가 한도 초과라고 답하면 다음 회차를 시작하지 않는다', async () => {
+  await withQuota(async ({ options, alerts }) => {
+    const quota = createApiQuota({ ...options, limit: 100 });
+    assert.equal(await quota.isExhausted(), false);
+    await quota.exhaust();
+    assert.equal(await quota.isExhausted(), true);
+    assert.deepEqual(alerts, ['공공 API 호출 한도 초과']);
+  });
+});
+
 test('한도를 다 쓴 날에는 수집 요청을 보내지 않고 다음 날 다시 시작한다', async () => {
   await withQuota(async ({ options, pool, day }) => {
     const quota = createApiQuota({ ...options, limit: 1 });
@@ -151,12 +161,13 @@ test('회차 중간에 한도에 닿으면 남은 시·도는 시작하지 않�
   await withQuota(async ({ options, pool }) => {
     const quota = createApiQuota({ ...options, limit: 6 });
     let sent = 0;
-    const fetchBeds = createFetchBeds('key', quota.take, (async () => {
+    const fetchItems = createFetchItems('key', quota, (async () => {
       sent += 1;
       return Response.json({
         response: { header: { resultCode: '00' }, body: { items: '' } },
       });
     }) as typeof fetch);
+    const fetchBeds = createFetchBeds(fetchItems);
     const regions = Array.from({ length: 17 }, (_, i) => `시도${i}`);
 
     const result = await runCollectRound({

@@ -25,7 +25,7 @@ pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오�
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
 // 로그인은 S2에 생긴다. 그때까지 인증이 없으니 운영에서는 켜지 않고, S2에 인증을 붙이며 이 조건을 없앤다.
-const openWithoutLogin = config.APP_ROLE === 'main' && config.NODE_ENV !== 'production';
+const openWithoutLogin = config.APP_ROLE === 'main' && config.NODE_ENV === 'development';
 
 const app = createApp({
   logger,
@@ -49,8 +49,10 @@ if (config.PUBLIC_DATA_API_KEY) {
     logger,
     limit: config.PUBLIC_DATA_DAILY_LIMIT,
   });
-  const fetchBeds = createFetchBeds(config.PUBLIC_DATA_API_KEY, quota.take);
-  const fetchItems = createFetchItems(config.PUBLIC_DATA_API_KEY, quota.take);
+  const fetchItems = createFetchItems(config.PUBLIC_DATA_API_KEY, quota);
+  const fetchBeds = createFetchBeds(fetchItems, (region, count) => {
+    logger.warn({ region, count }, '형식이 맞지 않는 병원을 건너뜁니다');
+  });
   const regions = regionsFrom(config.COLLECT_REGIONS);
   const deps = { pool, fetchItems, quota, regions, logger };
   scheduledJobs.push(

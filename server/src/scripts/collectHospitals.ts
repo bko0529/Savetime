@@ -20,7 +20,7 @@ const deps = {
   pool,
   quota,
   logger,
-  fetchItems: createFetchItems(config.PUBLIC_DATA_API_KEY, quota.take),
+  fetchItems: createFetchItems(config.PUBLIC_DATA_API_KEY, quota),
   regions: regionsFrom(config.COLLECT_REGIONS),
 };
 

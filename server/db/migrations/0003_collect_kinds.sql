@@ -35,6 +35,7 @@ INSERT INTO capability_item (code, name) VALUES
   ('mkioskty27', '[영상의학혈관중재] 영유아');
 
 -- Down Migration
+DELETE FROM hospital_capability;
 DELETE FROM capability_item;
 DROP INDEX collect_log_kind_region_started_at_idx;
 ALTER TABLE collect_log DROP COLUMN kind;

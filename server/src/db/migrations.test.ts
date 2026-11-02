@@ -78,9 +78,16 @@ test('마이그레이션을 두 번 실행해도 아무 일도 일어나지 않�
   });
 });
 
-test('0002·0003은 되돌렸다가 다시 적용할 수 있다', async () => {
+test('0002·0003은 수집 데이터가 있어도 되돌렸다가 다시 적용할 수 있다', async () => {
   await withTempDatabase(async (url) => {
     await migrate(url, 'up');
+    await query(
+      url,
+      `WITH h AS (
+         INSERT INTO hospital (public_id, name, lat, lng) VALUES ('A', 'A', 36, 127) RETURNING id
+       )
+       INSERT INTO hospital_capability SELECT id, 'mkioskty1', true, now() FROM h`,
+    );
     await migrate(url, 'down', 2);
     const tables = await query(url, `SELECT 1 FROM pg_tables WHERE tablename = 'collect_log'`);
     assert.equal(tables.length, 0);

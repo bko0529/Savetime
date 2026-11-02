@@ -2,10 +2,12 @@
 import type pg from 'pg';
 import type { Logger } from 'pino';
 import { z } from 'zod';
+import { withTransaction } from '../../db/transaction.js';
+import { recordFailure } from './collectLog.js';
+import { lastByKey, optionalNumber, optionalText } from './fields.js';
 import { runPool } from './pool.js';
 import { CollectError, type FetchItems } from './publicApi.js';
 import type { ApiQuota } from './quota.js';
-import { saveFailure } from './round.js';
 
 export const COLLECT_HOSPITALS_EVERY_MS = 86_400_000;
 const LIST_OPERATION = 'getEgytListInfoInqire';
@@ -23,16 +25,23 @@ export const EMCLS_TO_GRADE: Record<string, number> = {
 };
 const DEFAULT_GRADE = 3;
 
+// 대한민국 영역 (SFR-087). 값이 있어도 0처럼 이 밖이면 좌표가 없는 것으로 본다.
+function isInKorea(lat: number | undefined, lng: number | undefined): boolean {
+  return (
+    lat !== undefined && lng !== undefined && lat >= 33 && lat <= 39 && lng >= 124 && lng <= 132
+  );
+}
+
 const listItemSchema = z.object({
   hpid: z.string().min(1),
   dutyName: z.string().min(1),
-  dutyAddr: z.string().optional(),
-  dutyTel1: z.string().optional(),
-  dutyTel3: z.string().optional(),
-  dutyEmcls: z.string().optional(),
-  dutyEmclsName: z.string().optional(),
-  wgs84Lat: z.coerce.number().optional(),
-  wgs84Lon: z.coerce.number().optional(),
+  dutyAddr: optionalText,
+  dutyTel1: optionalText,
+  dutyTel3: optionalText,
+  dutyEmcls: optionalText,
+  dutyEmclsName: optionalText,
+  wgs84Lat: optionalNumber,
+  wgs84Lon: optionalNumber,
 });
 
 export interface HospitalRow {
@@ -59,7 +68,7 @@ export function parseHospitals(items: unknown[]): ParsedHospitals {
     if (!parsed.success) continue;
     const { data } = parsed;
     // hospital.lat·lng는 비울 수 없다. 좌표 없는 병원은 저장하지 않으니 추천에도 나오지 않는다 (SFR-088).
-    if (data.wgs84Lat === undefined || data.wgs84Lon === undefined) {
+    if (!isInKorea(data.wgs84Lat, data.wgs84Lon)) {
       result.noCoords.push(data.hpid);
       continue;
     }
@@ -69,12 +78,13 @@ export function parseHospitals(items: unknown[]): ParsedHospitals {
       address: data.dutyAddr,
       erPhone: data.dutyTel3,
       mainPhone: data.dutyTel1,
-      lat: data.wgs84Lat,
-      lng: data.wgs84Lon,
+      lat: data.wgs84Lat as number,
+      lng: data.wgs84Lon as number,
       emclsCode: data.dutyEmcls,
       grade: EMCLS_TO_GRADE[data.dutyEmclsName ?? ''] ?? DEFAULT_GRADE,
     });
   }
+  result.hospitals = lastByKey(result.hospitals, (hospital) => hospital.publicId);
   return result;
 }
 
@@ -93,9 +103,7 @@ async function saveRegion(
   startedAt: Date,
   { hospitals, noCoords }: ParsedHospitals,
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  await withTransaction(pool, async (client) => {
     // 입구 좌표·계정 상태처럼 우리가 관리하는 컬럼은 건드리지 않는다.
     await client.query(
       `INSERT INTO hospital
@@ -122,13 +130,7 @@ async function saveRegion(
        VALUES ('hospitals', $1, $2, now(), true, $3)`,
       [region, startedAt, hospitals.length],
     );
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export interface HospitalCollectDeps {
@@ -157,12 +159,8 @@ export async function runHospitalCollect(deps: HospitalCollectDeps): Promise<voi
       await saveRegion(pool, region, startedAt, parsed);
       publicIds.push(...parsed.hospitals.map((hospital) => hospital.publicId));
     } catch (err) {
-      const code = err instanceof CollectError ? err.code : 'SAVE_FAILED';
+      const code = await recordFailure(pool, logger, 'hospitals', region, startedAt, err);
       if (code === 'QUOTA_EXCEEDED') quotaReached = true;
-      if (code === 'SAVE_FAILED') {
-        logger.error({ region, message: (err as Error).message }, '병원 저장 실패');
-      }
-      await saveFailure(pool, region, startedAt, code, 'hospitals');
     }
   });
 

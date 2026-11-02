@@ -12,6 +12,8 @@ export interface ApiQuota {
   take: () => Promise<void>;
   // 회차를 시작해도 되는지 본다. 오늘 한도를 다 썼으면 true.
   isExhausted: () => Promise<boolean>;
+  // 공공 API가 한도 초과라고 답하면 오늘 호출을 멈춘다.
+  exhaust: () => Promise<void>;
   // 회차가 끝나면 호출 수를 DB에 남긴다.
   save: () => Promise<void>;
 }
@@ -80,6 +82,12 @@ export function createApiQuota(options: ApiQuotaOptions): ApiQuota {
       if (used < limit) return false;
       await alertOnce(day, '한도 초과', used);
       return true;
+    },
+
+    exhaust: async () => {
+      const day = await today();
+      await redis.set(countKey(day), limit, 'EX', KEY_TTL_SECONDS);
+      await alertOnce(day, '한도 초과', limit);
     },
 
     save: async () => {

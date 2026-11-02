@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseBeds } from './parseBeds.js';
-import { CollectError, createFetchBeds } from './publicApi.js';
+import { CollectError, createFetchBeds, createFetchItems } from './publicApi.js';
 
 const signal = new AbortController().signal;
 const KEY = 'test-key-1234';
-const noCount = async (): Promise<void> => {};
+const noCount = { take: async () => {}, exhaust: async () => {} };
+
+function bedsApi(quota: typeof noCount, fetchFn: typeof fetch) {
+  return createFetchBeds(createFetchItems(KEY, quota, fetchFn));
+}
 
 // 실제 응답과 같은 모양 (2026-11-02 충청남도 응답에서 필요한 필드만 남김)
 const bedItem = {
@@ -69,6 +73,32 @@ test('가용이 전체보다 많으면 병원을 추천에서 제외한다 (SFR-
   assert.equal(parseBeds([{ ...bedItem, hvoc: 5, hvs22: 4 }])[0].excluded, true);
 });
 
+test('빈 값과 null은 0이 아니라 정보 없음이다 (SFR-089)', () => {
+  for (const blank of ['', '  ', null]) {
+    const [row] = parseBeds([{ ...bedItem, hvoc: blank, hvs22: blank }]);
+    assert.deepEqual([row.orAvail, row.orTotal], [undefined, undefined]);
+  }
+});
+
+test('숫자가 아닌 값은 그 항목만 비우고 병원은 살린다', () => {
+  const [row] = parseBeds([{ ...bedItem, hvoc: 'N' }]);
+  assert.equal(row.orAvail, undefined);
+  assert.equal(row.erAvail, 14);
+});
+
+test('전체 값이 빠진 진료과 때문에 병원을 제외하지 않는다', () => {
+  const [row] = parseBeds([{ ...bedItem, hvicc: 8, hvs17: 8, hv6: 3 }]);
+  assert.deepEqual([row.icuAvail, row.icuTotal], [11, 8]);
+  assert.equal(row.excluded, false);
+  assert.equal(parseBeds([{ ...bedItem, hv6: 3, hvs12: 2 }])[0].excluded, true);
+});
+
+test('같은 병원이 두 번 오면 뒤의 값 하나만 남긴다', () => {
+  const rows = parseBeds([bedItem, { ...bedItem, hvec: 1 }]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].erAvail, 1);
+});
+
 test('형식이 깨진 병원은 빼고 나머지는 살린다', () => {
   const rows = parseBeds([{ ...bedItem, hvidate: '어제' }, { hvec: 1 }, bedItem]);
   assert.equal(rows.length, 1);
@@ -76,7 +106,7 @@ test('형식이 깨진 병원은 빼고 나머지는 살린다', () => {
 
 test('주소에 키·시·도·JSON 요청을 담고, 1건·0건 응답도 처리한다', async () => {
   let called: URL | undefined;
-  const fetchOne = createFetchBeds(KEY, noCount, (async (url: URL) => {
+  const fetchOne = bedsApi(noCount, (async (url: URL) => {
     called = url;
     return okResponse({ item: bedItem });
   }) as typeof fetch);
@@ -85,13 +115,13 @@ test('주소에 키·시·도·JSON 요청을 담고, 1건·0건 응답도 처�
   assert.equal(called?.searchParams.get('STAGE1'), '세종특별자치시');
   assert.equal(called?.searchParams.get('_type'), 'json');
 
-  const fetchNone = createFetchBeds(KEY, noCount, (async () => okResponse('')) as typeof fetch);
+  const fetchNone = bedsApi(noCount, (async () => okResponse('')) as typeof fetch);
   assert.deepEqual(await fetchNone('세종특별자치시', signal), []);
 });
 
 test('실패하면 1회 다시 조회하고, 성공하면 그 값을 쓴다 (SFR-024)', async () => {
   let calls = 0;
-  const fetchBeds = createFetchBeds(KEY, noCount, (async () => {
+  const fetchBeds = bedsApi(noCount, (async () => {
     calls += 1;
     if (calls === 1) return new Response('', { status: 500 });
     return okResponse({ item: [bedItem] });
@@ -102,7 +132,7 @@ test('실패하면 1회 다시 조회하고, 성공하면 그 값을 쓴다 (SFR
 
 test('재조회까지 실패하면 코드만 담긴 오류를 낸다. 키는 들어가지 않는다', async () => {
   let calls = 0;
-  const fetchBeds = createFetchBeds(KEY, noCount, (async (url: URL) => {
+  const fetchBeds = bedsApi(noCount, (async (url: URL) => {
     calls += 1;
     throw new Error(`연결 실패 ${url.toString()}`);
   }) as typeof fetch);
@@ -115,36 +145,61 @@ test('재조회까지 실패하면 코드만 담긴 오류를 낸다. 키는 들
   assert.equal(calls, 2);
 });
 
-test('공공 API 오류 코드는 RESULT_코드로 남긴다', async () => {
-  const fetchBeds = createFetchBeds(KEY, noCount, (async () =>
-    Response.json({
-      response: { header: { resultCode: '22', resultMsg: 'LIMITED NUMBER OF SERVICE REQUESTS' } },
-    })) as typeof fetch);
-  await assert.rejects(fetchBeds('충청남도', signal), { code: 'RESULT_22' });
+test('키 오류처럼 다시 해도 소용없는 실패는 재조회하지 않는다', async () => {
+  let calls = 0;
+  const fetchBeds = bedsApi(noCount, (async () => {
+    calls += 1;
+    return Response.json({ response: { header: { resultCode: '30' } } });
+  }) as typeof fetch);
+  await assert.rejects(fetchBeds('충청남도', signal), { code: 'RESULT_30' });
+  assert.equal(calls, 1);
+});
+
+test('공공 API가 한도 초과로 답하면 재조회 없이 오늘 호출을 멈춘다', async () => {
+  let calls = 0;
+  let exhausted = 0;
+  const quota = { ...noCount, exhaust: async () => void (exhausted += 1) };
+  const fetchBeds = bedsApi(quota, (async () => {
+    calls += 1;
+    return Response.json({ response: { header: { resultCode: '22' } } });
+  }) as typeof fetch);
+  await assert.rejects(fetchBeds('충청남도', signal), { code: 'QUOTA_EXCEEDED' });
+  assert.deepEqual([calls, exhausted], [1, 1]);
 });
 
 test('재조회도 호출 수에 넣고, 한도에 닿으면 호출하지 않는다', async () => {
   let counted = 0;
   let sent = 0;
-  const fetchBeds = createFetchBeds(
-    KEY,
-    async () => {
+  const quota = {
+    ...noCount,
+    take: async () => {
       counted += 1;
       if (counted === 2) throw new CollectError('QUOTA_EXCEEDED');
     },
-    (async () => {
-      sent += 1;
-      return new Response('', { status: 500 });
-    }) as typeof fetch,
-  );
+  };
+  const fetchBeds = bedsApi(quota, (async () => {
+    sent += 1;
+    return new Response('', { status: 500 });
+  }) as typeof fetch);
   await assert.rejects(fetchBeds('충청남도', signal), { code: 'QUOTA_EXCEEDED' });
   assert.deepEqual([counted, sent], [2, 1]);
+});
+
+test('형식이 맞지 않아 건너뛴 병원 수를 알린다', async () => {
+  const skipped: [string, number][] = [];
+  const fetchBeds = createFetchBeds(
+    createFetchItems(KEY, noCount, (async () =>
+      okResponse({ item: [bedItem, { hpid: 'B' }] })) as typeof fetch),
+    (region, count) => skipped.push([region, count]),
+  );
+  assert.equal((await fetchBeds('충청남도', signal)).length, 1);
+  assert.deepEqual(skipped, [['충청남도', 1]]);
 });
 
 test('마감이 지났으면 다시 조회하지 않는다', async () => {
   const controller = new AbortController();
   let calls = 0;
-  const fetchBeds = createFetchBeds(KEY, noCount, (async () => {
+  const fetchBeds = bedsApi(noCount, (async () => {
     calls += 1;
     controller.abort();
     throw new Error('aborted');

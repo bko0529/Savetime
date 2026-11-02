@@ -1,40 +1,28 @@
 // 공공 데이터 병상 필드 → 우리 3종 병상 (부록 D, CR-007). 공공 데이터 필드명은 이 파일에만 둔다.
 import { z } from 'zod';
+import { lastByKey, optionalInt } from './fields.js';
 
-const count = z.coerce.number().int().optional();
-
-// 일반 + 진료과별 중환자실. 일반 값 없이 진료과별 값만 보내는 큰 병원이 있다.
+// 일반 + 진료과별 중환자실 [가용, 전체]. 일반 값 없이 진료과별 값만 보내는 큰 병원이 있다.
 // 신생아·소아·음압격리는 일반 환자를 받는 병상이 아니라서 뺀다.
-const ICU_AVAIL_FIELDS = [
-  'hvicc', // 일반
-  'hv2', // 내과
-  'hv3', // 외과
-  'hv6', // 신경외과
-  'hv8', // 화상
-  'hv9', // 외상
-  'hv34', // 심장내과
-  'hvcc', // 신경과
-  'hvccc', // 흉부외과
-] as const;
-const ICU_TOTAL_FIELDS = [
-  'hvs17', // 일반
-  'hvs06', // 내과
-  'hvs07', // 외과
-  'hvs12', // 신경외과
-  'hvs13', // 화상
-  'hvs14', // 외상
-  'hvs15', // 심장내과
-  'hvs11', // 신경과
-  'hvs16', // 흉부외과
+const ICU_FIELDS = [
+  ['hvicc', 'hvs17'], // 일반
+  ['hv2', 'hvs06'], // 내과
+  ['hv3', 'hvs07'], // 외과
+  ['hv6', 'hvs12'], // 신경외과
+  ['hv8', 'hvs13'], // 화상
+  ['hv9', 'hvs14'], // 외상
+  ['hv34', 'hvs15'], // 심장내과
+  ['hvcc', 'hvs11'], // 신경과
+  ['hvccc', 'hvs16'], // 흉부외과
 ] as const;
 
 const itemSchema = z.object({
   hpid: z.string().min(1),
-  hvec: count, // 응급실 가용
-  hvs01: count, // 응급실 전체
-  hvoc: count, // 수술실 가용
-  hvs22: count, // 수술실 전체
-  ...Object.fromEntries([...ICU_AVAIL_FIELDS, ...ICU_TOTAL_FIELDS].map((f) => [f, count])),
+  hvec: optionalInt, // 응급실 가용
+  hvs01: optionalInt, // 응급실 전체
+  hvoc: optionalInt, // 수술실 가용
+  hvs22: optionalInt, // 수술실 전체
+  ...Object.fromEntries(ICU_FIELDS.flat().map((field) => [field, optionalInt])),
   hvidate: z.coerce.string().regex(/^\d{14}$/), // 기준 시각, 한국 시간
 });
 
@@ -72,8 +60,11 @@ function toIsoTime(value: string): string {
   return `${y}-${mo}-${d}T${h}:${mi}:${s}+09:00`;
 }
 
-// 형식이 깨진 병원 한 곳 때문에 시·도 전체를 버리지 않도록 그 병원만 뺀다.
-export function parseBeds(items: unknown[]): BedRow[] {
+// 병상 값이 깨진 것은 그 값만 비운다. 기관 ID나 기준 시각이 없으면 저장할 수 없어 그 병원만 빼고 알린다.
+export function parseBeds(
+  items: unknown[],
+  onSkipped: (count: number) => void = () => {},
+): BedRow[] {
   const rows: BedRow[] = [];
   for (const item of items) {
     const parsed = itemSchema.safeParse(item);
@@ -81,25 +72,29 @@ export function parseBeds(items: unknown[]): BedRow[] {
     const data = parsed.data as Record<string, number | undefined> & typeof parsed.data;
     const erAvail = available(data.hvec);
     const erTotal = data.hvs01;
-    const icuAvail = sum(ICU_AVAIL_FIELDS.map((field) => available(data[field])));
-    const icuTotal = sum(ICU_TOTAL_FIELDS.map((field) => data[field]));
     const orAvail = available(data.hvoc);
     const orTotal = data.hvs22;
+    const icuPairs = ICU_FIELDS.map(
+      ([avail, total]) => [available(data[avail]), data[total]] as const,
+    );
     rows.push({
       publicId: data.hpid,
       erAvail,
       erTotal,
-      icuAvail,
-      icuTotal,
+      icuAvail: sum(icuPairs.map(([avail]) => avail)),
+      icuTotal: sum(icuPairs.map(([, total]) => total)),
       orAvail,
       orTotal,
       sourceTime: toIsoTime(data.hvidate),
       raw: item,
+      // 중환자실은 진료과끼리 비교한다. 합계로 비교하면 전체 값이 빠진 진료과 때문에 잘못 제외된다.
       excluded:
         isOverTotal(erAvail, erTotal) ||
-        isOverTotal(icuAvail, icuTotal) ||
-        isOverTotal(orAvail, orTotal),
+        isOverTotal(orAvail, orTotal) ||
+        icuPairs.some(([avail, total]) => isOverTotal(avail, total)),
     });
   }
-  return rows;
+  const skipped = items.length - rows.length;
+  if (skipped > 0) onSkipped(skipped);
+  return lastByKey(rows, (row) => row.publicId);
 }

@@ -1,46 +1,36 @@
 // SFR-023 인수 기준을 임시 DB에서 그대로 확인한다. 공공 API는 호출하지 않는다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { pino } from 'pino';
-import { withTempDatabase } from '../../testing/services.js';
+import { withSchemaPool } from '../../testing/services.js';
 import type { BedRow } from './parseBeds.js';
 import { CollectError, type FetchBeds } from './publicApi.js';
 import type { ApiQuota } from './quota.js';
-import { ALL_REGIONS, runCollectRound } from './round.js';
+import { ALL_REGIONS, regionsFrom, runCollectRound } from './round.js';
 
 const logger = pino({ level: 'silent' });
 const quota: ApiQuota = {
   take: async () => {},
   isExhausted: async () => false,
+  exhaust: async () => {},
   save: async () => {},
 };
-const SCHEMA_FILE = fileURLToPath(new URL('../../../db/schema.sql', import.meta.url));
 
 function bedsFor(region: string, erAvail: number, sourceTime: string): BedRow[] {
   return [{ publicId: region, erAvail, erTotal: 20, sourceTime, raw: { region }, excluded: false }];
 }
 
 async function withPool(use: (pool: pg.Pool) => Promise<void>): Promise<void> {
-  await withTempDatabase(async (url) => {
-    const pool = new pg.Pool({ connectionString: url });
-    // 테스트 끝에 임시 DB를 지울 때 닫히는 중이던 연결이 끊겨도 실패로 보지 않는다
-    pool.on('error', () => {});
-    try {
-      await pool.query(await readFile(SCHEMA_FILE, 'utf8'));
-      // 시·도마다 병원 1곳: 기본정보 수집(S1 9번) 대신 직접 넣는다
-      await pool.query(
-        `INSERT INTO hospital (public_id, name, lat, lng)
-         SELECT region, region, 36.5, 127.5 FROM unnest($1::text[]) AS region`,
-        [ALL_REGIONS],
-      );
-      await use(pool);
-    } finally {
-      await pool.end();
-    }
+  await withSchemaPool(async (pool) => {
+    // 시·도마다 병원 1곳: 기본정보 수집(S1 9번) 대신 직접 넣는다
+    await pool.query(
+      `INSERT INTO hospital (public_id, name, lat, lng)
+       SELECT region, region, 36.5, 127.5 FROM unnest($1::text[]) AS region`,
+      [ALL_REGIONS],
+    );
+    await use(pool);
   });
 }
 
@@ -209,6 +199,37 @@ test('0건이 오면 시·도 이름 오류일 수 있어 실패로 기록한다
     const { rows } = await pool.query('SELECT error_code FROM collect_log');
     assert.equal(rows[0].error_code, 'EMPTY_REGION');
   });
+});
+
+test('실패 기록을 남기지 못해도 다른 시·도는 계속하고 호출 수를 저장한다', async () => {
+  await withPool(async (pool) => {
+    await pool.query('ALTER TABLE collect_log RENAME COLUMN error_code TO error_code_moved');
+    let saved = 0;
+    const counting: ApiQuota = {
+      ...quota,
+      save: async () => {
+        saved += 1;
+      },
+    };
+    const fetchBeds: FetchBeds = async () => {
+      throw new CollectError('NETWORK');
+    };
+    const result = await runCollectRound({
+      pool,
+      fetchBeds,
+      regions: ALL_REGIONS,
+      logger,
+      quota: counting,
+    });
+    assert.equal(result.failed, 17);
+    assert.equal(saved, 1);
+  });
+});
+
+test('시·도 설정: 빈 칸은 빼고, 비어 있으면 전국이다', () => {
+  assert.deepEqual(regionsFrom(' 충청남도, ,세종특별자치시,'), ['충청남도', '세종특별자치시']);
+  assert.equal(regionsFrom(undefined).length, 17);
+  assert.equal(regionsFrom(' , ').length, 17);
 });
 
 test('저장에 실패하면 병상은 그대로 두고 SAVE_FAILED로 기록한다', async () => {

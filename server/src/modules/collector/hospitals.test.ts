@@ -18,6 +18,7 @@ const logger = pino({ level: 'silent' });
 const quota: ApiQuota = {
   take: async () => {},
   isExhausted: async () => false,
+  exhaust: async () => {},
   save: async () => {},
 };
 const regions = ['충청남도'];
@@ -61,6 +62,37 @@ test('좌표가 없는 병원은 저장 대상에서 빼고 따로 모은다', (
   ]);
   assert.equal(hospitals.length, 1);
   assert.deepEqual(noCoords, ['B']);
+});
+
+test('좌표가 비었거나 대한민국 밖이면 좌표 없는 병원으로 본다 (SFR-088)', () => {
+  for (const wgs84Lat of ['', null, 0, 41]) {
+    const { hospitals, noCoords } = parseHospitals([{ ...listItem, wgs84Lat }]);
+    assert.deepEqual([hospitals.length, noCoords], [0, [listItem.hpid]]);
+  }
+});
+
+test('같은 병원이 두 번 와도 전체 저장이 실패하지 않는다', async () => {
+  await withSchemaPool(async (pool) => {
+    const fetchItems = fakeApi({
+      getEgytListInfoInqire: () => [listItem, { ...listItem, dutyName: '새 이름' }],
+    });
+    await runHospitalCollect({ pool, fetchItems, quota, regions, logger });
+
+    const severe = fakeApi({
+      getSrsillDissAceptncPosblInfoInqire: () => [
+        { hpid: listItem.hpid, MKioskTy1: 'Y' },
+        { hpid: listItem.hpid, MKioskTy1: '불가능' },
+      ],
+    });
+    await runCapabilityCollect({ pool, fetchItems: severe, quota, regions, logger });
+
+    const { rows } = await pool.query('SELECT name FROM hospital');
+    assert.deepEqual(rows, [{ name: '새 이름' }]);
+    const capabilities = await pool.query('SELECT available FROM hospital_capability');
+    assert.deepEqual(capabilities.rows, [{ available: false }]);
+    const failed = await pool.query('SELECT count(*) FROM collect_log WHERE NOT success');
+    assert.equal(failed.rows[0].count, '0');
+  });
 });
 
 test('진료과는 쉼표로 나누고 값이 없으면 빈 목록이다', () => {

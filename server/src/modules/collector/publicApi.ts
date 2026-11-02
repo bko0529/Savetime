@@ -1,11 +1,13 @@
 // 국립중앙의료원 응급의료정보 API 호출 (INR-001). 키는 주소에 들어가므로 오류에 주소를 담지 않는다 (SER-001).
 import { z } from 'zod';
 import { parseBeds, type BedRow } from './parseBeds.js';
+import type { ApiQuota } from './quota.js';
 
 const BASE_URL = 'https://apis.data.go.kr/B552657/ErmctInfoInqireService';
 const BEDS_OPERATION = 'getEmrrmRltmUsefulSckbdInfoInqire';
 const REQUEST_TIMEOUT_MS = 10_000;
 const NUM_OF_ROWS = '1000'; // 시·도 하나를 한 번의 호출로 받는다
+const LIMIT_EXCEEDED_CODE = 'RESULT_22'; // 공공데이터포털 공통 오류: 서비스 요청 제한 횟수 초과
 
 export type FetchItems = (
   operation: string,
@@ -65,11 +67,17 @@ async function fetchOnce(url: URL, signal: AbortSignal, fetchFn: typeof fetch): 
   return toItems(parsed.response.body);
 }
 
-// beforeCall은 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
-// beforeCall은 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
+// 일시적인 실패만 다시 조회한다. 키 오류나 잘못된 요청은 다시 해도 같은 결과라 호출 수만 쓴다.
+function isRetryable(err: unknown): boolean {
+  return (
+    err instanceof CollectError && /^(NETWORK|BAD_RESPONSE|HTTP_429|HTTP_5\d\d)$/.test(err.code)
+  );
+}
+
+// take는 실제 호출마다 돈다. 재조회도 호출 수에 들어간다 (SFR-090).
 export function createFetchItems(
   serviceKey: string,
-  beforeCall: () => Promise<void>,
+  quota: Pick<ApiQuota, 'take' | 'exhaust'>,
   fetchFn: typeof fetch = fetch,
 ): FetchItems {
   return async (operation, params, signal) => {
@@ -82,24 +90,36 @@ export function createFetchItems(
       ...params,
     }).toString();
 
-    await beforeCall();
+    const call = async (): Promise<unknown[]> => {
+      await quota.take();
+      try {
+        return await fetchOnce(url, signal, fetchFn);
+      } catch (err) {
+        // 공공 API가 직접 한도 초과라고 답하면 우리 숫자보다 그 답을 믿고 멈춘다.
+        if (err instanceof CollectError && err.code === LIMIT_EXCEEDED_CODE) {
+          await quota.exhaust();
+          throw new CollectError('QUOTA_EXCEEDED');
+        }
+        throw err;
+      }
+    };
+
     try {
-      return await fetchOnce(url, signal, fetchFn);
+      return await call();
     } catch (err) {
-      // 마감이 지났으면 다시 해도 소용없다. 그 밖의 실패는 1회 다시 조회한다 (SFR-024).
-      if (signal.aborted) throw err;
-      await beforeCall();
-      return fetchOnce(url, signal, fetchFn);
+      // 마감이 지났거나 다시 해도 소용없는 실패가 아니면 1회 다시 조회한다 (SFR-024).
+      if (signal.aborted || !isRetryable(err)) throw err;
+      return call();
     }
   };
 }
 
 export function createFetchBeds(
-  serviceKey: string,
-  beforeCall: () => Promise<void>,
-  fetchFn: typeof fetch = fetch,
+  fetchItems: FetchItems,
+  onSkipped: (region: string, count: number) => void = () => {},
 ): FetchBeds {
-  const fetchItems = createFetchItems(serviceKey, beforeCall, fetchFn);
   return async (region, signal) =>
-    parseBeds(await fetchItems(BEDS_OPERATION, { STAGE1: region }, signal));
+    parseBeds(await fetchItems(BEDS_OPERATION, { STAGE1: region }, signal), (count) =>
+      onSkipped(region, count),
+    );
 }

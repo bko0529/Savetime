@@ -1,10 +1,12 @@
 // 중증질환 진료가능 항목 수집, 1시간마다 (INR-001, SFR-007)
 import type pg from 'pg';
 import type { Logger } from 'pino';
+import { withTransaction } from '../../db/transaction.js';
+import { recordFailure } from './collectLog.js';
+import { lastByKey } from './fields.js';
 import { runPool } from './pool.js';
 import { CollectError, type FetchItems } from './publicApi.js';
 import type { ApiQuota } from './quota.js';
-import { saveFailure } from './round.js';
 
 export const COLLECT_CAPABILITIES_EVERY_MS = 3_600_000;
 const OPERATION = 'getSrsillDissAceptncPosblInfoInqire';
@@ -37,7 +39,7 @@ export function parseCapabilities(items: unknown[]): CapabilityRow[] {
       rows.push({ publicId: record.hpid, code: `mkioskty${n}`, available });
     }
   }
-  return rows;
+  return lastByKey(rows, (row) => `${row.publicId}:${row.code}`);
 }
 
 // 응답에 온 병원은 통째로 바꾼다. '가능'이었다가 '정보미제공'이 된 항목이 남지 않게 한다.
@@ -48,9 +50,7 @@ async function saveRegion(
   publicIds: string[],
   rows: CapabilityRow[],
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  await withTransaction(pool, async (client) => {
     await client.query(
       `DELETE FROM hospital_capability c USING hospital h
         WHERE h.id = c.hospital_id AND h.public_id = ANY($1::varchar[])`,
@@ -68,13 +68,7 @@ async function saveRegion(
        VALUES ('capabilities', $1, $2, now(), true, $3)`,
       [region, startedAt, publicIds.length],
     );
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export interface CapabilityCollectDeps {
@@ -101,17 +95,17 @@ export async function runCapabilityCollect(deps: CapabilityCollectDeps): Promise
       try {
         const items = await fetchItems(OPERATION, { STAGE1: region }, signal);
         if (items.length === 0) throw new CollectError('EMPTY_REGION');
-        const publicIds = items
-          .map((item) => (item as { hpid?: unknown }).hpid)
-          .filter((id): id is string => typeof id === 'string');
+        const publicIds = [
+          ...new Set(
+            items
+              .map((item) => (item as { hpid?: unknown }).hpid)
+              .filter((id): id is string => typeof id === 'string'),
+          ),
+        ];
         await saveRegion(pool, region, startedAt, publicIds, parseCapabilities(items));
       } catch (err) {
-        const code = err instanceof CollectError ? err.code : 'SAVE_FAILED';
+        const code = await recordFailure(pool, logger, 'capabilities', region, startedAt, err);
         if (code === 'QUOTA_EXCEEDED') quotaReached = true;
-        if (code === 'SAVE_FAILED') {
-          logger.error({ region, message: (err as Error).message }, '진료가능 항목 저장 실패');
-        }
-        await saveFailure(pool, region, startedAt, code, 'capabilities');
       }
     },
   );
