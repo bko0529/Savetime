@@ -4,6 +4,14 @@ import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import {
+  COLLECT_CAPABILITIES_EVERY_MS,
+  runCapabilityCollect,
+} from './modules/collector/capabilities.js';
+import { COLLECT_HOSPITALS_EVERY_MS, runHospitalCollect } from './modules/collector/hospitals.js';
+import { createFetchBeds, createFetchItems } from './modules/collector/publicApi.js';
+import { createApiQuota } from './modules/collector/quota.js';
+import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 
 const config = loadConfig();
@@ -16,8 +24,12 @@ const redis = new Redis(config.REDIS_URL, { lazyConnect: false });
 pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오류'));
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
+// 로그인은 S2에 생긴다. 그때까지 인증이 없으니 운영에서는 켜지 않고, S2에 인증을 붙이며 이 조건을 없앤다.
+const openWithoutLogin = config.APP_ROLE === 'main' && config.NODE_ENV === 'development';
+
 const app = createApp({
   logger,
+  hospitalDetailPool: openWithoutLogin ? pool : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),
@@ -28,16 +40,43 @@ const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
 
-// 수집기가 들어오기 전까지 주기 작업이 도는지 확인하는 용도
-const scheduledJobs: ScheduledJob[] = [
-  {
-    name: 'ops-heartbeat',
-    everyMs: 60_000,
-    run: async () => {
-      logger.info({ port: config.PORT }, '주기 작업 실행');
+// 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
+const scheduledJobs: ScheduledJob[] = [];
+if (config.PUBLIC_DATA_API_KEY) {
+  const quota = createApiQuota({
+    redis,
+    pool,
+    logger,
+    limit: config.PUBLIC_DATA_DAILY_LIMIT,
+  });
+  const fetchItems = createFetchItems(config.PUBLIC_DATA_API_KEY, quota);
+  const fetchBeds = createFetchBeds(fetchItems, (region, count) => {
+    logger.warn({ region, count }, '형식이 맞지 않는 병원을 건너뜁니다');
+  });
+  const regions = regionsFrom(config.COLLECT_REGIONS);
+  const deps = { pool, fetchItems, quota, regions, logger };
+  scheduledJobs.push(
+    {
+      name: 'collect-beds',
+      everyMs: COLLECT_EVERY_MS,
+      run: async () => {
+        await runCollectRound({ pool, fetchBeds, quota, regions, logger });
+      },
     },
-  },
-];
+    {
+      name: 'collect-hospitals',
+      everyMs: COLLECT_HOSPITALS_EVERY_MS,
+      run: () => runHospitalCollect(deps),
+    },
+    {
+      name: 'collect-capabilities',
+      everyMs: COLLECT_CAPABILITIES_EVERY_MS,
+      run: () => runCapabilityCollect(deps),
+    },
+  );
+} else {
+  logger.warn('PUBLIC_DATA_API_KEY가 없어 병상 수집을 켜지 않습니다');
+}
 
 // 관리자 서버는 주기 작업을 맡지 않는다 (T-11).
 const jobRunners: JobRunner[] =

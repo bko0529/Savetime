@@ -1,34 +1,14 @@
 // 마이그레이션 결과가 schema.sql과 같은지 임시 DB에서 비교한다. 개발 DB는 건드리지 않는다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { runner } from 'node-pg-migrate';
 import pg from 'pg';
-import { TEST_DATABASE_URL } from '../testing/services.js';
+import { withTempDatabase } from '../testing/services.js';
 
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../db/migrations', import.meta.url));
 const SCHEMA_FILE = fileURLToPath(new URL('../../db/schema.sql', import.meta.url));
-
-function urlFor(database: string): string {
-  const url = new URL(TEST_DATABASE_URL);
-  url.pathname = `/${database}`;
-  return url.toString();
-}
-
-async function withTempDatabase(use: (url: string) => Promise<void>): Promise<void> {
-  const name = `migrate_test_${randomBytes(6).toString('hex')}`;
-  const admin = new pg.Client({ connectionString: TEST_DATABASE_URL });
-  await admin.connect();
-  await admin.query(`CREATE DATABASE ${name}`);
-  try {
-    await use(urlFor(name));
-  } finally {
-    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-    await admin.end();
-  }
-}
 
 async function query<T extends pg.QueryResultRow>(url: string, sql: string): Promise<T[]> {
   const client = new pg.Client({ connectionString: url });
@@ -94,14 +74,21 @@ test('마이그레이션을 두 번 실행해도 아무 일도 일어나지 않�
     await migrate(url, 'up');
     await migrate(url, 'up');
     const rows = await query<{ count: string }>(url, 'SELECT count(*) FROM pgmigrations');
-    assert.equal(rows[0].count, '2');
+    assert.equal(rows[0].count, '3');
   });
 });
 
-test('0002는 되돌렸다가 다시 적용할 수 있다', async () => {
+test('0002·0003은 수집 데이터가 있어도 되돌렸다가 다시 적용할 수 있다', async () => {
   await withTempDatabase(async (url) => {
     await migrate(url, 'up');
-    await migrate(url, 'down', 1);
+    await query(
+      url,
+      `WITH h AS (
+         INSERT INTO hospital (public_id, name, lat, lng) VALUES ('A', 'A', 36, 127) RETURNING id
+       )
+       INSERT INTO hospital_capability SELECT id, 'mkioskty1', true, now() FROM h`,
+    );
+    await migrate(url, 'down', 2);
     const tables = await query(url, `SELECT 1 FROM pg_tables WHERE tablename = 'collect_log'`);
     assert.equal(tables.length, 0);
     await migrate(url, 'up');
