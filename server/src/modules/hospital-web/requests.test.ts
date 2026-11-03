@@ -84,7 +84,7 @@ test('요청 목록: 우리 병원의 대기·승인만, 마감 빠른 순, 소�
       etaMin: 9,
       etaSource: 'straight',
       respondUntil: res.body.items[0].respondUntil,
-      abnormalCount: null,
+      abnormalCount: 0,
       prevApprovedRecheck: false,
       respondedBy: null,
       updatedFields: [],

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as alarm from '@/lib/alarm/browserAlarm';
 import { envelope, FakeSocket } from '@/testing/fakeSocket';
-import { fakeServer, renderWithQuery } from '@/testing/render';
+import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
@@ -147,6 +147,63 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     socket.serverDisconnect();
     socket.serverConnect('sock-2');
     await waitFor(() => expect(server.callsTo(LIST).length).toBeGreaterThan(before));
+  });
+});
+
+describe('요청 목록·상세 (SFR-135·118)', () => {
+  const DETAIL = 'GET /hw/requests/102';
+  const detailBody = {
+    id: 102,
+    label: 'R-102',
+    status: 'waiting',
+    version: 1,
+    respondUntil: new Date(now + 60_000).toISOString(),
+    serverNow: new Date().toISOString(),
+    assessment: { chiefComplaint: '호흡곤란', spo2: 85, unknownFields: [] },
+    abnormalFields: ['spo2'],
+    etaMin: 8,
+    etaSource: 'route',
+    ourHospital: { capability: null, beds: { er: '5/20', icu: null, or: null } },
+  };
+
+  it("목록에 요청이 보이고, 덮개 '확인'을 누르면 그 요청 상세가 열린다", async () => {
+    server.set(LIST, list(item(102, 60)));
+    server.set(DETAIL, { status: 200, body: detailBody });
+    newRequest(102);
+    await screen.findByRole('dialog');
+
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+
+    const panel = await screen.findByRole('region', { name: '요청 상세' });
+    await waitFor(() => expect(panel.textContent).toContain('⚠ 85%'));
+    expect(server.callsTo(DETAIL)).toHaveLength(1);
+    // 덮개가 닫히면 목록에서도 그 요청을 다시 열 수 있다
+    expect(screen.getByRole('button', { name: 'R-102' })).toBeDefined();
+  });
+
+  it('열어 둔 요청이 다른 PC 응답으로 끝나면 상세도 끝난 요청으로 바뀐다', async () => {
+    server.set(LIST, list(item(102, 60)));
+    server.set(DETAIL, { status: 200, body: detailBody });
+    newRequest(102);
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await screen.findByText('⚠ 85%');
+
+    server.set(LIST, list());
+    server.set(DETAIL, { status: 409, body: apiError('REQUEST_CLOSED', { status: 'closed' }) });
+    socket.fire(
+      'request.changed',
+      envelope({
+        requestId: 102,
+        status: 'closed',
+        closeReason: 'other_hospital',
+        byName: null,
+        pcName: null,
+      }),
+    );
+
+    expect(await screen.findByText(/이미 끝난 요청이에요 \(닫힘\)/)).toBeDefined();
+    expect(screen.queryByText('⚠ 85%')).toBeNull();
   });
 });
 

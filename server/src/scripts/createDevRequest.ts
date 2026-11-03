@@ -30,7 +30,18 @@ try {
   if (!rows[0])
     throw new Error('병원을 찾지 못했어요. license:dev 로 병원을 만들고 PC 를 등록하세요');
 
-  const requestId = await addHospitalRequest(pool, rows[0].id);
+  // 상세 화면 확인용 예시 값 (산소포화도 86% 는 정상 범위 밖이라 빨간색으로 보인다)
+  const requestId = await addHospitalRequest(pool, rows[0].id, {
+    chiefComplaint: '갑작스러운 두통',
+    assessment: {
+      sex: 'M',
+      age_band: '60s',
+      consciousness: 'alert',
+      bp: '150/90',
+      pulse: 88,
+      spo2: 86,
+    },
+  });
   const hospitalIo = hospitalNamespace(realtime.io, { pool, allowedOrigins: [] });
   const result = await deliverNewRequests({ pool, hospitalIo }, [requestId]);
   console.log(

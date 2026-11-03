@@ -43,21 +43,23 @@ export function useNewRequests(socket: HospitalSocket | null) {
 
   useEffect(() => {
     if (!socket) return;
-    const refetch = () => void queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
+    const refetchList = () => void queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
+    // 목록과 열려 있는 상세를 같이 다시 받는다 (['hw','requests'] 로 시작하는 것 전부)
+    const refetchAll = () => void queryClient.invalidateQueries({ queryKey: ['hw', 'requests'] });
     const onNew: Parameters<typeof socket.on<'request.new'>>[1] = (_e, ack) => {
       // 무엇보다 먼저 '받았어요'. 5초 안에 안 보내면 서버가 이 PC 알림을 끄고 전달 실패로 센다 (SFR-161)
       ack({ received: true });
-      refetch();
+      refetchList();
     };
     socket.on('request.new', onNew);
-    // 다른 PC 응답·만료·닫힘으로 요청이 끝나면 창과 소리를 멈추기 위해 다시 받는다
-    socket.on('request.changed', refetch);
+    // 다른 PC 응답·만료·닫힘으로 요청이 끝나면 창과 소리를 멈추고, 열린 상세도 '끝난 요청'으로 바꾼다
+    socket.on('request.changed', refetchAll);
     // 재연결 때는 놓친 게 있을 수 있어 항상 전체를 다시 받는다 (실시간 설계 B)
-    socket.on('connect', refetch);
+    socket.on('connect', refetchAll);
     return () => {
       socket.off('request.new', onNew);
-      socket.off('request.changed', refetch);
-      socket.off('connect', refetch);
+      socket.off('request.changed', refetchAll);
+      socket.off('connect', refetchAll);
     };
   }, [socket, queryClient]);
 
@@ -95,20 +97,23 @@ export function useNewRequests(socket: HospitalSocket | null) {
     }
   }, [waiting]);
 
-  // 덮개 창이 떠 있는 동안만 1초마다 서버 기준 시각을 다시 계산한다
+  const items = useMemo(() => requests.data?.items ?? [], [requests.data]);
+
+  // 목록에 요청이 있는 동안만 1초마다 서버 기준 시각을 다시 계산한다 (남은 시간 표시)
   const offsetMs = requests.data?.offsetMs ?? 0;
+  const hasItems = items.length > 0;
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
-    if (!overlay) return;
+    if (!hasItems) return;
     const tick = () => setNowMs(Date.now() + offsetMs);
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [overlay, offsetMs]);
+  }, [hasItems, offsetMs]);
 
   function confirm(id: number) {
     setConfirmed((prev) => new Set(prev).add(id));
   }
 
-  return { waiting, overlay, nowMs, confirm };
+  return { items, waiting, overlay, nowMs, confirm };
 }

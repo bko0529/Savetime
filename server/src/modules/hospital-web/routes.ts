@@ -18,7 +18,7 @@ import {
   type HospitalWebContext,
 } from './pcAuth.js';
 import { alarmRoom, joinAlarmRoom, pcRoom, turnAlarmOff } from './realtime.js';
-import { listQuerySchema, listRequests } from './requests.js';
+import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 
 export const MAX_PCS = 3;
 // 키 입력 5번 연속 실패 → 그 PC(접속 주소)에서 10분 막음 (SER-011)
@@ -32,6 +32,7 @@ const registerSchema = z.object({
 });
 const shiftSchema = z.object({ staffName: z.string().trim().min(1).max(40) });
 const alarmOnSchema = z.object({ socketId: z.string().min(1).max(100) });
+const requestIdParams = z.object({ requestId: z.coerce.number().int().positive() });
 
 interface PcSummary {
   id: number;
@@ -275,6 +276,12 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
   router.get('/hw/requests', pcOnly, async (req, res) => {
     const pc = hospitalPc(res);
     res.json(await listRequests(ctx.pool, pc.hospitalId, parseBody(listQuerySchema, req.query)));
+  });
+
+  // 요청 상세: 환자 평가·이상 수치·우리 병원 병상. 열 때마다 열람 기록이 남는다 (SFR-118, SFR-137)
+  router.get('/hw/requests/:requestId', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    res.json(await getRequestDetail(ctx.pool, hospitalPc(res), requestId));
   });
 
   return router;
