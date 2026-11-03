@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { ShiftScreen } from './ShiftScreen';
 
 type Session = ApiPaths['/hw/session']['get']['responses'][200]['content']['application/json'];
 
@@ -14,7 +16,7 @@ function isUnregistered(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'PC_NOT_REGISTERED';
 }
 
-export function HospitalHome() {
+export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSocket } = {}) {
   const router = useRouter();
   const session = useQuery({
     queryKey: ['hw', 'session'],
@@ -37,13 +39,13 @@ export function HospitalHome() {
     );
   }
 
-  const { hospital, pc } = session.data;
+  const { hospital, pc, shift } = session.data;
   return (
-    <div className="flex flex-col gap-2 text-xl">
-      <p>
+    <div className="flex flex-col gap-6">
+      <p className="text-xl">
         <span className="font-bold">{hospital?.name}</span> · {pc?.name}
       </p>
-      <p className="text-muted-foreground">근무 시작·알림 켜기는 다음 단계에서 추가돼요.</p>
+      <ShiftScreen shift={shift ?? null} createSocket={createSocket} />
     </div>
   );
 }
