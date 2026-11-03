@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
+import { useNewRequests } from './useNewRequests';
 
 type ShiftBody = ApiPaths['/hw/shifts']['post']['requestBody']['content']['application/json'];
 type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
@@ -78,11 +80,24 @@ export function ShiftScreen({
   shift: Shift | null;
   createSocket?: () => HospitalSocket;
 }) {
-  const { connection, alarm, turnOn } = useHospitalAlarm(createSocket);
+  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
+  // 근무 중일 때만 요청을 받는다
+  const incoming = useNewRequests(shift ? socket : null);
   const [startedHere, setStartedHere] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
+      {incoming.waiting.length > 0 && (
+        <p className="text-3xl font-extrabold text-destructive">
+          🔴 새 이송 요청 {incoming.waiting.length}건
+        </p>
+      )}
+      <NewRequestOverlay
+        request={incoming.overlay}
+        pendingCount={incoming.waiting.length}
+        nowMs={incoming.nowMs}
+        onConfirm={incoming.confirm}
+      />
       {connection === 'disconnected' && (
         <p
           role="alert"

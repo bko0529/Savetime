@@ -26,6 +26,36 @@ export function mockFetch(...responses: { status: number; body?: unknown }[]) {
   return fn;
 }
 
+type Reply = { status: number; body?: unknown };
+
+// 주소별로 답하는 가짜 서버. 화면이 몇 번 부를지 순서를 몰라도 되게 한다.
+// 키는 'GET /hw/session' 처럼 '메서드 경로'. 답을 여러 개 주면 차례로 쓰고 마지막 답은 계속 반복한다
+export function fakeServer(routes: Record<string, Reply | Reply[]>) {
+  const queues = new Map<string, Reply[]>();
+  const set = (key: string, reply: Reply | Reply[]) =>
+    queues.set(key, Array.isArray(reply) ? [...reply] : [reply]);
+  Object.entries(routes).forEach(([key, reply]) => set(key, reply));
+
+  const calls: { key: string; body: unknown }[] = [];
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? 'GET'} ${url.replace(/^\/api\/v1/, '')}`;
+    calls.push({ key, body: init?.body ? JSON.parse(init.body as string) : null });
+    const queue = queues.get(key);
+    if (!queue) throw new Error(`가짜 서버에 없는 주소예요: ${key}`);
+    const reply = queue.length > 1 ? queue.shift()! : queue[0];
+    return new Response(reply.body === undefined ? null : JSON.stringify(reply.body), {
+      status: reply.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fn);
+
+  return {
+    set,
+    callsTo: (key: string) => calls.filter((c) => c.key === key),
+  };
+}
+
 export function apiError(code: string, details?: unknown) {
   return { error: { code, message: `${code} (서버 문구)`, details: details ?? null } };
 }
