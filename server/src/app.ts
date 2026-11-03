@@ -13,6 +13,7 @@ import { geocodeRouter, type Geocoder } from './modules/transport/geocode.js';
 import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 import type { EtaLookup } from './modules/transport/eta.js';
 import { recommendRouter } from './modules/transport/recommend.js';
+import { transportRouter } from './modules/transport/create.js';
 
 export interface AppDeps {
   logger: Logger;
@@ -44,6 +45,7 @@ export function createApp({ logger, healthChecks, auth, eta, geocoder }: AppDeps
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
+    app.use('/api/v1', transportRouter(auth.pool, approvedParamedic));
   }
 
   app.use(notFoundHandler);
