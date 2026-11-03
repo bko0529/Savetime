@@ -56,7 +56,8 @@ CREATE TABLE paramedic (                               -- 구급대원
   failed_count  int          NOT NULL DEFAULT 0,
   locked_until  timestamptz,
   created_at    timestamptz  NOT NULL DEFAULT now(),
-  withdrawn_at  timestamptz
+  withdrawn_at  timestamptz,
+  session_version int        NOT NULL DEFAULT 1        -- 정지·로그아웃 때 +1 → 이전 접근 토큰 무효 (SER-016)
 );
 
 CREATE TABLE signup_request (                          -- 공무원증 가입 신청 (SFR-017, SFR-083)
@@ -77,7 +78,7 @@ CREATE TABLE refresh_token (                           -- 폐기 가능한 로�
   owner_id    bigint      NOT NULL,
   token_hash  text        NOT NULL UNIQUE,
   device_id   varchar(80),
-  expires_at  timestamptz NOT NULL,                    -- 30일 (SER-007)
+  expires_at  timestamptz NOT NULL,                    -- 로그인부터 14시간, 재발급해도 늘지 않음 (SER-007)
   revoked_at  timestamptz,                             -- 정지·로그아웃·PIN 5회 실패 시
   created_at  timestamptz NOT NULL DEFAULT now()
 );

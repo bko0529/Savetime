@@ -235,7 +235,8 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 로그인
-      description: "5번 틀리면 10분 잠금. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려'\
+      description: "5번 틀리면 10분 잠금(ACCOUNT_LOCKED, details.retryAfterSeconds = 남은 초). 정지 여부는 비밀번호가\
+        \ 맞을 때만 알려 준다. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려'\
         \ 화면만 연다 (SFR-022·083).\n\n**요구사항**: SFR-018, SER-011  \n**화면**: S-02 로그인\
         \  \n**오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_SUSPENDED"
       operationId: post_auth_login
@@ -354,7 +355,8 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 내 정보
-      description: "**요구사항**: SFR-022, SFR-083  \n**화면**: S-02 승인 대기 · 앱 시작"
+      description: "앱을 다시 열 때 이 응답으로 화면을 정한다 (근무 중이면 로그인을 묻지 않음).\n\n**요구사항**: SFR-018, SFR-022, SFR-083\
+        \  \n**화면**: S-02 승인 대기 · 앱 시작"
       operationId: get_me
       security: *id009
       responses:
@@ -3977,7 +3979,8 @@ components:
           description: 15분 유효 JWT
         refreshToken:
           type: string
-          description: 30일 유효, 서버 폐기 가능 (SER-016)
+          description: 로그인부터 최대 14시간(근무 단위, SER-007). 서버에 해시만 저장해 폐기 가능(SER-016).
+            재발급할 때마다 새 값으로 바뀌고 예전 값은 다시 못 쓴다
     Me:
       type: object
       properties:
@@ -4012,10 +4015,9 @@ components:
         appliedAt:
           type: string
           format: date-time
-          description: 가입 신청(재신청) 시각
+          description: 가입 신청(재신청) 시각. 신청 없이 만든 계정(개발용)은 null
+          nullable: true
         mustChangePassword:
-          type: boolean
-        hasPin:
           type: boolean
         teamId:
           type: integer

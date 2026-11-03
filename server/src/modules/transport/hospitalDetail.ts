@@ -1,5 +1,5 @@
 // GET /hospitals/{hospitalId}: 대원 앱 병원 상세 (SFR-007)
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { AppError } from '../../http/errors.js';
 
@@ -45,11 +45,11 @@ function notFound(): AppError {
   return new AppError(404, 'NOT_FOUND', '병원을 찾을 수 없어요');
 }
 
-export function hospitalDetailRouter(pool: pg.Pool): Router {
+export function hospitalDetailRouter(pool: pg.Pool, guards: RequestHandler[]): Router {
   const router = Router();
 
-  router.get('/hospitals/:hospitalId', async (req, res) => {
-    const { hospitalId } = req.params;
+  router.get('/hospitals/:hospitalId', ...guards, async (req, res) => {
+    const hospitalId = String(req.params.hospitalId);
     if (!VALID_ID.test(hospitalId)) throw notFound();
 
     const { rows } = await pool.query<HospitalDetailRow>(DETAIL_SQL, [hospitalId]);
