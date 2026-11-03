@@ -9,6 +9,7 @@ import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
 import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
+import { recommendRouter } from './modules/transport/recommend.js';
 
 export interface AppDeps {
   logger: Logger;
@@ -31,6 +32,8 @@ export function createApp({ logger, healthChecks, auth }: AppDeps): express.Expr
     // 로그인한 승인 대원만 쓰는 API에 붙인다. 로그인·재발급·내 정보는 그 전 단계라 따로 둔다.
     const approvedParamedic = [requireParamedic(auth), requireApproved];
     app.use('/api/v1', authRouter(auth));
+    // /hospitals/nearby가 /hospitals/:hospitalId보다 먼저 와야 'nearby'를 병원 ID로 읽지 않는다
+    app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
   }
 
