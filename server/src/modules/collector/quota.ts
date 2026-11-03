@@ -24,11 +24,13 @@ export interface ApiQuotaOptions {
   logger: Logger;
   limit: number;
   api?: string;
+  // 로그 문구에 쓰는 이름. 길찾기처럼 다른 API도 같은 방식으로 센다
+  label?: string;
   today?: () => Promise<string>;
 }
 
 export function createApiQuota(options: ApiQuotaOptions): ApiQuota {
-  const { redis, pool, logger, limit, api = 'public_data' } = options;
+  const { redis, pool, logger, limit, api = 'public_data', label = '공공 API' } = options;
 
   // 날짜가 바뀌면 키가 달라져서 수가 자연히 0부터 시작한다. 서버 시계 대신 DB 시각을 쓴다.
   const today =
@@ -50,7 +52,7 @@ export function createApiQuota(options: ApiQuotaOptions): ApiQuota {
       KEY_TTL_SECONDS,
       'NX',
     );
-    if (first) logger.error({ api, day, used, limit }, `공공 API 호출 ${stage}`);
+    if (first) logger.error({ api, day, used, limit }, `${label} 호출 ${stage}`);
   };
 
   return {

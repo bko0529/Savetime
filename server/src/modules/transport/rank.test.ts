@@ -104,3 +104,15 @@ test('거리가 같으면 ID 순으로 늘 같은 결과를 낸다', () => {
   const b = hospital(2);
   assert.deepEqual(ids(rankHospitals([b, a], options).items), [a.id, b.id]);
 });
+
+test('예상 이동시간은 통과한 후보 중 직선거리 가까운 10곳만 구한다 (SFR-072)', () => {
+  const list = Array.from({ length: 15 }, (_, i) => hospital(i + 1, { grade: i === 14 ? 1 : 3 }));
+  const blocked = hospital(0.5, { er: 0 });
+  const result = rankHospitals([...list, blocked], { ...options, requestedGrade: 1 });
+  assert.deepEqual(
+    result.etaTargets.map((c) => c.distanceKm),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  );
+  // 등급 우선으로 1위가 된 15km 병원은 거리상 10곳 밖이라 이동시간이 없다
+  assert.equal(result.items[0].distanceKm, 15);
+});
