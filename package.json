@@ -5,7 +5,8 @@
     "node": ">=24"
   },
   "workspaces": [
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "prepare": "husky",
