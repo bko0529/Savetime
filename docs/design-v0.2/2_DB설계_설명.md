@@ -17,9 +17,9 @@ npm run migrate
 | 그룹 | 테이블 | 한 줄 설명 | 관련 요구사항 |
 |---|---|---|---|
 | A 계정·인증 | agency | 소속기관(소방서) 코드, 초기 데이터 | SFR-017, COR-007 |
-| | paramedic | 구급대원 계정 (상태: 승인 대기·승인·반려·정지·탈퇴) | SFR-017, 018, 022 |
+| | paramedic | 구급대원 계정 (상태: 승인 대기·승인·반려·정지·탈퇴). `session_version`은 정지·로그아웃 때 +1 → 그 전 접근 토큰 무효 | SFR-017, 018, 022, SER-016 |
 | | signup_request | 공무원증 가입 신청. 승인·반려하면 사진 키를 바로 지움 | SFR-083, DAR-012 |
-| | refresh_token | 서버가 폐기할 수 있는 로그인 토큰 | SER-016, SER-007 |
+| | refresh_token | 서버가 폐기할 수 있는 로그인 토큰. 해시만 저장, 로그인부터 14시간, 쓸 때마다 새 토큰으로 바꿈 | SER-016, SER-007 |
 | | push_device | FCM 토큰 (iOS는 FCM → APNs) | SFR-130, COR-009 |
 | B 팀 | team / team_member | 팀과 팀원. 운전은 팀에 1명, 대원은 동시에 팀 1개 | SFR-113, 159 |
 | | team_invite | 목록 초대 (5분 만료) | SFR-159 |

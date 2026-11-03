@@ -44,13 +44,25 @@ cd savetime
 docker compose up -d
 cp server/.env.example server/.env
 npm install                     # 저장소 맨 위에서
-npm run migrate                 # 테이블 42개 생성
+npm run migrate                 # 테이블 생성 (마이그레이션 순서대로)
+```
+
+`server/.env`의 `JWT_SECRET`은 비어 있으면 서버가 켜지지 않아요. 아래 명령은 무작위 값을 화면에 보이지 않게 넣어요.
+```bash
+cd server && printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 32)" >> .env
+```
+
+## 앱에서 로그인 시험하기 (개발용 계정)
+가입·승인 기능(S5) 전까지 쓰는 계정이에요. 운영 환경에서는 실행되지 않아요.
+```bash
+cd server
+npm run account:dev -- dev1     # 비밀번호를 무작위로 만들어 한 번만 보여 줘요
 ```
 
 ## 테스트 돌려 보기 (서버)
 ```bash
 cd server
-npm test          # DB·Redis를 켜 둔 상태로. 상태 전이 31개 + 서버 뼈대 10개 + 마이그레이션 4개 + 주기 작업 4개 + 수집기 48개 + 병원 상세 6개
+npm test          # DB·Redis를 켜 둔 상태로. 상태 전이 31개 + 서버 뼈대 10개 + 마이그레이션 4개 + 주기 작업 4개 + 수집기 48개 + 병원 상세 6개 + 로그인 15개
 ```
 
 ## 설계 점검
