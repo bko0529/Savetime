@@ -35,7 +35,7 @@
 
 - 기본 주소: `/api/v1` · 형식: JSON (가입 신청·재신청만 multipart)
 - 시간: ISO 8601, 모두 **서버 시각**. 모든 응답 헤더에 `X-Server-Now`, 시간이 중요한 응답 본문에는 `serverNow`. 2분·5분은 서버 수신 시각으로 판정
-- 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(근무 종료 때 폐기, 최대 14시간) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
+- 인증: 대원·관리자 = `Authorization: Bearer <accessToken>`(15분) + refreshToken(근무 종료 때 폐기, 최대 14시간, 재발급하면 새 값으로 바뀌고 예전 값은 못 씀) / 병원 웹 = 등록 PC 쿠키 `st_pc`(httpOnly · Secure · SameSite=Strict)
 - **계정 상태는 요청마다 확인** (정지·탈퇴·PC 해제 후 10초 안 모든 요청 거부, SER-016). 토큰이 살아 있어도 401·403
 - 병원·관리자 웹: 상태를 바꾸는 요청은 `Origin` 헤더가 허용 목록일 때만 (CSRF 방어)
 - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
@@ -58,7 +58,7 @@
 | POST | `/auth/login` | 로그인 | 없음 | - | S-02 로그인 | SFR-018, SER-011 |
 | POST | `/auth/refresh` | 토큰 재발급 | 없음 | - | (모든 화면) | SER-016 |
 | POST | `/auth/logout` | 로그아웃 (팀에서 빠짐) | 대원 | CANCEL | S-12 설정 | SFR-070, SFR-113 |
-| GET | `/me` | 내 정보 | 대원 | - | S-02 승인 대기 · 앱 시작 | SFR-022, SFR-083 |
+| GET | `/me` | 내 정보 | 대원 | - | S-02 승인 대기 · 앱 시작 | SFR-018, SFR-022, SFR-083 |
 | PUT | `/me/password` | 비밀번호 변경 (임시 비밀번호 후 필수) | 대원 | - | (비밀번호 변경) | SFR-021 |
 | PUT | `/me/push-device` | 푸시 토큰 등록 | 대원 | - | 앱 시작 | SFR-130, COR-009 |
 | DELETE | `/me` | 회원 탈퇴 | 대원 | CANCEL | S-12 설정 | SFR-071, SFR-113 |
