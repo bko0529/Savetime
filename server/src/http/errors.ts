@@ -1,6 +1,13 @@
 // 공통 오류 형식: {"error": {"code", "message", "details"}} (API 명세 · 오류 코드표)
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import type { Logger } from 'pino';
+import { TransitionError, type ErrorCode } from '../domain/stateMachine.js';
+
+const TRANSITION_STATUS: Partial<Record<ErrorCode, number>> = {
+  VERSION_REQUIRED: 400,
+  REASON_REQUIRED: 422,
+  NO_REQUEST_TARGET: 422,
+};
 
 export class AppError extends Error {
   constructor(
@@ -29,6 +36,14 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
     if (err instanceof AppError) {
       res.status(err.status).json({
         error: { code: err.code, message: err.message, details: err.details },
+      });
+      return;
+    }
+
+    // 상태 전이표가 막은 동작: 오류 코드표의 HTTP 상태로 바꾼다. 나머지는 '지금 상태와 충돌'이라 409
+    if (err instanceof TransitionError) {
+      res.status(TRANSITION_STATUS[err.code] ?? 409).json({
+        error: { code: err.code, message: err.message },
       });
       return;
     }
