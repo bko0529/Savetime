@@ -8,6 +8,7 @@ import { requireApproved, requireParamedic } from './modules/auth/guards.js';
 import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
+import { geocodeRouter, type Geocoder } from './modules/transport/geocode.js';
 import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 
 export interface AppDeps {
@@ -15,9 +16,11 @@ export interface AppDeps {
   healthChecks: HealthChecks;
   // 없으면 /health만 켠다 (관리자 서버·테스트)
   auth?: AuthContext;
+  // 카카오 키가 없으면 비워 둔다. 주소→좌표만 503이 된다
+  geocoder?: Geocoder;
 }
 
-export function createApp({ logger, healthChecks, auth }: AppDeps): express.Express {
+export function createApp({ logger, healthChecks, auth, geocoder }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
 
@@ -32,6 +35,7 @@ export function createApp({ logger, healthChecks, auth }: AppDeps): express.Expr
     const approvedParamedic = [requireParamedic(auth), requireApproved];
     app.use('/api/v1', authRouter(auth));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
+    app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
   }
 
   app.use(notFoundHandler);

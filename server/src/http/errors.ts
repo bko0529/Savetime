@@ -41,9 +41,12 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
       return;
     }
 
-    // 예상 못 한 오류는 내부 내용을 숨기고, 원인은 서버 로그에만 남긴다
+    // 예상 못 한 오류는 내부 내용을 숨기고, 원인은 서버 로그에만 남긴다.
+    // stack 첫 줄은 오류 메시지라 주소·SQL 값 같은 입력이 섞일 수 있어 빼고, 코드 위치만 남긴다 (SER-012)
+    const where =
+      typeof err?.stack === 'string' ? err.stack.split('\n').slice(1).join('\n') : undefined;
     logger.error(
-      { name: err?.name, stack: err?.stack, method: req.method, path: req.path },
+      { name: err?.name, stack: where, method: req.method, path: req.path },
       '처리 못 한 오류',
     );
     res.status(500).json({

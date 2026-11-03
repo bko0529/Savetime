@@ -975,12 +975,16 @@ paths:
       tags:
       - 3. 병원 정보·위치 (대원 앱)
       summary: 주소 → 좌표 (위치 실패·미동의)
-      description: "카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 후보 최대 5개.\n\n**요구사항**: SFR-009,\
-        \ INR-004  \n**화면**: S-04 · S-06 주소 입력  \n**오류 코드**: ADDRESS_NOT_FOUND"
+      description: "카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 주소 검색 → 0건이면 장소 이름 검색(예: 천안역),\
+        \ 후보 최대 5개, 대한민국 밖 좌표는 뺀다. 3초 안에 못 받거나 카카오 장애·한도 초과면 503 GEOCODE_UNAVAILABLE.\
+        \ 입력 주소는 로그·DB·캐시에 남기지 않는다 (SER-012).\n\n**요구사항**: SFR-009, INR-004  \n**화면**: S-04 · S-06 주소 입력\
+        \  \n**오류 코드**: VALIDATION_FAILED, ADDRESS_NOT_FOUND, GEOCODE_UNAVAILABLE"
       operationId: get_geocode
       security: *id009
       x-error-codes:
+      - VALIDATION_FAILED
       - ADDRESS_NOT_FOUND
+      - GEOCODE_UNAVAILABLE
       parameters:
       - name: address
         in: query

@@ -14,6 +14,9 @@ const schema = z.object({
   PUBLIC_DATA_API_KEY: z.string().optional(),
   PUBLIC_DATA_DAILY_LIMIT: z.coerce.number().int().positive().default(10_000),
   COLLECT_REGIONS: z.string().optional(),
+  KAKAO_REST_API_KEY: z.string().optional(),
+  // 카카오 로컬(주소 검색) 하루 무료량. 늘어나면 이 값만 바꾼다
+  KAKAO_LOCAL_DAILY_LIMIT: z.coerce.number().int().positive().default(100_000),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

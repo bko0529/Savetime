@@ -93,6 +93,21 @@ test('예상 못 한 오류는 500으로 바꾸고 내용을 숨긴다', async (
   assert.ok(!res.text.includes('비밀'));
 });
 
+test('예상 못 한 오류의 로그에는 코드 위치만 남고 오류 메시지(입력값이 섞일 수 있음)는 남지 않는다', async () => {
+  const lines: string[] = [];
+  const capture = pino({ level: 'error' }, { write: (line: string) => void lines.push(line) });
+  const app = express();
+  app.get('/x', async () => {
+    throw new Error('충청남도 천안시 신부동 123');
+  });
+  app.use(errorHandler(capture));
+  await request(app).get('/x?address=secret');
+  assert.equal(lines.length, 1);
+  assert.ok(!lines[0].includes('신부동'));
+  assert.ok(!lines[0].includes('secret'));
+  assert.ok(lines[0].includes('app.test'), '코드 위치는 남는다');
+});
+
 test('환경 변수가 빠지면 이름만 알려 주고 값은 보여 주지 않는다', () => {
   assert.throws(
     () => loadConfig({ REDIS_URL: 'redis://user:secret@host' }),
