@@ -4,12 +4,15 @@ import type { Request, RequestHandler, Response } from 'express';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
 import { AppError } from '../../http/errors.js';
+import type { HospitalNamespace } from './realtime.js';
 
 export interface HospitalWebContext {
   pool: pg.Pool;
   redis: Redis;
   // 병원 웹 주소(예: https://savetime.example). 비어 있으면 Origin 검사를 하지 않는다
   allowedOrigins: string[];
+  // 실시간 연결 (/hospital). 알림 켜기·근무 종료가 방에 넣고 뺀다
+  hospitalIo: HospitalNamespace;
 }
 
 export const PC_COOKIE = 'st_pc';
@@ -91,15 +94,18 @@ interface PcRow {
 const notRegistered = () =>
   new AppError(401, 'PC_NOT_REGISTERED', '등록되지 않은 PC예요. 라이선스 키를 입력해 주세요');
 
-// 병원 PC API 입구. 쿠키 → 등록 PC → 병원의 유효한 키 순서로 확인하고, 마지막 사용 시각을 남긴다.
+// 쿠키 → 등록 PC → 병원의 유효한 키 순서로 확인하고, 마지막 사용 시각을 남긴다.
+// REST 입구(requireHospitalPc)와 실시간 연결 입구가 같이 쓴다.
 // 시간 판정(90일·키 만료)은 모두 DB 시각 기준 (규칙 6)
-export function requireHospitalPc(ctx: HospitalWebContext): RequestHandler {
-  return async (req: Request, res, next) => {
-    const token = readCookie(req.headers.cookie, PC_COOKIE);
-    if (!token) throw notRegistered();
+export async function findHospitalPc(
+  pool: pg.Pool,
+  cookieHeader: string | undefined,
+): Promise<HospitalPc> {
+  const token = readCookie(cookieHeader, PC_COOKIE);
+  if (!token) throw notRegistered();
 
-    const { rows } = await ctx.pool.query<PcRow>(
-      `SELECT pc.id AS pc_id, pc.name AS pc_name, h.id AS hospital_id, h.name AS hospital_name,
+  const { rows } = await pool.query<PcRow>(
+    `SELECT pc.id AS pc_id, pc.name AS pc_name, h.id AS hospital_id, h.name AS hospital_name,
               pc.released_at IS NOT NULL AS released,
               pc.last_used_at < now() - make_interval(days => $2) AS unused_too_long,
               (SELECT ceil(extract(epoch FROM max(lk.expires_at) - now()) / 86400)::int
@@ -109,28 +115,33 @@ export function requireHospitalPc(ctx: HospitalWebContext): RequestHandler {
          FROM hospital_pc pc
          JOIN hospital h ON h.id = pc.hospital_id
         WHERE pc.token_hash = $1`,
-      [hashPcToken(token), UNUSED_DAYS],
-    );
-    const row = rows[0];
-    if (!row || row.released) throw notRegistered();
-    if (row.unused_too_long) {
-      await ctx.pool.query('UPDATE hospital_pc SET released_at = now() WHERE id = $1', [row.pc_id]);
-      throw notRegistered();
-    }
-    // 병원의 키가 모두 만료·폐기됐으면 PC 등록은 남아 있어도 쓸 수 없다 (SFR-146)
-    if (row.license_days_left === null) {
-      throw new AppError(403, 'LICENSE_EXPIRED', '라이선스 키 기간이 끝났어요');
-    }
+    [hashPcToken(token), UNUSED_DAYS],
+  );
+  const row = rows[0];
+  if (!row || row.released) throw notRegistered();
+  if (row.unused_too_long) {
+    await pool.query('UPDATE hospital_pc SET released_at = now() WHERE id = $1', [row.pc_id]);
+    throw notRegistered();
+  }
+  // 병원의 키가 모두 만료·폐기됐으면 PC 등록은 남아 있어도 쓸 수 없다 (SFR-146)
+  if (row.license_days_left === null) {
+    throw new AppError(403, 'LICENSE_EXPIRED', '라이선스 키 기간이 끝났어요');
+  }
 
-    await ctx.pool.query('UPDATE hospital_pc SET last_used_at = now() WHERE id = $1', [row.pc_id]);
-    const pc: HospitalPc = {
-      pcId: Number(row.pc_id),
-      pcName: row.pc_name,
-      hospitalId: Number(row.hospital_id),
-      hospitalName: row.hospital_name,
-      licenseDaysLeft: row.license_days_left,
-    };
-    res.locals.pc = pc;
+  await pool.query('UPDATE hospital_pc SET last_used_at = now() WHERE id = $1', [row.pc_id]);
+  return {
+    pcId: Number(row.pc_id),
+    pcName: row.pc_name,
+    hospitalId: Number(row.hospital_id),
+    hospitalName: row.hospital_name,
+    licenseDaysLeft: row.license_days_left,
+  };
+}
+
+// 병원 PC API 입구
+export function requireHospitalPc(ctx: HospitalWebContext): RequestHandler {
+  return async (req: Request, res, next) => {
+    res.locals.pc = await findHospitalPc(ctx.pool, req.headers.cookie);
     next();
   };
 }

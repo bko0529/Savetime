@@ -2190,7 +2190,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 근무 시작 (담당자 이름)
-      description: "**요구사항**: SFR-117  \n**화면**: H-01 근무 시작"
+      description: "PC 1대에 진행 중 근무는 1개. 앞 근무가 남아 있으면 끝내고 새로 시작하고, 그 근무가 알림을 켰었으면 그\
+        \ PC에 hospital.alarm_off{shift_ended}. 새 근무는 알림이 꺼진 채로 시작한다.\n\n**요구사항**: SFR-117  \n**화면**: H-01 근무 시작"
       operationId: post_hw_shifts
       security: *id013
       requestBody:
@@ -2227,7 +2228,7 @@ paths:
       - 5. 병원 웹
       summary: 알림 켜기 (이때부터 요청 대상)
       description: "브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에\
-        \ 쓴다.\n\n**요구사항**: SFR-117, SFR-136  \n**화면**: H-01 근무 시작  \n**오류 코드**: NOT_FOUND"
+        \ 쓴다. 진행 중 근무가 없거나 socketId가 이 PC의 /hospital 연결이 아니면 NOT_FOUND.\n\n**요구사항**: SFR-117, SFR-136  \n**화면**: H-01 근무 시작  \n**오류 코드**: NOT_FOUND"
       operationId: post_hw_shifts_current_alarm_on
       security: *id013
       x-error-codes:
@@ -2265,10 +2266,12 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 근무 종료
-      description: "이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.\n\n**요구사항**:\
+      description: "이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}. 진행 중 근무가 없으면 NOT_FOUND.\n\n**요구사항**:\
         \ SFR-117  \n**화면**: H-02"
       operationId: post_hw_shifts_current_end
       security: *id013
+      x-error-codes:
+      - NOT_FOUND
       responses:
         '204':
           description: 성공 (본문 없음)

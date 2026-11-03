@@ -8,19 +8,26 @@ import {
   newLicenseKey,
 } from '../modules/hospital-web/licenseKey.js';
 import type { HospitalWebContext } from '../modules/hospital-web/pcAuth.js';
+import { hospitalNamespace } from '../modules/hospital-web/realtime.js';
+import { createRealtime, type Realtime } from '../modules/realtime/io.js';
 import { TEST_REDIS_URL, withSchemaPool } from './services.js';
 
 export const WEB_ORIGIN = 'http://localhost:3000';
 
 export async function withHospitalWeb(
-  use: (ctx: HospitalWebContext) => Promise<void>,
+  use: (ctx: HospitalWebContext, realtime: Realtime) => Promise<void>,
 ): Promise<void> {
   await withSchemaPool(async (pool) => {
-    // 테스트 파일이 동시에 돌아도 Redis 키(실패 횟수 등)가 섞이지 않게 무작위 이름을 붙인다
-    const redis = new Redis(TEST_REDIS_URL, { keyPrefix: `t_${randomBytes(6).toString('hex')}:` });
+    // 테스트 파일이 동시에 돌아도 Redis 키(실패 횟수 등)·실시간 채널이 섞이지 않게 무작위 이름을 붙인다
+    const prefix = `t_${randomBytes(6).toString('hex')}`;
+    const redis = new Redis(TEST_REDIS_URL, { keyPrefix: `${prefix}:` });
+    const realtime = createRealtime({ redis, keyPrefix: `${prefix}:socket.io` });
+    const allowedOrigins = [WEB_ORIGIN];
     try {
-      await use({ pool, redis, allowedOrigins: [WEB_ORIGIN] });
+      const hospitalIo = hospitalNamespace(realtime.io, { pool, allowedOrigins });
+      await use({ pool, redis, allowedOrigins, hospitalIo }, realtime);
     } finally {
+      await realtime.close();
       redis.disconnect();
     }
   });
