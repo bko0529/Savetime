@@ -3,6 +3,7 @@ import type pg from 'pg';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
+import { isInKorea } from '../../domain/geo.js';
 import { recordFailure } from './collectLog.js';
 import { lastByKey, optionalNumber, optionalText } from './fields.js';
 import { runPool } from './pool.js';
@@ -24,13 +25,6 @@ export const EMCLS_TO_GRADE: Record<string, number> = {
   지역응급의료기관: 3,
 };
 const DEFAULT_GRADE = 3;
-
-// 대한민국 영역 (SFR-087). 값이 있어도 0처럼 이 밖이면 좌표가 없는 것으로 본다.
-function isInKorea(lat: number | undefined, lng: number | undefined): boolean {
-  return (
-    lat !== undefined && lng !== undefined && lat >= 33 && lat <= 39 && lng >= 124 && lng <= 132
-  );
-}
 
 const listItemSchema = z.object({
   hpid: z.string().min(1),
