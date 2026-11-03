@@ -7,7 +7,7 @@ import { AppError } from '../../http/errors.js';
 import { findHospitalPc, type HospitalPc } from './pcAuth.js';
 
 // shared/events.ts 의 HospitalServerEvents·HospitalClientEvents 중 지금 서버가 쓰는 것 (서버는 shared 를 못 불러온다)
-interface Envelope<T> {
+export interface Envelope<T> {
   seq: number;
   room: string;
   occurredAt: string;
@@ -15,7 +15,13 @@ interface Envelope<T> {
   data: T;
 }
 export type AlarmOffReason = 'no_ack' | 'shift_ended';
+export interface NewRequestData {
+  requestId: number;
+  label: string;
+  respondUntil: string;
+}
 interface ServerEvents {
+  'request.new': (e: Envelope<NewRequestData>, ack: (r: { received: true }) => void) => void;
   'hospital.alarm_off': (e: Envelope<{ reason: AlarmOffReason }>) => void;
 }
 interface ClientEvents {
@@ -96,20 +102,20 @@ export async function joinAlarmRoom(
   return true;
 }
 
-// 이 PC 의 탭들을 요청 대상에서 빼고 이유를 알려 준다 (근무 종료·응답 없음)
+// 병원 웹 이벤트 머리. 병원 웹은 놓친 이벤트를 다시 받지 않고 항상 전체를 새로 받으므로
+// seq 를 쓰지 않는다 (실시간 설계 3장)
+export function envelope<T>(room: string, now: Date, data: T): Envelope<T> {
+  return { seq: 0, room, occurredAt: now.toISOString(), serverNow: now.toISOString(), data };
+}
+
+// 탭들(room 은 pc:{id} 또는 연결 id 들)을 요청 대상에서 빼고 이유를 알려 준다 (근무 종료·응답 없음)
 export function turnAlarmOff(
   nsp: HospitalNamespace,
-  pc: Pick<HospitalPc, 'pcId' | 'hospitalId'>,
+  { hospitalId, tabs }: { hospitalId: number; tabs: string | string[] },
   reason: AlarmOffReason,
   now: Date,
 ): void {
-  nsp.in(pcRoom(pc.pcId)).socketsLeave(alarmRoom(pc.hospitalId));
-  // 병원 웹은 놓친 이벤트를 다시 받지 않고 항상 전체를 새로 받으므로 seq 를 쓰지 않는다 (실시간 설계 3장)
-  nsp.to(pcRoom(pc.pcId)).emit('hospital.alarm_off', {
-    seq: 0,
-    room: pcRoom(pc.pcId),
-    occurredAt: now.toISOString(),
-    serverNow: now.toISOString(),
-    data: { reason },
-  });
+  nsp.in(tabs).socketsLeave(alarmRoom(hospitalId));
+  const room = Array.isArray(tabs) ? alarmRoom(hospitalId) : tabs;
+  nsp.to(tabs).emit('hospital.alarm_off', envelope(room, now, { reason }));
 }

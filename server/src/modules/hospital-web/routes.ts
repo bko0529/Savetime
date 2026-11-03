@@ -14,9 +14,11 @@ import {
   requireHospitalPc,
   setPcCookie,
   UNUSED_DAYS,
+  type HospitalPc,
   type HospitalWebContext,
 } from './pcAuth.js';
-import { alarmRoom, joinAlarmRoom, turnAlarmOff } from './realtime.js';
+import { alarmRoom, joinAlarmRoom, pcRoom, turnAlarmOff } from './realtime.js';
+import { listQuerySchema, listRequests } from './requests.js';
 
 export const MAX_PCS = 3;
 // 키 입력 5번 연속 실패 → 그 PC(접속 주소)에서 10분 막음 (SER-011)
@@ -41,6 +43,9 @@ type RegisterOutcome =
   | { kind: 'ok'; hospital: { id: number; name: string }; pcId: number; token: string }
   | { kind: 'full'; pcs: PcSummary[] }
   | { kind: 'bad_replace' };
+
+// 이 PC 의 탭 전부 (pc:{id} 방)
+const myTabs = (pc: HospitalPc) => ({ hospitalId: pc.hospitalId, tabs: pcRoom(pc.pcId) });
 
 // 실패 횟수는 서버 메모리가 아니라 Redis 에 센다. 서버가 2대가 돼도 같이 센다 (규칙 7)
 const failKey = (ip: string) => `hw:license-fail:${ip}`;
@@ -220,7 +225,7 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     });
 
     // 알림은 커밋한 뒤에 보낸다 (롤백된 일이 알려지면 안 된다)
-    if (started.endedAlarm) turnAlarmOff(ctx.hospitalIo, pc, 'shift_ended', started.now);
+    if (started.endedAlarm) turnAlarmOff(ctx.hospitalIo, myTabs(pc), 'shift_ended', started.now);
     res.status(201).json({ shiftId: started.shiftId });
   });
 
@@ -262,8 +267,14 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       [pc.pcId],
     );
     if (!rows[0]) throw new AppError(404, 'NOT_FOUND', '진행 중인 근무가 없어요');
-    turnAlarmOff(ctx.hospitalIo, pc, 'shift_ended', rows[0].now);
+    turnAlarmOff(ctx.hospitalIo, myTabs(pc), 'shift_ended', rows[0].now);
     res.status(204).end();
+  });
+
+  // 요청 목록: request.new 를 받으면, 그리고 다시 연결될 때마다 이걸로 전체를 새로 받는다 (실시간 설계 3장)
+  router.get('/hw/requests', pcOnly, async (req, res) => {
+    const pc = hospitalPc(res);
+    res.json(await listRequests(ctx.pool, pc.hospitalId, parseBody(listQuerySchema, req.query)));
   });
 
   return router;

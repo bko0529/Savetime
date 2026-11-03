@@ -14,6 +14,7 @@
     "collect:hospitals": "tsc -p . && node --env-file-if-exists=.env dist/scripts/collectHospitals.js",
     "account:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAccount.js",
     "admin:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAdmin.js",
+    "request:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevRequest.js",
     "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
