@@ -5,6 +5,7 @@ import { pino } from 'pino';
 import request from 'supertest';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { TransitionError } from './domain/stateMachine.js';
 import { AppError, errorHandler } from './http/errors.js';
 
 const logger = pino({ level: 'silent' });
@@ -84,6 +85,19 @@ test('AppError는 상태 코드와 details를 그대로 내보낸다', async () 
   assert.deepEqual(res.body, {
     error: { code: 'VERSION_CONFLICT', message: '최신 상태가 아니에요', details: { current: 2 } },
   });
+});
+
+test('상태 전이표가 막은 동작은 오류 코드표의 HTTP 상태로 내보낸다', async () => {
+  const cases: [TransitionError, number][] = [
+    [new TransitionError('VERSION_CONFLICT', '그사이 상태가 바뀌었어요'), 409],
+    [new TransitionError('VERSION_REQUIRED', 'version을 같이 보내야 해요'), 400],
+    [new TransitionError('REASON_REQUIRED', '사유를 골라 주세요'), 422],
+  ];
+  for (const [err, status] of cases) {
+    const res = await request(appThatThrows(err)).get('/x');
+    assert.equal(res.status, status, err.code);
+    assert.equal(res.body.error.code, err.code);
+  }
 });
 
 test('예상 못 한 오류는 500으로 바꾸고 내용을 숨긴다', async () => {

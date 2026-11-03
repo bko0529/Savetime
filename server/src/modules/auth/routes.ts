@@ -1,14 +1,15 @@
-// 대원 로그인·토큰 재발급·내 정보 (SFR-018, SER-016, SER-007)
+// 대원 로그인·토큰 재발급·로그아웃·내 정보 (SFR-018, SFR-070, SER-016, SER-007)
 import { Router } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
+import { endDuty } from '../team/endDuty.js';
 import { paramedicAuth, requireParamedic } from './guards.js';
 import { loadMe } from './me.js';
 import { verifyPassword } from './password.js';
-import type { AuthContext, ParamedicStatus } from './session.js';
+import { forgetSessionState, type AuthContext, type ParamedicStatus } from './session.js';
 import { hashRefreshToken, newRefreshToken, signAccessToken } from './tokens.js';
 
 const MAX_FAILURES = 5;
@@ -185,6 +186,18 @@ export function authRouter(ctx: AuthContext): Router {
       accessToken: await signAccessToken(ctx.jwtKey, issued),
       refreshToken: issued.refreshToken,
     });
+  });
+
+  // 로그아웃 = 근무 종료와 같은 처리 (SFR-070). 승인 전 계정도 로그아웃은 할 수 있어야 해서 승인 확인은 붙이지 않는다.
+  router.post('/auth/logout', requireParamedic(ctx), async (req, res) => {
+    const { paramedicId } = paramedicAuth(res);
+    const confirmCancelActive = req.query.confirmCancelActive === 'true';
+    await withTransaction(ctx.pool, (client) =>
+      endDuty(client, ctx, paramedicId, 'logout', confirmCancelActive),
+    );
+    // 커밋 전에 지운 캐시에 그사이 옛 값이 다시 들어갔을 수 있어 한 번 더 지운다
+    await forgetSessionState(ctx, paramedicId);
+    res.status(204).end();
   });
 
   router.get('/me', requireParamedic(ctx), async (_req, res) => {

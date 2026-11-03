@@ -323,8 +323,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 로그아웃 (팀에서 빠짐)
-      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport.\
-        \ 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝낸다.\n\n**요구사항**: SFR-070, SFR-113  \n\
+      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport{id,status,hospitalName}.\
+        \ 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝내고 열린·확정 병원 요청을 닫고 팀을 해제한다.\
+        \ 근무 종료와 같은 처리이며, 다른 기기의 토큰까지 모두 끊는다(SER-016). 승인 전 계정도 쓸 수 있다.\n\n**요구사항**: SFR-070, SFR-113  \n\
         **화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이\
         \ 사건**: CANCEL"
       operationId: post_auth_logout
@@ -1014,8 +1015,11 @@ paths:
       tags:
       - 3. 병원 정보·위치 (대원 앱)
       summary: 주변 병원 (지도·오프라인 저장용)
-      description: "반경 안 전체 병원(지도용). 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다.\n\
-        \n**요구사항**: SFR-027, SFR-059, SFR-061, SFR-064  \n**화면**: S-06 지도 · S-11 오프라인"
+      description: "반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001),\
+        \ 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다. 좌표가 대한민국 밖이면 400\
+        \ VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).\n\
+        \n**요구사항**: SFR-001, SFR-027, SFR-059, SFR-061, SFR-064, SFR-087  \n**화면**: S-06 지도 · S-11 오프라인\
+        \  \n**오류 코드**: VALIDATION_FAILED"
       operationId: get_hospitals_nearby
       security: *id009
       parameters:
@@ -1306,11 +1310,12 @@ paths:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 추천 목록 (요청 화면·예비 추천 공용, 거리순)
       description: "요청 중에도 부를 수 있음 (v1.5, D-127·128). 등급 이상 먼저, 그 안에서 직선거리순.\n\n**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**:\
-        \ S-05 요청 화면  \n**오류 코드**: NOT_FOUND"
+        \ S-05 요청 화면  \n**오류 코드**: NOT_FOUND, LOCATION_REQUIRED"
       operationId: get_transports__transportId__recommendations
       security: *id009
       x-error-codes:
       - NOT_FOUND
+      - LOCATION_REQUIRED
       parameters:
       - *id011
       responses:
@@ -1332,7 +1337,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/HospitalCard'
-                    description: 필수 병상 기준 통과 + 제외 병원 뺀 상위 5곳, 이동시간순
+                    description: 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 고른 등급 이상 먼저, 그 안에서 직선거리순 (SFR-098, D-128)
                   map:
                     type: array
                     items:
@@ -1342,7 +1347,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/HospitalCard'
-                    description: 수집 지역 밖
+                    description: 실시간 병상 정보가 전혀 없는 병원 (미제공·수집 실패로 저장값 없음). 거리순 최대 3곳, '병상 정보 없음 · 전화로 확인'
                   emptyGuide:
                     type: string
                     enum:
@@ -4471,15 +4476,19 @@ components:
           properties:
             er:
               type: string
-              description: '가용/전체, 예: 2/8'
+              description: '가용/전체, 예: 2/8. 전체가 비면 가용만(예: 3), 가용이 비면 null(정보 없음, SFR-089)'
+              nullable: true
             icu:
               type: string
+              nullable: true
             or:
               type: string
+              nullable: true
         bedsSourceTime:
           type: string
           format: date-time
           description: 공공 데이터 기준 시각
+          nullable: true
         capabilityCount:
           type: object
           properties:
@@ -4495,7 +4504,7 @@ components:
           type: string
         rank:
           type: integer
-          description: 예비 추천 순위 1~5, 지도만이면 null
+          description: 추천 순위 1~5, 추천 카드가 아니면 null
           nullable: true
         excluded:
           type: boolean
