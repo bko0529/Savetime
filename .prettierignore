@@ -8,3 +8,6 @@ docs/
 # 표 모양을 맞춘 설계 코드라 자동 정리하지 않는다
 server/src/domain/
 shared/
+.next/
+# Next.js가 typegen·dev·build 때 자동으로 만드는 파일
+next-env.d.ts
