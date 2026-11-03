@@ -8,6 +8,7 @@ import request from 'supertest';
 import { createApp } from '../../app.js';
 import { addParamedic, withAuthContext } from '../../testing/auth.js';
 import { signAccessToken } from '../auth/tokens.js';
+import type { EtaLookup } from './eta.js';
 
 const logger = pino({ level: 'silent' });
 const ok = async () => 'ok';
@@ -21,9 +22,9 @@ interface Harness {
   get: (path: string) => request.Test;
 }
 
-async function withApi(use: (h: Harness) => Promise<void>): Promise<void> {
+async function withApi(use: (h: Harness) => Promise<void>, eta?: EtaLookup): Promise<void> {
   await withAuthContext(async (auth) => {
-    const app = createApp({ logger, healthChecks: { db: ok, redis: ok }, auth });
+    const app = createApp({ logger, healthChecks: { db: ok, redis: ok }, auth, eta });
     const paramedicId = await addParamedic(auth.pool);
     const token = await signAccessToken(auth.jwtKey, { paramedicId, sessionVersion: 1 });
     await use({
@@ -224,4 +225,32 @@ test('내 팀 이송이 아니거나 잘못된 ID면 404, 출발 위치가 없�
     assert.equal(res.status, 409);
     assert.equal(res.body.error.code, 'LOCATION_REQUIRED');
   });
+});
+
+test('예상 이동시간을 카드에 채우고, 못 구한 곳은 null이다 (SFR-072·073)', async () => {
+  const asked: string[][] = [];
+  const eta: EtaLookup = async (_origin, destinations) => {
+    asked.push(destinations.map((d) => d.id));
+    // 첫 병원만 성공, 나머지는 실패한 것처럼
+    return new Map([[destinations[0].id, 7]]);
+  };
+  await withApi(async ({ pool, paramedicId, get }) => {
+    const transportId = await addTransport(pool, paramedicId);
+    await addHospital(pool, '가까움', 1, { beds: OK_BEDS });
+    await addHospital(pool, '중간', 3, { beds: OK_BEDS });
+    await addHospital(pool, '응급실0', 2, { beds: [0, 10, 2, 8, 1, 3] });
+
+    const res = await get(`/api/v1/transports/${transportId}/recommendations`);
+    assert.deepEqual(
+      res.body.items.map((c: { name: string; etaMin: number | null }) => [c.name, c.etaMin]),
+      [
+        ['가까움', 7],
+        ['중간', null],
+      ],
+    );
+    // 게이트를 통과한 곳만 길찾기 대상이다 (응급실 0개는 묻지 않음)
+    assert.equal(asked[0].length, 2);
+    const mapCard = res.body.map.find((c: { name: string }) => c.name === '가까움');
+    assert.equal(mapCard.etaMin, 7);
+  }, eta);
 });

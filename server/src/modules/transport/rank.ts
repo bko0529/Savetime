@@ -4,6 +4,7 @@ import { MAX_RADIUS_KM } from '../../domain/geo.js';
 
 const TOP = 5; // 추천 카드 (SFR-027)
 const NO_BED_INFO_MAX = 3; // '병상 정보 없음 · 전화로 확인' 묶음
+const ETA_TARGETS = 10; // 예상 이동시간을 구할 곳 (SFR-072, D-19)
 
 export interface BedPair {
   avail: number | null;
@@ -22,6 +23,8 @@ export interface Candidate {
 export interface Ranked<T extends Candidate> {
   items: (T & { rank: number })[];
   noBedInfo: T[];
+  // 게이트를 통과한 후보 중 직선거리 가까운 10곳. 등급 순서와 상관없이 거리로만 고른다 (SFR-072)
+  etaTargets: T[];
   emptyGuide: 'expand_radius' | 'call_nearby' | null;
 }
 
@@ -56,5 +59,5 @@ export function rankHospitals<T extends Candidate>(
   const emptyGuide =
     items.length > 0 ? null : radiusKm >= MAX_RADIUS_KM ? 'call_nearby' : 'expand_radius';
 
-  return { items, noBedInfo, emptyGuide };
+  return { items, noBedInfo, etaTargets: passed.slice(0, ETA_TARGETS), emptyGuide };
 }

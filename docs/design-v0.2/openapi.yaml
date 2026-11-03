@@ -4475,6 +4475,7 @@ components:
         etaMin:
           type: integer
           nullable: true
+          description: 도로 기준 예상 이동시간(분). 게이트를 통과한 후보 중 직선거리 가까운 10곳만 카카오 자동차 길찾기로 구함(SFR-072). 실패·한도 초과·10곳 밖이면 null → '예상 이동시간 없음'(SFR-073). 정렬에는 쓰지 않음
         beds:
           type: object
           properties:

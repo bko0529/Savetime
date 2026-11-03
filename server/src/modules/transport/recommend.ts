@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isInKorea, RADIUS_KM } from '../../domain/geo.js';
 import { AppError } from '../../http/errors.js';
 import { paramedicAuth } from '../auth/guards.js';
+import type { EtaLookup } from './eta.js';
 import { rankHospitals, type BedPair, type Candidate } from './rank.js';
 
 interface CandidateRow {
@@ -90,7 +91,7 @@ function bedText(pair: BedPair | undefined): string | null {
   return pair.total === null ? String(pair.avail) : `${pair.avail}/${pair.total}`;
 }
 
-function toCard(candidate: Row, rank: number | null) {
+function toCard(candidate: Row, rank: number | null, etas?: Map<string, number>) {
   const { row, beds } = candidate;
   return {
     id: Number(row.id),
@@ -99,7 +100,8 @@ function toCard(candidate: Row, rank: number | null) {
     lng: row.lng,
     address: row.address,
     distanceKm: Math.round(row.distance_km * 10) / 10,
-    etaMin: null, // 길찾기 예상 이동시간은 SFR-072에서 채운다
+    // 길찾기에 실패했거나 대상(가까운 10곳)이 아니면 null → 앱은 '예상 이동시간 없음' (SFR-073)
+    etaMin: etas?.get(candidate.id) ?? null,
     beds: { er: bedText(beds?.er), icu: bedText(beds?.icu), or: bedText(beds?.or) },
     bedsSourceTime: row.source_time,
     capabilityCount: { available: row.capability_available, total: row.capability_total },
@@ -138,7 +140,8 @@ function parseOrigin(query: unknown): { lat: number; lng: number; radiusKm: numb
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function recommendRouter(pool: pg.Pool, guards: RequestHandler[]): Router {
+// eta가 없으면(카카오 키 없음) 예상 이동시간만 빠지고 추천은 그대로 나간다
+export function recommendRouter(pool: pg.Pool, guards: RequestHandler[], eta?: EtaLookup): Router {
   const router = Router();
 
   // 환자 정보를 입력하는 동안 앱이 미리 받아 두는 반경 안 전체 병원 (SFR-001, 지도 SFR-027)
@@ -179,9 +182,10 @@ export function recommendRouter(pool: pg.Pool, guards: RequestHandler[]): Router
       [transportId],
     );
     const radiusKm = transport.fallback_radius_km;
+    const origin = { lat: transport.origin_lat, lng: transport.origin_lng };
     const candidates = await findCandidates(
       pool,
-      { lat: transport.origin_lat, lng: transport.origin_lng },
+      origin,
       radiusKm,
       new Set(excluded.map((row) => row.hospital_id)),
     );
@@ -190,11 +194,17 @@ export function recommendRouter(pool: pg.Pool, guards: RequestHandler[]): Router
       radiusKm,
     });
     const rankOf = new Map(ranked.items.map((item) => [item.id, item.rank]));
+    const etas = eta
+      ? await eta(
+          origin,
+          ranked.etaTargets.map((c) => ({ id: c.id, lat: c.row.lat, lng: c.row.lng })),
+        )
+      : undefined;
 
     res.json({
       radiusKm,
-      items: ranked.items.map((item) => toCard(item, item.rank)),
-      map: candidates.map((candidate) => toCard(candidate, rankOf.get(candidate.id) ?? null)),
+      items: ranked.items.map((item) => toCard(item, item.rank, etas)),
+      map: candidates.map((candidate) => toCard(candidate, rankOf.get(candidate.id) ?? null, etas)),
       noBedInfo: ranked.noBedInfo.map((candidate) => toCard(candidate, null)),
       emptyGuide: ranked.emptyGuide,
     });
