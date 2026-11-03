@@ -15,6 +15,7 @@ import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 import { createEtaLookup } from './modules/transport/eta.js';
+import { createGeocoder } from './modules/transport/geocode.js';
 
 const config = loadConfig();
 const logger = pino({ level: config.NODE_ENV === 'production' ? 'info' : 'debug' });
@@ -49,9 +50,25 @@ const eta = config.KAKAO_REST_API_KEY
   : undefined;
 if (!eta) logger.warn('KAKAO_REST_API_KEY가 없어 예상 이동시간을 구하지 않습니다');
 
+// 같은 카카오 키를 쓴다. 키가 없으면 주소→좌표만 503이 된다 (SFR-009)
+const geocoder = config.KAKAO_REST_API_KEY
+  ? createGeocoder({
+      apiKey: config.KAKAO_REST_API_KEY,
+      quota: createApiQuota({
+        redis,
+        pool,
+        logger,
+        limit: config.KAKAO_LOCAL_DAILY_LIMIT,
+        api: 'kakao_local',
+        label: '카카오 로컬',
+      }),
+    })
+  : undefined;
+
 const app = createApp({
   logger,
   eta,
+  geocoder,
   auth:
     config.APP_ROLE === 'main' && config.JWT_SECRET
       ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
