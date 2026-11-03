@@ -323,8 +323,9 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 로그아웃 (팀에서 빠짐)
-      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport.\
-        \ 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝낸다.\n\n**요구사항**: SFR-070, SFR-113  \n\
+      description: "팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport{id,status,hospitalName}.\
+        \ 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝내고 열린·확정 병원 요청을 닫고 팀을 해제한다.\
+        \ 근무 종료와 같은 처리이며, 다른 기기의 토큰까지 모두 끊는다(SER-016). 승인 전 계정도 쓸 수 있다.\n\n**요구사항**: SFR-070, SFR-113  \n\
         **화면**: S-12 설정  \n**오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이\
         \ 사건**: CANCEL"
       operationId: post_auth_logout
