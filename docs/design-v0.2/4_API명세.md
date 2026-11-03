@@ -22,7 +22,7 @@
 | 전화 확인 상태 복원: `phone-check/start` 추가, 결과에 `dismissed`(결과 미선택) 추가, 거절 시 다음 후보 자동 | 부록 A13~18, SFR-075 |
 | `rounds`를 `kind: expand | re_request`로 나눔. 이동 중 다시 요청은 확정 병원이 승인 취소했을 때만 | 부록 A12·A20, SFR-131·128 |
 | `POST /transports` 대상 0곳 → 오류 대신 201 + fallback. `finishPrevious`로 '이전 이송 끝내기' | SFR-109·104 |
-| `/fallback`·`/phone-checks`·`/arrive`·병원 응답 전부 version 필수, 오류 코드를 상태 전이표와 통일 + `error.details` | SFR-160 |
+| `/phone-checks`·`/arrive`·병원 응답 전부 version 필수, 오류 코드를 상태 전이표와 통일 + `error.details` | SFR-160 |
 | 팀 작성 중 정보: 버전이 달라도 409 대신 항목 단위 병합, 덮어쓴 항목 알려줌 | SFR-114 |
 | 새 API 8개: 반려 후 재신청, 주소→좌표, 예비 추천 반경 넓히기, 전화 확인 시작, 경로 안내 담당 단말, 관리자 OTP 첫 연결, 키 폐기(사유), 초대 수락 역할 | SFR-083·009·029·132·152·146·159 |
 | 근무 종료·로그아웃·탈퇴·정지: 진행 중 이송이 있으면 확인 → 마지막 1명이면 취소 (탈퇴는 막지 않음) | SFR-113·070·071·151 |
@@ -86,7 +86,6 @@
 
 | 메서드 | 주소 | 하는 일 | 인증 | 상태 전이 | 화면 | 요구사항 |
 |---|---|---|---|---|---|---|
-| GET | `/symptoms` | 증상 버튼 목록 S01~S16 | 대원 | - | S-04 환자 정보 입력 | SFR-108, 부록 B |
 | GET | `/geocode` | 주소 → 좌표 (위치 실패·미동의) | 대원 | - | S-04 · S-06 주소 입력 | SFR-009, INR-004 |
 | GET | `/hospitals/nearby` | 주변 병원 (지도·오프라인 저장용) | 대원 | - | S-06 지도 · S-11 오프라인 | SFR-027, SFR-059, SFR-061, SFR-064 |
 | GET | `/hospitals/{hospitalId}` | 병원 상세 (값이 없는 병상은 null. S2 로그인 전까지 개발 환경에서만 인증 없이 열림) | 대원 | - | S-07 병원 상세 | SFR-007, SFR-081 |
@@ -100,11 +99,10 @@
 | GET | `/transports/current` | 진행 중 이송 불러오기 (앱 재실행 복구) | 대원 | - | 앱 시작 · 모든 이송 화면 | SFR-133 |
 | GET | `/transports/{transportId}` | 이송 건 보기 | 대원 | - | S-05 · S-09 | SFR-110 |
 | POST | `/transports/{transportId}/confirm` | 승인 병원 확정 | 대원 | CONFIRM | S-05 확정 확인 | SFR-111, SFR-134, SFR-160, SFR-125 |
-| POST | `/transports/{transportId}/fallback` | 기다리지 않고 예비로 | 대원 | GO_FALLBACK | S-05 응답 대기 | SFR-112 |
-| GET | `/transports/{transportId}/recommendations` | 예비 추천 목록 | 대원 | - | S-06 예비 추천 | SFR-112, SFR-098, SFR-027, SFR-030, SFR-002 |
+| GET | `/transports/{transportId}/recommendations` | 추천 목록 (요청 중·예비 추천 공용, 거리순) | 대원 | - | S-05 요청 화면 | SFR-112, SFR-098, SFR-027, SFR-030, SFR-002 |
 | PUT | `/transports/{transportId}/fallback-radius` | 예비 추천 반경 넓히기 (요청은 안 보냄) | 대원 | - | S-06 예비 추천 | SFR-029, SFR-012 |
 | POST | `/transports/{transportId}/rounds` | 다시 요청 (반경 넓히기 · 승인 취소 후) | 대원 | EXPAND_ROUND, RE_REQUEST | S-06 · S-09 승인 취소 경보 | SFR-131, SFR-128, SFR-156 |
-| POST | `/transports/{transportId}/phone-check/start` | 추천 병원으로 전화 확인 시작 | 대원 | START_PHONE_CHECK | S-06 → S-08 전화 확인 | SFR-032, SFR-031 |
+| POST | `/transports/{transportId}/phone-check/start` | 추천 병원으로 전화 확인 시작 (요청 중에도, 요청은 열어 둠) | 대원 | START_PHONE_CHECK | S-05 → S-08 전화 확인 | SFR-032, SFR-031 |
 | POST | `/transports/{transportId}/phone-checks` | 전화 확인 결과 기록 | 대원 | PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED | S-08 전화 확인 | SFR-032, SFR-033, SFR-034, SFR-074, SFR-075 |
 | POST | `/transports/{transportId}/nav-device` | 경로 안내 담당 단말 응답 | 대원 | - | S-09 경로 안내 | SFR-132, SFR-133 |
 | POST | `/transports/{transportId}/assessments` | 변경 사항 보내기 | 대원 | ASSESSMENT_UPDATED | S-05 · S-09 | SFR-121, SFR-105 |
@@ -245,8 +243,8 @@
 | S-01 | (서버 호출 없음 · 폰 권한만) |
 | S-02 | `GET /agencies/{code}` · `POST /auth/signup` · `PUT /me/signup` · `POST /auth/login` · `GET /me` |
 | S-03 | `POST /teams` · `POST /teams/join` · `GET /teams/current` · `PATCH /teams/current/members/me` · `POST /teams/current/leave` · `GET /paramedics/on-duty` · `POST /teams/current/invites` · `PUT /memos/{paramedicId}` |
-| S-04 | `GET /teams/current/draft` · `PATCH /teams/current/draft` · `DELETE /teams/current/draft` · `GET /symptoms` · `GET /geocode` · `GET /request-targets/preview` · `POST /transports` |
-| S-05 | `POST /transports` · `GET /transports/{transportId}` · `POST /transports/{transportId}/confirm` · `POST /transports/{transportId}/fallback` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/cancel` |
+| S-04 | `GET /teams/current/draft` · `PATCH /teams/current/draft` · `DELETE /teams/current/draft` · `GET /geocode` · `GET /request-targets/preview` · `POST /transports` |
+| S-05 | `POST /transports` · `GET /transports/{transportId}` · `POST /transports/{transportId}/confirm` · `GET /transports/{transportId}/recommendations` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/cancel` |
 | S-06 | `GET /geocode` · `GET /hospitals/nearby` · `POST /transports` · `GET /transports/{transportId}/recommendations` · `PUT /transports/{transportId}/fallback-radius` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/cancel` |
 | S-07 | `GET /hospitals/{hospitalId}` |
 | S-08 | `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/phone-checks` · `POST /transports/{transportId}/cancel` |

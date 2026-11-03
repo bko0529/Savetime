@@ -1,6 +1,7 @@
 // =====================================================================
 // 세이브타임 상태 전이 v0.2 (서버 코드에 그대로 복사해서 사용)
-// 기준: 요구사항분석서 v0.115 부록 A(이송 건) · A-2(병원 요청) — 표의 행 번호를 note에 적어 둠
+// 기준: 요구사항분석서 v1.5 부록 A(이송 건) · A-2(병원 요청) — 표의 행 번호를 note에 적어 둠
+// v1.5 (CR-007, D-127): '기다리지 않고 예비로'(GO_FALLBACK) 삭제, 요청 중에도 전화 확인 가능(요청은 열어 둠)
 // 규칙
 //  1) 상태를 바꾸는 코드는 반드시 transitionTransport()/transitionHreq()를 거친다. 표에 없는 전이는 전부 거부.
 //  2) 검사 순서: 표 → 상태 조건 → 시간·사유 → 버전 (그래야 오류 코드가 정확함)
@@ -30,12 +31,11 @@ export type TransportEvent =
   | 'HOSPITAL_RESPONDED'           // A6  병원 승인·거절 도착 (상태 유지, 화면 갱신)
   | 'CONFIRM'                      // A7  승인 병원 1곳 선택
   | 'NO_OPEN_REQUEST'              // A8·A10 + SFR-161: 대기 0곳·유효 승인 0곳 (전부 거절·2분 승인 0·전달 0곳·승인 취소로 0)
-  | 'GO_FALLBACK'                  // A8  '기다리지 않고 예비로'
   | 'APPROVAL_WINDOW_ENDED'        // A9  요청 후 5분 동안 선택 없음
   | 'APPROVAL_CANCELLED_OPEN_REMAIN' // A10 승인 취소됐지만 대기·유효 승인이 남음 (상태 유지)
   | 'ASSESSMENT_UPDATED'           // A11 변경 사항 보내기 (상태 유지)
   | 'EXPAND_ROUND'                 // A12 '반경 넓혀 다시 요청'
-  | 'START_PHONE_CHECK'            // A13 추천 병원 '경로 안내'
+  | 'START_PHONE_CHECK'            // A13 추천 병원 '경로 안내' (요청 중·예비 추천 모두, v1.5)
   | 'PHONE_ACCEPTED'               // A14 수용 확정
   | 'PHONE_PROCEED'                // A15 연결 실패·확인 생략 + 사유
   | 'PHONE_REJECTED_NEXT'          // A16 거절, 남은 후보 있음
@@ -52,13 +52,14 @@ export type CancelReason = 'user' | 'auto_inactive' | 'duty_end' | 'logout' | 'w
 // offline_superseded: 통신 두절 중 만든 건이 복구 때 같은 팀의 다른 진행 중 건과 겹침 → 서버 건을 남기고 오프라인 건은 이력으로 (SFR-099, 부록 A30)
 export type ArrivalMethod = 'button' | 'menu' | 'hospital' | 'finish_previous';
 export type FallbackReason = 'no_target' | 'offline' | 'all_rejected' | 'expired_no_approval' | 'none_delivered'
-  | 'approvals_cancelled' | 'user' | 'approval_window' | 'phone_rejected_last' | 'phone_dismissed';
+  | 'approvals_cancelled' | 'approval_window' | 'phone_rejected_last' | 'phone_dismissed';
 export type PhoneProceedReason = 'no_answer' | 'busy' | 'urgent' | 'etc';
 export type DestChangeReason = 'patient_change' | 'road' | 'hospital' | 'etc';
 
-type Row<S, E> = { from: S | null; event: E; to: S; user: boolean; ref: string; note: string };
-const T = (from: TransportStatus | null, event: TransportEvent, to: TransportStatus, user: boolean, ref: string, note: string): Row<TransportStatus, TransportEvent> =>
-  ({ from, event, to, user, ref, note });
+type Row<S, E> = { from: S | null; event: E; to: S; user: boolean; ref: string; note: string; toIfOpen?: S };
+// toIfOpen: 병원 요청이 아직 열려 있으면(대기·유효 승인 1곳 이상) to 대신 이 상태로 간다 (v1.5, 전화 확인에서 돌아갈 때)
+const T = (from: TransportStatus | null, event: TransportEvent, to: TransportStatus, user: boolean, ref: string, note: string, toIfOpen?: TransportStatus): Row<TransportStatus, TransportEvent> =>
+  ({ from, event, to, user, ref, note, ...(toIfOpen ? { toIfOpen } : {}) });
 
 export const TRANSPORT_TABLE: Row<TransportStatus, TransportEvent>[] = [
   T(null,          'CREATE_WITH_TARGETS', 'requesting', true,  'A4',  '회차 1 생성 → 병원 요청 SEND'),
@@ -66,19 +67,26 @@ export const TRANSPORT_TABLE: Row<TransportStatus, TransportEvent>[] = [
   T('requesting',  'HOSPITAL_RESPONDED',  'requesting', false, 'A6',  '대원 화면 갱신, 첫 승인은 알림'),
   T('requesting',  'CONFIRM',             'moving',     true,  'A7',  '나머지 대기·승인 → 다른 병원으로 이송, 출발 시각(처음만), 경로 안내 담당 단말 지정'),
   T('requesting',  'NO_OPEN_REQUEST',     'fallback',   false, 'A8·A10', '사유 all_rejected / expired_no_approval / none_delivered / approvals_cancelled'),
-  T('requesting',  'GO_FALLBACK',         'fallback',   true,  'A8',  '대기·승인 요청 → 요청 종료'),
   T('requesting',  'APPROVAL_WINDOW_ENDED','fallback',  false, 'A9',  '승인 요청 → 요청 종료(5분)'),
   T('requesting',  'APPROVAL_CANCELLED_OPEN_REMAIN', 'requesting', false, 'A10', "해당 병원 '승인 취소' 표시"),
   T('requesting',  'ASSESSMENT_UPDATED',  'requesting', true,  'A11', '대기·승인 병원에 강조 표시'),
+  T('requesting',  'START_PHONE_CHECK',   'phone_check',true,  'A13', '요청 화면 추천 목록에서 전화 확인. 병원 요청은 닫지 않음 (D-127)'),
   T('requesting',  'CANCEL',              'cancelled',  true,  'A24·A28·A29', '열린 요청 → 취소됨'),
   T('fallback',    'EXPAND_ROUND',        'requesting', true,  'A12', '반경 한 단계, 아직 요청 안 한 병원에만 새 회차'),
   T('fallback',    'START_PHONE_CHECK',   'phone_check',true,  'A13', '대상 병원 기록'),
   T('fallback',    'CANCEL',              'cancelled',  true,  'A24', ''),
-  T('phone_check', 'PHONE_ACCEPTED',      'moving',     true,  'A14', '결과·시각, 출발 시각(처음만)'),
-  T('phone_check', 'PHONE_PROCEED',       'moving',     true,  'A15', '연결 실패·확인 생략, 사유 필수'),
+  // 전화 확인 중에도 열린 요청은 계속 처리된다 (v1.5). 상태는 phone_check 유지, 대원 화면에 승인 칸 갱신·진동
+  T('phone_check', 'HOSPITAL_RESPONDED',  'phone_check',false, 'A6',  '전화 확인 중 승인·거절 도착'),
+  T('phone_check', 'NO_OPEN_REQUEST',     'phone_check',false, 'A8·A10', '요청이 모두 닫힘 → 전화 화면 유지, 돌아가면 예비 추천'),
+  T('phone_check', 'APPROVAL_WINDOW_ENDED','phone_check',false,'A9',  '승인 요청 → 요청 종료(5분)'),
+  T('phone_check', 'APPROVAL_CANCELLED_OPEN_REMAIN', 'phone_check', false, 'A10', "해당 병원 '승인 취소' 표시"),
+  T('phone_check', 'ASSESSMENT_UPDATED',  'phone_check',true,  'A11', '대기·승인 병원에 강조 표시'),
+  T('phone_check', 'CONFIRM',             'moving',     true,  'A31', "전화 확인 중 '승인' 칸 병원 선택 — 요청 중 CONFIRM과 같은 연쇄"),
+  T('phone_check', 'PHONE_ACCEPTED',      'moving',     true,  'A14', '결과·시각, 출발 시각(처음만). 열려 있던 요청 → 요청 종료'),
+  T('phone_check', 'PHONE_PROCEED',       'moving',     true,  'A15', '연결 실패·확인 생략, 사유 필수. 열려 있던 요청 → 요청 종료'),
   T('phone_check', 'PHONE_REJECTED_NEXT', 'phone_check',true,  'A16', '제외 병원 추가(통계 제외), 대상 병원을 다음 후보로'),
-  T('phone_check', 'PHONE_REJECTED_LAST', 'fallback',   true,  'A17', '40km 미만이면 반경 확장 안내, 40km면 전화 안내'),
-  T('phone_check', 'PHONE_DISMISSED',     'fallback',   true,  'A18', "사유 '결과 미선택'"),
+  T('phone_check', 'PHONE_REJECTED_LAST', 'fallback',   true,  'A17', '40km 미만이면 반경 확장 안내, 40km면 전화 안내. 요청이 열려 있으면 요청 중으로', 'requesting'),
+  T('phone_check', 'PHONE_DISMISSED',     'fallback',   true,  'A18', "사유 '결과 미선택'. 요청이 열려 있으면 요청 중으로", 'requesting'),
   T('phone_check', 'CANCEL',              'cancelled',  true,  'A24', ''),
   T('moving',      'ASSESSMENT_UPDATED',  'moving',     true,  'A11', '확정 병원 도착 예정 목록에 강조'),
   T('moving',      'ARRIVE',              'arrived',    true,  'A19', '방법 button/menu/hospital, 익명 소요시간, 원본 위치 삭제. 병원 웹 도착 확인(200m 안)은 서버 판단이라 version 없이'),
@@ -101,6 +109,7 @@ export const OFFLINE_QUEUEABLE: TransportEvent[] = [
  *  A27 새 요청 시도 = CREATE_*가 ACTIVE_TRANSPORT_EXISTS로 거부
  *  A28·A29 = CANCEL + cancelReason (auto_inactive / duty_end·logout·withdrawal·suspended), 버전 없이 */
 export const APPENDIX_A_NO_ROW = ['A22', 'A25', 'A26', 'A27', 'A28', 'A29', 'A30'] as const;
+// A31(v1.5): 전화 확인 중 승인 병원 선택 = phone_check CONFIRM 행
 
 // ---------------- 2. 병원 요청 (hospital_request.status) — 부록 A-2 ----------------
 export type HreqStatus = 'waiting' | 'delivery_failed' | 'approved' | 'rejected' | 'expired' | 'closed' | 'confirmed' | 'arrived' | 'unacceptable';
@@ -158,7 +167,9 @@ export type CascadeTarget = keyof typeof TARGET_STATES | 'chosen' | 'new_round';
 export const CASCADE: Partial<Record<TransportEvent, { target: CascadeTarget; event: HreqEvent }[]>> = {
   CREATE_WITH_TARGETS:   [{ target: 'new_round', event: 'SEND' }],
   CONFIRM:               [{ target: 'chosen', event: 'CONFIRM_THIS' }, { target: 'open', event: 'OTHER_CONFIRMED' }], // open = 선택한 것 제외
-  GO_FALLBACK:           [{ target: 'open', event: 'TRANSPORT_FALLBACK' }],
+  // 전화 확인 결과로 출발하면 열려 있던 요청을 닫는다 (병원 웹 '요청 종료', closeReason fallback). 요청이 없으면 대상 0건이라 아무 일도 없음
+  PHONE_ACCEPTED:        [{ target: 'open', event: 'TRANSPORT_FALLBACK' }],
+  PHONE_PROCEED:         [{ target: 'open', event: 'TRANSPORT_FALLBACK' }],
   APPROVAL_WINDOW_ENDED: [{ target: 'approved', event: 'APPROVAL_TIMEOUT' }],
   EXPAND_ROUND:          [{ target: 'new_round', event: 'SEND' }],
   RE_REQUEST:            [{ target: 'new_round', event: 'SEND' }],
@@ -175,7 +186,8 @@ export function transportEventAfterHreqChange(
 ): { event: TransportEvent; reason?: FallbackReason } | null {
   if (transport === 'moving' && changed.event === 'CANCEL_APPROVAL' && changed.fromStatus === 'confirmed')
     return { event: 'CONFIRMED_HOSPITAL_CANCELLED' };
-  if (transport !== 'requesting') return null;
+  // 요청이 열려 있을 수 있는 상태: 요청 중, 그리고 요청 중에 들어간 전화 확인 (v1.5)
+  if (transport !== 'requesting' && transport !== 'phone_check') return null;
   // 5분 해제는 정방향(APPROVAL_WINDOW_ENDED → 연쇄 APPROVAL_TIMEOUT)으로만 처리. 타이머는 이송 건 사건을 먼저 부른다
   if (changed.event === 'APPROVAL_TIMEOUT') return null;
   if (counts.waiting === 0 && counts.validApproved === 0) {
@@ -219,6 +231,7 @@ export interface TransportCtx {
   currentRadiusKm?: number; nextRadiusKm?: number; newTargetCount?: number; // EXPAND_ROUND·RE_REQUEST·CHANGE_DESTINATION
   cancelReason?: CancelReason; arrivalMethod?: ArrivalMethod;
   phoneReason?: PhoneProceedReason | null; destReason?: DestChangeReason | null; fallbackReason?: FallbackReason;
+  openRequestsRemain?: boolean;   // 전화 확인에서 돌아갈 때: 현재 회차에 대기·유효 승인이 남았나 (서버가 같은 트랜잭션에서 셈)
 }
 export interface TransportResult { to: TransportStatus; history: { from: TransportStatus | null; to: TransportStatus; event: TransportEvent; reason: string | null; at: Date } }
 
@@ -270,7 +283,6 @@ export function transitionTransport(from: TransportStatus | null, event: Transpo
     case 'PHONE_DISMISSED': reason = 'phone_dismissed'; break;
     case 'PHONE_REJECTED_LAST': reason = 'phone_rejected_last'; break;
     case 'NO_OPEN_REQUEST': reason = ctx.fallbackReason ?? 'all_rejected'; break;
-    case 'GO_FALLBACK': reason = 'user'; break;
     case 'APPROVAL_WINDOW_ENDED': reason = 'approval_window'; break;
     case 'ARRIVE':
       reason = ctx.arrivalMethod ?? 'button';
@@ -284,7 +296,9 @@ export function transitionTransport(from: TransportStatus | null, event: Transpo
     if (ctx.clientVersion === undefined) throw new TransitionError('VERSION_REQUIRED', 'version을 같이 보내야 해요');
     if (ctx.clientVersion !== ctx.version) throw new TransitionError('VERSION_CONFLICT', '그사이 상태가 바뀌었어요');
   }
-  return { to: row.to, history: { from, to: row.to, event, reason, at: ctx.now } };
+  // ④ 돌아갈 상태: 요청이 아직 열려 있으면 요청 화면(requesting)으로, 아니면 예비 추천(fallback)으로 (A안, D-127)
+  const to = row.toIfOpen && ctx.openRequestsRemain ? row.toIfOpen : row.to;
+  return { to, history: { from, to, event, reason, at: ctx.now } };
 }
 
 export interface HreqCtx {

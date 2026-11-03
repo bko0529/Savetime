@@ -30,7 +30,6 @@ npm run migrate
 | | hospital_shift | 근무 담당자 이름, 알림 켜기 | SFR-117 |
 | | bed_current | 병상 캐시 (병원당 최신 1행, 3분마다 갱신) | QUR-008, SFR-007 |
 | | capability_item / hospital_capability | 중증질환 진료가능 항목 (공공 데이터 표기 그대로) | SFR-007 |
-| | symptom / symptom_capability | 증상 버튼 S01~S16과 진료가능 항목 연결 (필수 병상은 항목별 여러 개: `required_beds`) | 부록 B·C, SFR-108 |
 | | bed_history | 병상 이력 30일 (2단계 분석용) | DAR-007 |
 | D 이송 (핵심) | transport | 이송 건. ID는 처음 만든 폰이 정함 (오프라인 복구). 상태 6개(phone_check 포함), 종료 뒤 team_id NULL | SFR-104, 099, 086 |
 | | transport_status_history | 상태가 바뀔 때마다 1행 (이전·다음 상태, 사건, 사유, 시각) | SFR-086 |
@@ -51,7 +50,7 @@ npm run migrate
 | I 수집기 기록 | collect_log | 시·도별 수집 성공·실패·기준 시각 | SFR-023 |
 | | bed_anomaly_log | 병상 이상치 기록 (공공 기관 ID 기준) | SFR-088 |
 | | api_call_daily | 외부 API 하루 호출 수 기록 | SFR-090 |
-| H 운영 | feature_flag | 기능 토글 (journal_ai · voice_input · hospital_grade) | QUR-013 |
+| H 운영 | feature_flag | 기능 토글 (journal_ai · hospital_grade). voice_input은 v1.5에서 삭제 (D-133, 마이그레이션 0004) | QUR-013 |
 | G 실시간 | event_log | 보낸 실시간 이벤트 기록 (재연결 때 놓친 것 다시 보내기, 24시간 보관) | 1-4 실시간 통신 설계 |
 
 ## DB가 직접 막아주는 규칙 (테스트 완료)

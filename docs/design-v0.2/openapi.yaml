@@ -968,34 +968,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /symptoms:
-    get:
-      tags:
-      - 3. 병원 정보·위치 (대원 앱)
-      summary: 증상 버튼 목록 S01~S16
-      description: "**요구사항**: SFR-108, 부록 B  \n**화면**: S-04 환자 정보 입력"
-      operationId: get_symptoms
-      security: *id009
-      responses:
-        '200':
-          description: 성공
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    code:
-                      type: string
-                    name:
-                      type: string
-        4XX:
-          description: 오류 (코드는 오류 코드표)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /geocode:
     get:
       tags:
@@ -1326,57 +1298,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /transports/{transportId}/fallback:
-    post:
-      tags:
-      - 4. 이송 (대원 앱 · 핵심)
-      summary: 기다리지 않고 예비로
-      description: "대기·승인 요청을 닫고(fallback) 병원 웹에 '요청 종료'.\n\n**요구사항**: SFR-112  \n\
-        **화면**: S-05 응답 대기  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED,\
-        \ VERSION_CONFLICT  \n**상태 전이 사건**: GO_FALLBACK"
-      operationId: post_transports__transportId__fallback
-      security: *id009
-      x-state-events:
-      - GO_FALLBACK
-      x-error-codes:
-      - NOT_FOUND
-      - INVALID_TRANSITION
-      - VERSION_REQUIRED
-      - VERSION_CONFLICT
-      parameters:
-      - *id011
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                version:
-                  type: integer
-                  description: 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED
-              required:
-              - version
-      responses:
-        '200':
-          description: 성공
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transport'
-        4XX:
-          description: 오류 (코드는 오류 코드표)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /transports/{transportId}/recommendations:
     get:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
-      summary: 예비 추천 목록
-      description: "**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**:\
-        \ S-06 예비 추천  \n**오류 코드**: NOT_FOUND"
+      summary: 추천 목록 (요청 화면·예비 추천 공용, 거리순)
+      description: "요청 중에도 부를 수 있음 (v1.5, D-127·128). 등급 이상 먼저, 그 안에서 직선거리순.\n\n**요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002  \n**화면**:\
+        \ S-05 요청 화면  \n**오류 코드**: NOT_FOUND"
       operationId: get_transports__transportId__recommendations
       security: *id009
       x-error-codes:
@@ -1547,8 +1475,8 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 추천 병원으로 전화 확인 시작
-      description: "fallback → phone_check, 대상 병원 기록. 팀원 화면에 transport.phone_target.\n\
-        \n**요구사항**: SFR-032, SFR-031  \n**화면**: S-06 → S-08 전화 확인  \n**오류 코드**: NOT_FOUND,\
+      description: "requesting·fallback → phone_check, 대상 병원 기록. 요청 중이면 병원 요청은 닫지 않음 (v1.5, D-127). 팀원 화면에 transport.phone_target.\n\
+        \n**요구사항**: SFR-032, SFR-031  \n**화면**: S-05 요청 화면 추천 목록 → S-08 전화 확인  \n**오류 코드**: NOT_FOUND,\
         \ INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT  \n**상태 전이 사건**:\
         \ START_PHONE_CHECK"
       operationId: post_transports__transportId__phone_check_start
@@ -3921,8 +3849,6 @@ paths:
                     properties:
                       journalAi:
                         type: boolean
-                      voiceInput:
-                        type: boolean
                       hospitalGrade:
                         type: boolean
                   minAppVersion:
@@ -4167,11 +4093,6 @@ components:
           type: string
           description: 주 증상 (직접 입력, 필수)
           maxLength: 100
-        symptomCode:
-          type: string
-          description: 증상 버튼 코드 S01~S16, 안 골랐으면 null
-          pattern: ^S\d{2}$
-          nullable: true
         sex:
           type: string
           enum:
@@ -4422,7 +4343,6 @@ components:
           - expired_no_approval
           - none_delivered
           - approvals_cancelled
-          - user
           - approval_window
           - phone_rejected_last
           - phone_dismissed
@@ -4686,9 +4606,6 @@ components:
         chiefComplaint:
           type: string
           description: 열 수 있는 요청만. 닫힌 요청은 null (SER-014)
-          nullable: true
-        symptomCode:
-          type: string
           nullable: true
         etaMin:
           type: integer
