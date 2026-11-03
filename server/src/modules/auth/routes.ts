@@ -11,6 +11,7 @@ import { loadMe } from './me.js';
 import { verifyPassword } from './password.js';
 import { forgetSessionState, type AuthContext, type ParamedicStatus } from './session.js';
 import { hashRefreshToken, newRefreshToken, signAccessToken } from './tokens.js';
+import { withdrawParamedic } from './withdraw.js';
 
 const MAX_FAILURES = 5;
 const LOCK_MINUTES = 10;
@@ -204,6 +205,17 @@ export function authRouter(ctx: AuthContext): Router {
     const me = await loadMe(ctx.pool, paramedicAuth(res).paramedicId);
     if (!me) throw new AppError(401, 'TOKEN_REVOKED', '다시 로그인해 주세요');
     res.json(me);
+  });
+
+  // 회원 탈퇴 (SFR-071). 승인 전·반려 계정도 탈퇴할 수 있어야 해서 승인 확인은 붙이지 않는다.
+  router.delete('/me', requireParamedic(ctx), async (req, res) => {
+    const { paramedicId } = paramedicAuth(res);
+    const confirmCancelActive = req.query.confirmCancelActive === 'true';
+    await withTransaction(ctx.pool, (client) =>
+      withdrawParamedic(client, ctx, paramedicId, confirmCancelActive),
+    );
+    await forgetSessionState(ctx, paramedicId);
+    res.status(204).end();
   });
 
   return router;
