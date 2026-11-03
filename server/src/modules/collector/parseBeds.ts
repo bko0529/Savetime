@@ -1,4 +1,4 @@
-// 공공 데이터 병상 필드 → 우리 3종 병상 (부록 D, CR-007). 공공 데이터 필드명은 이 파일에만 둔다.
+// 공공 데이터 병상 필드 → 우리 3종 병상 (부록 D, CR-008). 공공 데이터 필드명은 이 파일에만 둔다.
 import { z } from 'zod';
 import { lastByKey, optionalInt } from './fields.js';
 
@@ -39,7 +39,7 @@ export interface BedRow {
   excluded: boolean; // 가용이 전체보다 많음: 믿을 수 없어 추천에서 제외 (SFR-088)
 }
 
-// 음수는 공공 데이터에 정상으로 오는 값이다. 그 병상만 빈자리 0개로 본다 (CR-007).
+// 음수는 공공 데이터에 정상으로 오는 값이다. 그 병상만 빈자리 0개로 본다 (CR-008).
 function available(value: number | undefined): number | undefined {
   return value === undefined ? undefined : Math.max(value, 0);
 }
