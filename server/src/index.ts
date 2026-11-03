@@ -4,6 +4,7 @@ import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { signingKey } from './modules/auth/tokens.js';
 import {
   COLLECT_CAPABILITIES_EVERY_MS,
   runCapabilityCollect,
@@ -24,12 +25,17 @@ const redis = new Redis(config.REDIS_URL, { lazyConnect: false });
 pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오류'));
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
-// 로그인은 S2에 생긴다. 그때까지 인증이 없으니 운영에서는 켜지 않고, S2에 인증을 붙이며 이 조건을 없앤다.
-const openWithoutLogin = config.APP_ROLE === 'main' && config.NODE_ENV === 'development';
+// 서명 키 없이 대원 API를 켜면 로그인을 아무도 못 한다. 빠뜨렸으면 켜지 않는다.
+if (config.APP_ROLE === 'main' && !config.JWT_SECRET) {
+  throw new Error('환경 변수를 확인하세요: JWT_SECRET');
+}
 
 const app = createApp({
   logger,
-  hospitalDetailPool: openWithoutLogin ? pool : undefined,
+  auth:
+    config.APP_ROLE === 'main' && config.JWT_SECRET
+      ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
+      : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),

@@ -104,4 +104,19 @@ test('환경 변수 기본값과 숫자 변환', () => {
   const config = loadConfig({ DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', PORT: '5000' });
   assert.equal(config.PORT, 5000);
   assert.equal(config.NODE_ENV, 'production');
+  assert.equal(config.SHIFT_MAX_HOURS, 14);
+});
+
+test('JWT 서명 키가 짧으면 서버를 켜지 않는다', () => {
+  assert.throws(
+    () => loadConfig({ DATABASE_URL: 'postgres://x', REDIS_URL: 'redis://x', JWT_SECRET: 'short' }),
+    (err: Error) => err.message.includes('JWT_SECRET') && !err.message.includes('short'),
+  );
+  // .env.example을 복사한 빈 값은 '없음'이라 수집 스크립트처럼 로그인이 필요 없는 실행은 막지 않는다
+  const empty = loadConfig({
+    DATABASE_URL: 'postgres://x',
+    REDIS_URL: 'redis://x',
+    JWT_SECRET: '',
+  });
+  assert.equal(empty.JWT_SECRET, undefined);
 });
