@@ -13,6 +13,7 @@
     "migrate": "node --env-file-if-exists=.env ../node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m db/migrations",
     "collect:hospitals": "tsc -p . && node --env-file-if-exists=.env dist/scripts/collectHospitals.js",
     "account:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAccount.js",
+    "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {

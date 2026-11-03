@@ -19,6 +19,16 @@ const schema = z.object({
   KAKAO_DIRECTIONS_DAILY_LIMIT: z.coerce.number().int().positive().default(10_000),
   // 카카오 로컬(주소 검색) 하루 무료량. 늘어나면 이 값만 바꾼다
   KAKAO_LOCAL_DAILY_LIMIT: z.coerce.number().int().positive().default(100_000),
+  // 병원·관리자 웹 주소(쉼표로 여러 개). 다른 사이트에서 병원 PC 쿠키로 요청을 보내지 못하게 막는다 (SER-008)
+  ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

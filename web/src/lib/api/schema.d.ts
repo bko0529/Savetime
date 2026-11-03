@@ -979,7 +979,7 @@ export interface paths {
         put?: never;
         /**
          * 라이선스 키로 PC 등록
-         * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict), 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.
+         * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict · Path=/, 실시간 연결에도 씀), 1년. PC_LIMIT_REACHED는 details.pcs[{id, name, lastUsedAt}]를 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds. 관리자 알림(pc_change) 발생.
          *
          *     **요구사항**: SFR-116, SFR-147, COR-012
          *     **화면**: H-01 PC 등록
@@ -1965,7 +1965,7 @@ export interface components {
                 code: string;
                 /** @description 사람이 읽는 한국어 메시지 */
                 message: string;
-                /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
+                /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[{id, name, lastUsedAt}], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
                 details?: Record<string, never> | null;
             };
         };
