@@ -23,7 +23,7 @@ export type HreqStatus = 'waiting' | 'delivery_failed' | 'approved' | 'rejected'
 export type CloseReason = 'other_hospital' | 'fallback' | 'cancelled' | 'expired_approval' | 'approval_cancelled' | 'dest_changed';
 export type CancelReason = 'user' | 'auto_inactive' | 'duty_end' | 'logout' | 'withdrawal' | 'suspended' | 'offline_superseded';
 export type FallbackReason = 'no_target' | 'offline' | 'all_rejected' | 'expired_no_approval' | 'none_delivered'
-  | 'approvals_cancelled' | 'user' | 'approval_window' | 'phone_rejected_last' | 'phone_dismissed';
+  | 'approvals_cancelled' | 'approval_window' | 'phone_rejected_last' | 'phone_dismissed';
 
 /** 대원 앱이 보는 병원 요청 1건 (환자 정보 없음) */
 export interface AppHospitalRequest {

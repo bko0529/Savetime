@@ -68,8 +68,58 @@ test('이동 중 다시 요청은 확정 병원이 승인 취소했을 때만 (A
   assert.equal(code(() => T('moving', 'RE_REQUEST', { ...U(), confirmedReqClosedReason: null })), 'RE_REQUEST_NOT_ALLOWED');
 });
 
-test('이동 중 예비 추천으로 가는 길은 없음 (부록 A, 결정 A)', () => {
-  assert.equal(code(() => T('moving', 'GO_FALLBACK', U())), 'INVALID_TRANSITION');
+test('이동 중 예비 추천·전화 확인으로 가는 길은 없음 (부록 A, 결정 A)', () => {
+  assert.equal(code(() => T('moving', 'START_PHONE_CHECK', U())), 'INVALID_TRANSITION');
+  assert.ok(!TRANSPORT_TABLE.some(r => r.from === 'moving' && (r.to === 'fallback' || r.to === 'phone_check')));
+});
+
+// ---------- v1.5 (CR-007, D-127): 요청 화면 + 추천 목록, 요청 중 전화 확인 ----------
+test("v1.5: '기다리지 않고 예비로'(GO_FALLBACK)는 없음", () => {
+  assert.ok(!TRANSPORT_TABLE.some(r => (r.event as string) === 'GO_FALLBACK'));
+  assert.ok(!('GO_FALLBACK' in CASCADE));
+});
+
+test('v1.5: 요청 중 → 전화 확인, 병원 요청은 닫지 않음', () => {
+  assert.equal(T('requesting', 'START_PHONE_CHECK', U()).to, 'phone_check');
+  assert.equal(CASCADE.START_PHONE_CHECK, undefined);
+});
+
+test('v1.5: 전화 확인 중 병원 응답이 와도 전화 확인 유지', () => {
+  assert.equal(after('phone_check', { event: 'APPROVE', fromStatus: 'waiting' }, { waiting: 5, validApproved: 1 })?.event, 'HOSPITAL_RESPONDED');
+  assert.equal(T('phone_check', 'HOSPITAL_RESPONDED', { now, version: 2 }).to, 'phone_check');
+  const all = after('phone_check', { event: 'RESPOND_TIMEOUT', fromStatus: 'waiting' }, { waiting: 0, validApproved: 0 });
+  assert.deepEqual(all, { event: 'NO_OPEN_REQUEST', reason: 'expired_no_approval' });
+  assert.equal(T('phone_check', 'NO_OPEN_REQUEST', { now, version: 2, fallbackReason: 'expired_no_approval' }).to, 'phone_check');
+  assert.equal(T('phone_check', 'APPROVAL_WINDOW_ENDED', { now, version: 2 }).to, 'phone_check');
+  assert.equal(T('phone_check', 'APPROVAL_CANCELLED_OPEN_REMAIN', { now, version: 2 }).to, 'phone_check');
+});
+
+test('v1.5: 전화 확인 중 승인 칸 병원 선택 → 이동 중 (A31)', () => {
+  const tgt = { status: 'approved' as const, approvalValidUntil: plus(300) };
+  assert.equal(T('phone_check', 'CONFIRM', { ...U(2), target: tgt }).to, 'moving');
+  assert.equal(code(() => T('phone_check', 'CONFIRM', { ...U(2), target: { ...tgt, status: 'waiting' as const } })), 'REQUEST_NOT_APPROVED');
+});
+
+test('v1.5: 전화 결과로 출발하면 열린 요청을 닫음 (요청 종료)', () => {
+  for (const e of ['PHONE_ACCEPTED', 'PHONE_PROCEED'] as const)
+    assert.deepEqual(CASCADE[e], [{ target: 'open', event: 'TRANSPORT_FALLBACK' }], e);
+  assert.equal(H('approved', 'TRANSPORT_FALLBACK', { now, version: 1 }).closeReason, 'fallback');
+});
+
+test('v1.5: 전화 화면 닫기·마지막 후보 거절 → 요청이 열려 있으면 요청 중, 아니면 예비 추천 (A안)', () => {
+  for (const r of ['dismissed', 'rejected'] as const) {
+    const e = phoneEvent(r, false);
+    assert.equal(T('phone_check', e, { ...U(), openRequestsRemain: true }).to, 'requesting', e);
+    assert.equal(T('phone_check', e, { ...U(), openRequestsRemain: false }).to, 'fallback', e);
+    assert.equal(T('phone_check', e, U()).to, 'fallback', e);
+  }
+  const h = T('phone_check', 'PHONE_DISMISSED', { ...U(), openRequestsRemain: true }).history;
+  assert.deepEqual([h.to, h.reason], ['requesting', 'phone_dismissed']);
+});
+
+test('v1.5: toIfOpen은 전화 확인에서 돌아가는 두 행에만', () => {
+  const rows = TRANSPORT_TABLE.filter(r => r.toIfOpen);
+  assert.deepEqual(rows.map(r => `${r.from}|${r.event}|${r.toIfOpen}`).sort(), ['phone_check|PHONE_DISMISSED|requesting', 'phone_check|PHONE_REJECTED_LAST|requesting']);
 });
 
 test('목적지 변경: 요청 중으로, 사유 필수, 1번만 (A21, SFR-077)', () => {

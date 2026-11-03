@@ -258,17 +258,7 @@ CREATE TABLE hospital_capability (
   PRIMARY KEY (hospital_id, item_code)
 );
 
-CREATE TABLE symptom (                                 -- 증상 버튼 S01~S16 (부록 B)
-  code          char(3)     PRIMARY KEY,
-  name          varchar(60) NOT NULL,
-  required_beds varchar(3)[] NOT NULL CHECK (required_beds <@ ARRAY['er','icu','or']::varchar[])  -- 필수 병상 게이트, 여러 개 가능 (부록 C, DAR-001)
-);
-
-CREATE TABLE symptom_capability (                      -- 증상 ↔ 진료가능 항목 (여러 개 가능)
-  symptom_code char(3)     NOT NULL REFERENCES symptom(code),
-  item_code    varchar(20) NOT NULL REFERENCES capability_item(code),
-  PRIMARY KEY (symptom_code, item_code)
-);
+-- 증상 버튼(symptom)·증상↔진료가능 항목(symptom_capability) 테이블은 v1.5에서 삭제 (D-130, 마이그레이션 0004)
 
 -- =====================================================================
 -- D. 이송 (핵심)   이송 건 1 : N 요청 회차 1 : N 병원 요청  (부록 A-2)
@@ -324,7 +314,6 @@ CREATE TABLE assessment (                              -- 병원에 보낸 환�
   transport_id    uuid        NOT NULL REFERENCES transport(id),
   seq             int         NOT NULL,                -- 1 = 첫 요청, 2.. = 변경 사항 보내기
   chief_complaint varchar(100),                        -- 주 증상 (직접 입력)
-  symptom_code    char(3)     REFERENCES symptom(code),-- 버튼으로 골랐을 때만, 아니면 NULL('미선택')
   sex             char(1)     CHECK (sex IN ('M','F','U')),            -- U = 확인 불가
   age_band        varchar(10),
   consciousness   varchar(12) CHECK (consciousness IN ('alert','verbal','pain','unresponsive','unknown')),
@@ -432,7 +421,7 @@ CREATE TABLE request_view_log (                        -- 병원 열람 기록 (
 CREATE TABLE response_stat (                           -- 응답·거절 통계 행 (환자 정보 삭제 뒤에도 보관)
   id            bigserial   PRIMARY KEY,
   hospital_id   bigint      NOT NULL REFERENCES hospital(id),
-  symptom_code  char(3),                               -- NULL = 미선택
+  requested_grade smallint  CHECK (requested_grade IN (1,2,3)),  -- 대원이 고른 병원 등급, NULL = 안 고름 (v1.5, D-130)
   result        varchar(20) NOT NULL CHECK (result IN ('approved','rejected','expired','approval_cancelled','unacceptable')),
   reason        varchar(40),
   response_sec  int,
@@ -457,7 +446,6 @@ CREATE TABLE rejection_record (                        -- 모든 출처의 거�
   source       varchar(20)  NOT NULL CHECK (source IN ('hospital_web','paused','phone_check','approval_cancelled','unacceptable')),
   reason       varchar(16)  CHECK (reason IN ('er_bed','or_room','ward','icu','no_specialist','equipment','etc','paused')),
   reason_text  varchar(30),
-  symptom_code char(3),                                -- NULL = 미선택
   requested_grade smallint  CHECK (requested_grade IN (1,2,3)),
   created_at   timestamptz  NOT NULL DEFAULT now()
 );
@@ -523,12 +511,12 @@ CREATE INDEX ON event_log (room, seq);
 -- H. 운영 (v0.3)
 -- =====================================================================
 CREATE TABLE feature_flag (                            -- 기능 토글 (QUR-013). 앱·웹은 GET /config로 1분마다 읽음
-  key         varchar(40)  PRIMARY KEY,                -- journal_ai / voice_input / hospital_grade
+  key         varchar(40)  PRIMARY KEY,                -- journal_ai / hospital_grade (voice_input은 v1.5에서 삭제, D-133)
   enabled     boolean      NOT NULL DEFAULT false,
   updated_at  timestamptz  NOT NULL DEFAULT now(),
   updated_by  bigint       REFERENCES admin(id)
 );
-INSERT INTO feature_flag (key, enabled) VALUES ('journal_ai', false), ('voice_input', true), ('hospital_grade', true);
+INSERT INTO feature_flag (key, enabled) VALUES ('journal_ai', false), ('hospital_grade', true);
 
 -- =====================================================================
 -- I. 수집기 기록 (SFR-023, 088, 090)
