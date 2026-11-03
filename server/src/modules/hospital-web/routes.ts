@@ -16,6 +16,7 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { alarmRoom, joinAlarmRoom, turnAlarmOff } from './realtime.js';
 
 export const MAX_PCS = 3;
 // 키 입력 5번 연속 실패 → 그 PC(접속 주소)에서 10분 막음 (SER-011)
@@ -27,6 +28,8 @@ const registerSchema = z.object({
   pcName: z.string().trim().min(1).max(40),
   replacePcId: z.number().int().positive().nullish(),
 });
+const shiftSchema = z.object({ staffName: z.string().trim().min(1).max(40) });
+const alarmOnSchema = z.object({ socketId: z.string().min(1).max(100) });
 
 interface PcSummary {
   id: number;
@@ -188,6 +191,79 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       pausedAt: row.paused_at?.toISOString() ?? null,
       serverNow: row.server_now.toISOString(),
     });
+  });
+
+  // 근무 시작: 담당자 이름만 받는다 (SFR-117). 아직 알림은 꺼져 있고, 알림 켜기를 눌러야 요청 대상이 된다
+  router.post('/hw/shifts', pcOnly, async (req, res) => {
+    const pc = hospitalPc(res);
+    const input = parseBody(shiftSchema, req.body);
+
+    const started = await withTransaction(ctx.pool, async (client) => {
+      // 같은 PC 에서 두 번 눌러도 진행 중인 근무가 하나만 남게 PC 행을 잠근다
+      await client.query('SELECT id FROM hospital_pc WHERE id = $1 FOR UPDATE', [pc.pcId]);
+      // 앞 근무가 남아 있으면(다른 탭 등) 끝내고 새로 시작한다. 1 PC = 진행 중 근무 1개
+      const { rows: ended } = await client.query<{ alarm_on: boolean }>(
+        `UPDATE hospital_shift SET ended_at = now()
+          WHERE pc_id = $1 AND ended_at IS NULL
+         RETURNING alarm_on_at IS NOT NULL AS alarm_on`,
+        [pc.pcId],
+      );
+      const { rows } = await client.query<{ id: string; now: Date }>(
+        'INSERT INTO hospital_shift (pc_id, staff_name) VALUES ($1, $2) RETURNING id, now() AS now',
+        [pc.pcId, input.staffName],
+      );
+      return {
+        shiftId: Number(rows[0].id),
+        endedAlarm: ended.some((s) => s.alarm_on),
+        now: rows[0].now,
+      };
+    });
+
+    // 알림은 커밋한 뒤에 보낸다 (롤백된 일이 알려지면 안 된다)
+    if (started.endedAlarm) turnAlarmOff(ctx.hospitalIo, pc, 'shift_ended', started.now);
+    res.status(201).json({ shiftId: started.shiftId });
+  });
+
+  // 알림 켜기 (SFR-117, SFR-136): 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다.
+  // 이때부터 이 탭이 hospital:{id}:on 방에 들어가 새 요청을 받는다
+  router.post('/hw/shifts/current/alarm-on', pcOnly, async (req, res) => {
+    const pc = hospitalPc(res);
+    const input = parseBody(alarmOnSchema, req.body);
+
+    const { rows } = await ctx.pool.query<{ id: string }>(
+      `SELECT id FROM hospital_shift
+        WHERE pc_id = $1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`,
+      [pc.pcId],
+    );
+    if (!rows[0]) throw new AppError(404, 'NOT_FOUND', '근무를 먼저 시작해 주세요');
+    const shiftId = Number(rows[0].id);
+
+    if (!(await joinAlarmRoom(ctx.hospitalIo, pc, input.socketId))) {
+      throw new AppError(404, 'NOT_FOUND', '실시간 연결을 찾지 못했어요. 잠시 뒤 다시 눌러 주세요');
+    }
+    const { rowCount } = await ctx.pool.query(
+      'UPDATE hospital_shift SET alarm_on_at = now() WHERE id = $1 AND ended_at IS NULL',
+      [shiftId],
+    );
+    // 그사이 다른 탭에서 근무를 끝냈으면 방에서 다시 뺀다
+    if (rowCount === 0) {
+      ctx.hospitalIo.in(input.socketId).socketsLeave(alarmRoom(pc.hospitalId));
+      throw new AppError(404, 'NOT_FOUND', '근무를 먼저 시작해 주세요');
+    }
+    res.json({ shiftId });
+  });
+
+  // 근무 종료: 이 PC 의 탭들을 요청 대상에서 빼고 hospital.alarm_off{shift_ended} 를 보낸다
+  router.post('/hw/shifts/current/end', pcOnly, async (_req, res) => {
+    const pc = hospitalPc(res);
+    const { rows } = await ctx.pool.query<{ now: Date }>(
+      `UPDATE hospital_shift SET ended_at = now()
+        WHERE pc_id = $1 AND ended_at IS NULL RETURNING now() AS now`,
+      [pc.pcId],
+    );
+    if (!rows[0]) throw new AppError(404, 'NOT_FOUND', '진행 중인 근무가 없어요');
+    turnAlarmOff(ctx.hospitalIo, pc, 'shift_ended', rows[0].now);
+    res.status(204).end();
   });
 
   return router;
