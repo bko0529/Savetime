@@ -6,7 +6,10 @@ import { AdminHome } from '../AdminHome';
 import { groupSecret, LoginForm, otpSecret } from './LoginForm';
 
 const replace = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+  usePathname: () => '/admin',
+}));
 
 beforeEach(() => replace.mockClear());
 afterEach(() => {
