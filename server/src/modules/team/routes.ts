@@ -41,7 +41,7 @@ const driverTaken = () => new AppError(409, 'DRIVER_TAKEN', "'운전'은 팀에 
 
 type Db = pg.Pool | pg.PoolClient;
 
-async function currentTeamId(db: Db, paramedicId: string): Promise<string | undefined> {
+export async function currentTeamId(db: Db, paramedicId: string): Promise<string | undefined> {
   const { rows } = await db.query<{ team_id: string }>(
     'SELECT team_id FROM team_member WHERE paramedic_id = $1 AND left_at IS NULL',
     [paramedicId],
