@@ -14,6 +14,7 @@ import { createFetchBeds, createFetchItems } from './modules/collector/publicApi
 import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
+import { createRealtime } from './modules/realtime/server.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
 
@@ -65,14 +66,19 @@ const geocoder = config.KAKAO_REST_API_KEY
     })
   : undefined;
 
+const auth =
+  config.APP_ROLE === 'main' && config.JWT_SECRET
+    ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
+    : undefined;
+// 실시간(Socket.IO)은 대원·병원 API가 있는 서버에서만 켠다. 관리자 서버(T-11)는 켜지 않는다
+const realtime = auth ? createRealtime({ auth, redisUrl: config.REDIS_URL, logger }) : undefined;
+
 const app = createApp({
   logger,
   eta,
   geocoder,
-  auth:
-    config.APP_ROLE === 'main' && config.JWT_SECRET
-      ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
-      : undefined,
+  auth,
+  realtime,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),
@@ -82,6 +88,8 @@ const app = createApp({
 const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
+// REST와 같은 포트에서 /socket.io 경로로 받는다 (Caddy가 /socket.io를 서버로 넘김)
+realtime?.attach(server);
 
 // 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
 const scheduledJobs: ScheduledJob[] = [];
@@ -139,11 +147,13 @@ function shutdown(signal: string): void {
     logger.error('제한 시간 안에 종료하지 못해 강제로 끝냅니다');
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS).unref();
-  server.close(async () => {
+  // 실시간 연결을 먼저 끊어야 HTTP 서버가 닫힌다
+  void Promise.allSettled([realtime?.close()]).then(() => server.close(onClosed));
+  async function onClosed() {
     await Promise.allSettled(jobRunners.map((runner) => runner.close()));
     await Promise.allSettled([pool.end(), redis.quit()]);
     process.exit(0);
-  });
+  }
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

@@ -16,31 +16,38 @@ export function paramedicAuth(res: Response): ParamedicAuth {
 // 다시 로그인해야 하는 경우는 모두 같은 코드로 답한다. 왜 안 되는지(위조·만료·로그아웃) 밖에 알려 줄 필요가 없다.
 const revoked = () => new AppError(401, 'TOKEN_REVOKED', '다시 로그인해 주세요');
 
+// 접근 토큰 하나로 대원을 확인한다. REST(requireParamedic)와 실시간 연결(/app)이 같은 확인을 거친다.
+export async function authenticateParamedic(
+  ctx: AuthContext,
+  token: string | undefined,
+): Promise<ParamedicAuth> {
+  if (!token) throw revoked();
+
+  const verified = await verifyAccessToken(ctx.jwtKey, token);
+  if (!verified.ok) {
+    // 만료는 앱이 갱신 토큰으로 새 토큰을 받으면 된다
+    if (verified.reason === 'expired') {
+      throw new AppError(401, 'TOKEN_EXPIRED', '로그인 시간이 지났어요');
+    }
+    throw revoked();
+  }
+
+  // 토큰이 살아 있어도 그 뒤에 정지·로그아웃됐으면 세션 번호가 달라져 있다
+  const { paramedicId, sessionVersion } = verified.claims;
+  const state = await loadSessionState(ctx, paramedicId);
+  if (!state || state.status === 'withdrawn' || state.sessionVersion !== sessionVersion) {
+    throw revoked();
+  }
+  if (state.status === 'suspended') {
+    throw new AppError(403, 'ACCOUNT_SUSPENDED', '정지된 계정이에요');
+  }
+  return { paramedicId, status: state.status };
+}
+
 export function requireParamedic(ctx: AuthContext): RequestHandler {
   return async (req, res, next) => {
     const [scheme, token] = req.headers.authorization?.split(' ') ?? [];
-    if (scheme !== 'Bearer' || !token) throw revoked();
-
-    const verified = await verifyAccessToken(ctx.jwtKey, token);
-    if (!verified.ok) {
-      // 만료는 앱이 갱신 토큰으로 새 토큰을 받으면 된다
-      if (verified.reason === 'expired') {
-        throw new AppError(401, 'TOKEN_EXPIRED', '로그인 시간이 지났어요');
-      }
-      throw revoked();
-    }
-
-    // 토큰이 살아 있어도 그 뒤에 정지·로그아웃됐으면 세션 번호가 달라져 있다
-    const { paramedicId, sessionVersion } = verified.claims;
-    const state = await loadSessionState(ctx, paramedicId);
-    if (!state || state.status === 'withdrawn' || state.sessionVersion !== sessionVersion) {
-      throw revoked();
-    }
-    if (state.status === 'suspended') {
-      throw new AppError(403, 'ACCOUNT_SUSPENDED', '정지된 계정이에요');
-    }
-
-    res.locals.auth = { paramedicId, status: state.status } satisfies ParamedicAuth;
+    res.locals.auth = await authenticateParamedic(ctx, scheme === 'Bearer' ? token : undefined);
     next();
   };
 }

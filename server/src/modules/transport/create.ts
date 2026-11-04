@@ -17,7 +17,8 @@ import {
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
-import { appendEvents, type EventRecord } from '../realtime/eventLog.js';
+import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
+import type { Realtime } from '../realtime/server.js';
 import { currentTeamId } from '../team/routes.js';
 import { loadTransport } from './view.js';
 
@@ -157,7 +158,8 @@ async function finishPrevious(
   };
 }
 
-type CreateOutcome = { kind: 'created' | 'repeated'; transportId: string };
+// 커밋한 뒤 실시간으로 보낼 것: 기록된 이벤트와 병원에 보낼 회차
+type CreateOutcome = { transportId: string; events: LoggedEvent[]; roundId: string | null };
 
 export async function createTransport(
   client: pg.PoolClient,
@@ -181,7 +183,8 @@ export async function createTransport(
     if (same[0].team_id !== teamId) {
       throw new AppError(400, 'VALIDATION_FAILED', '입력 형식이 맞지 않아요', { fields: ['id'] });
     }
-    return { kind: 'repeated', transportId: input.id };
+    // 이미 보낸 이벤트·요청은 다시 보내지 않는다
+    return { transportId: input.id, events: [], roundId: null };
   }
 
   const { rows: active } = await client.query<{
@@ -293,6 +296,11 @@ export async function createTransport(
     ],
   );
 
+  // 팀원 화면에 'OOO 님이 요청했어요'. 대원 이름이라 환자 정보가 아니다 (DAR-013: 누가 보냈는지는 실시간 이벤트에만)
+  const { rows: me } = await client.query<{ name: string }>(
+    'SELECT name FROM paramedic WHERE id = $1',
+    [paramedicId],
+  );
   events.push({
     room: '',
     name: 'transport.created',
@@ -302,18 +310,25 @@ export async function createTransport(
     payload: {
       transportId: input.id,
       status: to,
+      byName: me[0].name,
       fallbackReason: to === 'fallback' ? history.reason : null,
     },
   });
 
+  let roundId: string | null = null;
   if (to === 'requesting') {
     // 회차 1: 2분 응답 제한·5분 승인 유효는 DB 시각 기준으로 고정한다 (절대 규칙 6)
-    const { rows: round } = await client.query<{ id: string; respond_until: Date }>(
+    const { rows: round } = await client.query<{
+      id: string;
+      respond_until: Date;
+      approval_valid_until: Date;
+    }>(
       `INSERT INTO request_round (transport_id, round_no, kind, radius_km, sent_at, respond_until, approval_valid_until)
        VALUES ($1, 1, 'first', $2, now(), now() + interval '2 minutes', now() + interval '5 minutes')
-       RETURNING id, respond_until`,
+       RETURNING id, respond_until, approval_valid_until`,
       [input.id, input.radiusKm],
     );
+    roundId = round[0].id;
     for (const target of targets) {
       const { to: hreqStatus } = transitionHreq(null, 'SEND', { now, version: 1 });
       await client.query(
@@ -337,20 +352,26 @@ export async function createTransport(
         transportId: input.id,
         roundNo: 1,
         kind: 'first',
+        radiusKm: input.radiusKm,
         targetCount: targets.length,
         respondUntil: round[0].respond_until.toISOString(),
+        approvalValidUntil: round[0].approval_valid_until.toISOString(),
       },
     });
   }
 
-  await appendEvents(
+  const logged = await appendEvents(
     client,
     events.map((e) => ({ ...e, room: `team:${teamId}` })),
   );
-  return { kind: 'created', transportId: input.id };
+  return { transportId: input.id, events: logged, roundId };
 }
 
-export function transportRouter(pool: pg.Pool, guards: RequestHandler[]): Router {
+export function transportRouter(
+  pool: pg.Pool,
+  guards: RequestHandler[],
+  realtime?: Realtime,
+): Router {
   const router = Router();
 
   router.post('/transports', ...guards, async (req, res) => {
@@ -365,6 +386,9 @@ export function transportRouter(pool: pg.Pool, guards: RequestHandler[]): Router
     const outcome = await withTransaction(pool, (client) =>
       createTransport(client, paramedicId, input),
     );
+    // 커밋된 뒤에만 보낸다. 팀원 화면 갱신 + 병원 PC에 request.new (SFR-109·161)
+    realtime?.publish(outcome.events);
+    if (outcome.roundId) realtime?.deliverRound(outcome.roundId);
     res.status(201).json(await loadTransport(pool, outcome.transportId, paramedicId));
   });
 

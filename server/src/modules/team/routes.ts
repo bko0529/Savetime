@@ -11,6 +11,7 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { forgetSessionState, type AuthContext } from '../auth/session.js';
+import type { Realtime } from '../realtime/server.js';
 import { endDuty } from './endDuty.js';
 
 export const MAX_MEMBERS = 4;
@@ -106,7 +107,11 @@ export async function loadTeam(db: Db, teamId: string, meId: string) {
   };
 }
 
-export function teamRouter(ctx: AuthContext, guards: RequestHandler[]): Router {
+export function teamRouter(
+  ctx: AuthContext,
+  guards: RequestHandler[],
+  realtime?: Realtime,
+): Router {
   const router = Router();
 
   router.post('/teams', ...guards, async (req, res) => {
@@ -131,6 +136,8 @@ export function teamRouter(ctx: AuthContext, guards: RequestHandler[]): Router {
       }
       throw new Error('남은 팀 코드를 찾지 못했어요');
     });
+    // 이미 연결된 앱 소켓을 팀 방에 넣는다. 다시 연결할 때는 연결 단계에서 넣는다
+    await realtime?.joinTeam(paramedicId, String(team.id));
     res.status(201).json(team);
   });
 
@@ -162,6 +169,7 @@ export function teamRouter(ctx: AuthContext, guards: RequestHandler[]): Router {
       await addMember(client, teamId, paramedicId, input.role);
       return loadTeam(client, teamId, paramedicId);
     });
+    await realtime?.joinTeam(paramedicId, String(team.id));
     res.json(team);
   });
 
@@ -217,6 +225,7 @@ export function teamRouter(ctx: AuthContext, guards: RequestHandler[]): Router {
       if (result.teamId === null) throw notInTeam();
     });
     await forgetSessionState(ctx, paramedicId);
+    await realtime?.disconnectParamedic(paramedicId);
     res.status(204).end();
   });
 
