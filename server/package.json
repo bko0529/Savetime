@@ -13,8 +13,6 @@
     "migrate": "node --env-file-if-exists=.env ../node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m db/migrations",
     "collect:hospitals": "tsc -p . && node --env-file-if-exists=.env dist/scripts/collectHospitals.js",
     "account:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAccount.js",
-    "admin:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAdmin.js",
-    "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {
@@ -22,12 +20,10 @@
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
-    "socket.io-client": "^4.8.4",
     "supertest": "^7.3.1",
     "typescript": "^6.0.0"
   },
   "dependencies": {
-    "@socket.io/redis-adapter": "^8.3.0",
     "argon2": "^0.45.2",
     "bullmq": "^5.81.5",
     "express": "^5.3.0",
@@ -35,10 +31,8 @@
     "ioredis": "^5.11.1",
     "jose": "^6.2.15",
     "node-pg-migrate": "^9.0.0",
-    "otplib": "^13.6.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
-    "socket.io": "^4.8.4",
     "zod": "^4.6.7"
   }
 }
