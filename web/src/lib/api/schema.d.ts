@@ -983,7 +983,7 @@ export interface paths {
          *
          *     **요구사항**: SFR-116, SFR-147, COR-012
          *     **화면**: H-01 PC 등록
-         *     **오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED
+         *     **오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, ACCOUNT_SUSPENDED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED
          */
         post: operations["post_hw_pc_register"];
         delete?: never;
@@ -1001,9 +1001,11 @@ export interface paths {
         };
         /**
          * 현재 PC·병원 정보
-         * @description **요구사항**: SFR-116, SFR-146, SFR-139
+         * @description 병원 계정이 정지됐으면 ACCOUNT_SUSPENDED (등록 PC를 쓰는 모든 /hw API 공통, SFR-123).
+         *
+         *     **요구사항**: SFR-116, SFR-146, SFR-139
          *     **화면**: H-01 · 상단 바
-         *     **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED
+         *     **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED, ACCOUNT_SUSPENDED
          */
         get: operations["get_hw_session"];
         put?: never;
