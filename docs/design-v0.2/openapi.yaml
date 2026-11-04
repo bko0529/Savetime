@@ -2066,10 +2066,8 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 라이선스 키로 PC 등록
-      description: "성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict · Path=/,\
-        \ 실시간 연결에도 씀), 1년. PC_LIMIT_REACHED는 details.pcs[{id, name, lastUsedAt}]를\
-        \ 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds.\
-        \ 관리자 알림(pc_change) 발생.\n\n**요구사항**:\
+      description: "성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict),\
+        \ 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.\n\n**요구사항**:\
         \ SFR-116, SFR-147, COR-012  \n**화면**: H-01 PC 등록  \n**오류 코드**: INVALID_LICENSE,\
         \ LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
       operationId: post_hw_pc_register
@@ -3963,7 +3961,7 @@ components:
               properties: {}
               description: 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신
                 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED
-                → pcs[{id, name, lastUsedAt}], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName},
+                → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName},
                 OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED
                 → fields[]
               nullable: true

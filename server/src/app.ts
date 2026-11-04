@@ -7,8 +7,6 @@ import { serverNow } from './http/serverNow.js';
 import { requireApproved, requireParamedic } from './modules/auth/guards.js';
 import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
-import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
-import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
 import { teamRouter } from './modules/team/routes.js';
 import { geocodeRouter, type Geocoder } from './modules/transport/geocode.js';
@@ -25,23 +23,11 @@ export interface AppDeps {
   eta?: EtaLookup;
   // 카카오 키가 없으면 비워 둔다. 주소→좌표만 503이 된다
   geocoder?: Geocoder;
-  // 없으면 병원 웹 API(/hw)를 켜지 않는다 (관리자 서버·테스트)
-  hospitalWeb?: HospitalWebContext;
 }
 
-export function createApp({
-  logger,
-  healthChecks,
-  auth,
-  eta,
-  geocoder,
-  hospitalWeb,
-}: AppDeps): express.Express {
+export function createApp({ logger, healthChecks, auth, eta, geocoder }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
-  // Caddy·로드밸런서(사설망)를 거쳐 와도 req.ip 가 실제 접속 주소가 되게 한다.
-  // 안 하면 모든 병원이 프록시 주소 하나로 보여, 한 곳의 키 실패가 전체를 막는다 (SER-011)
-  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
   // 순서가 중요하다: 오류 응답에도 서버 시각이 붙도록 serverNow를 맨 앞에 둔다.
   app.use(serverNow);
@@ -58,9 +44,6 @@ export function createApp({
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
-  }
-  if (hospitalWeb) {
-    app.use('/api/v1', hospitalWebRouter(hospitalWeb));
   }
 
   app.use(notFoundHandler);
