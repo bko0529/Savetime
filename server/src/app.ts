@@ -18,6 +18,7 @@ import { geocodeRouter, type Geocoder } from './modules/transport/geocode.js';
 import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 import type { EtaLookup } from './modules/transport/eta.js';
 import { recommendRouter } from './modules/transport/recommend.js';
+import { confirmRouter } from './modules/transport/confirm.js';
 import { transportRouter } from './modules/transport/create.js';
 import type { Realtime } from './modules/realtime/server.js';
 
@@ -70,6 +71,7 @@ export function createApp({
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
     app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime));
+    app.use('/api/v1', confirmRouter(auth, approvedParamedic, realtime));
   }
   if (hospitalWeb) {
     app.use('/api/v1', hospitalWebRouter(hospitalWeb));
