@@ -5,6 +5,7 @@ import type pg from 'pg';
 import { ACTIVE, type CancelReason, type TransportStatus } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { endSessions, type AuthContext } from '../auth/session.js';
+import type { LoggedEvent } from '../realtime/eventLog.js';
 import { cancelTransport } from '../transport/cancel.js';
 
 export type LeaveReason = 'logout' | 'duty_end' | 'auto_14h' | 'withdrawal' | 'suspended';
@@ -22,6 +23,8 @@ export interface EndDutyResult {
   teamId: string | null;
   teamEnded: boolean;
   cancelledTransportId: string | null;
+  // 취소로 생긴 실시간 이벤트. 부르는 쪽이 커밋한 뒤 Realtime.publish로 보낸다
+  events: LoggedEvent[];
 }
 
 export async function endDuty(
@@ -39,6 +42,7 @@ export async function endDuty(
   const teamId = membership[0]?.team_id ?? null;
   let teamEnded = false;
   let cancelledTransportId: string | null = null;
+  let events: LoggedEvent[] = [];
 
   if (teamId !== null) {
     // 팀 행을 잠가 같은 팀의 퇴장을 한 줄로 세운다. 두 명이 동시에 나가도 '내가 마지막'을 정확히 한 명만 본다.
@@ -78,7 +82,7 @@ export async function endDuty(
     // 남은 팀원이 있으면 이송은 그 팀원이 이어간다
     if (remaining[0].count === '0') {
       if (transport) {
-        await cancelTransport(client, transport.id, CANCEL_REASON[reason]);
+        ({ events } = await cancelTransport(client, transport.id, CANCEL_REASON[reason]));
         cancelledTransportId = transport.id;
       }
       await client.query('UPDATE team SET ended_at = now() WHERE id = $1', [teamId]);
@@ -88,5 +92,5 @@ export async function endDuty(
 
   // 근무가 끝나면 로그인도 끝난다 (SFR-018·070, SER-007). 다른 폰에 남은 토큰도 함께 막힌다.
   await endSessions(ctx, client, paramedicId);
-  return { teamId, teamEnded, cancelledTransportId };
+  return { teamId, teamEnded, cancelledTransportId, events };
 }

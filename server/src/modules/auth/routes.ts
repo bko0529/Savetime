@@ -194,9 +194,11 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
   router.post('/auth/logout', requireParamedic(ctx), async (req, res) => {
     const { paramedicId } = paramedicAuth(res);
     const confirmCancelActive = req.query.confirmCancelActive === 'true';
-    await withTransaction(ctx.pool, (client) =>
+    const { events } = await withTransaction(ctx.pool, (client) =>
       endDuty(client, ctx, paramedicId, 'logout', confirmCancelActive),
     );
+    // 마지막 1명이라 이송이 취소됐으면 병원 웹에도 '이송 취소'를 알린다 (커밋 뒤)
+    realtime?.publish(events);
     // 커밋 전에 지운 캐시에 그사이 옛 값이 다시 들어갔을 수 있어 한 번 더 지운다
     await forgetSessionState(ctx, paramedicId);
     // 이 대원의 실시간 연결도 끊는다. 토큰이 막혀서 다시 붙지 못한다 (SER-016)
@@ -214,9 +216,10 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
   router.delete('/me', requireParamedic(ctx), async (req, res) => {
     const { paramedicId } = paramedicAuth(res);
     const confirmCancelActive = req.query.confirmCancelActive === 'true';
-    await withTransaction(ctx.pool, (client) =>
+    const events = await withTransaction(ctx.pool, (client) =>
       withdrawParamedic(client, ctx, paramedicId, confirmCancelActive),
     );
+    realtime?.publish(events);
     await forgetSessionState(ctx, paramedicId);
     // 이 대원의 실시간 연결도 끊는다. 토큰이 막혀서 다시 붙지 못한다 (SER-016)
     await realtime?.disconnectParamedic(paramedicId);

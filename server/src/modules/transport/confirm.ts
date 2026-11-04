@@ -9,12 +9,10 @@ import { withTransaction } from '../../db/transaction.js';
 import {
   CASCADE,
   TARGET_STATES,
-  TransitionError,
   transitionHreq,
   transitionTransport,
   type CloseReason,
   type HreqStatus,
-  type TransportStatus,
 } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
@@ -22,9 +20,9 @@ import { paramedicAuth } from '../auth/guards.js';
 import type { AuthContext } from '../auth/session.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
+import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import { loadTransport } from './view.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // 앱이 재시도하는 동안만 필요하다. 5분 판정이 끝난 뒤에는 의미가 없어 10분 뒤 지운다
 const FIRST_ARRIVAL_SECONDS = 600;
 
@@ -34,8 +32,6 @@ const bodySchema = z.object({
   version: z.number().int().optional(),
 });
 const keySchema = z.string().min(1).max(64);
-
-const notFound = () => new AppError(404, 'NOT_FOUND', '이송 건을 찾을 수 없어요');
 
 interface ConfirmInput {
   transportId: string;
@@ -57,22 +53,8 @@ export async function confirmTransport(
 ): Promise<ConfirmOutcome> {
   const { transportId, paramedicId, firstArrival } = input;
 
-  // 내 팀 이송 건만. 남의 것은 있는지조차 알리지 않는다 (SER-010). 이송 건 행부터 잠근다 (stateMachine.ts 규칙 5)
-  const { rows: transports } = await client.query<{
-    status: TransportStatus;
-    version: number;
-    team_id: string;
-    location_consent: boolean;
-  }>(
-    `SELECT t.status, t.version, t.team_id, t.location_consent
-       FROM transport t
-       JOIN team_member tm ON tm.team_id = t.team_id AND tm.left_at IS NULL AND tm.paramedic_id = $2
-      WHERE t.id = $1
-      FOR UPDATE OF t`,
-    [transportId, paramedicId],
-  );
-  const transport = transports[0];
-  if (!transport) throw notFound();
+  // 내 팀 이송 건만 (SER-010). 이송 건 행부터 잠근다 (stateMachine.ts 규칙 5)
+  const transport = await lockMyTransport(client, transportId, paramedicId);
 
   // 같은 키로 이미 확정했으면 처음 결과를 그대로 (앱의 '확정 중' 재시도, SFR-111). 잠근 뒤에 봐야 동시 재시도도 한 번만
   const { rows: done } = await client.query<{ transport_id: string; response: unknown }>(
@@ -236,8 +218,7 @@ export function confirmRouter(
   const { pool, redis } = auth;
 
   router.post('/transports/:transportId/confirm', ...guards, async (req, res) => {
-    const transportId = String(req.params.transportId);
-    if (!UUID.test(transportId)) throw notFound();
+    const transportId = transportIdParam(req.params.transportId);
     const key = keySchema.safeParse(req.get('Idempotency-Key'));
     if (!key.success) {
       throw new AppError(400, 'VALIDATION_FAILED', '입력 형식이 맞지 않아요', {
@@ -259,8 +240,8 @@ export function confirmRouter(
       // 판정 기준만 조금 늦어진다. 확정 자체를 막지는 않는다
     }
 
-    try {
-      const outcome = await withTransaction(pool, (client) =>
+    const outcome = await withCurrentOnBlock(pool, transportId, paramedicId, () =>
+      withTransaction(pool, (client) =>
         confirmTransport(client, {
           transportId,
           paramedicId,
@@ -269,20 +250,11 @@ export function confirmRouter(
           clientVersion: input.version,
           firstArrival,
         }),
-      );
-      // 커밋된 뒤에만 보낸다
-      realtime?.publish(outcome.events);
-      res.json(outcome.body);
-    } catch (err) {
-      // 막힌 이유와 함께 최신 상태를 돌려줘 앱이 바로 화면을 바꾸게 한다 (SFR-160, 오류 코드표 details.current)
-      if (err instanceof TransitionError) {
-        const current = await loadTransport(pool, transportId, paramedicId);
-        throw new AppError(err.code === 'VERSION_REQUIRED' ? 400 : 409, err.code, err.message, {
-          current,
-        });
-      }
-      throw err;
-    }
+      ),
+    );
+    // 커밋된 뒤에만 보낸다
+    realtime?.publish(outcome.events);
+    res.json(outcome.body);
   });
 
   return router;
