@@ -2289,11 +2289,18 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 잠시 요청 중지 / 다시 받기
-      description: "중지하면 대기 중인 요청은 '요청 중지'로 자동 거절(통계 제외, 제외 병원 아님). 병원 전체 PC에 hospital.pause_changed.\
-        \ 2시간째 pause_reminder.\n\n**요구사항**: SFR-139  \n**화면**: H-02 탭  \n**상태 전이 사건**:\
+      description: "병원 전체에 적용(병원 행 FOR UPDATE). 중지하면 응답 마감(2분) 전인 대기 요청은 '요청 중지'로 자동 거절(reason\
+        \ paused, 통계 제외, 제외 병원 아님) — 대원 앱에 request.rejected{reason: paused}, 회차에 남은 요청이 없으면\
+        \ 역방향 연쇄로 예비 추천. 이미 승인한 요청은 그대로. 병원 전체 PC에 hospital.pause_changed{paused, byPcName,\
+        \ byName, pausedAt}. 이미 같은 상태면 아무것도 바꾸지 않고 204. 중지 2시간째(paused_at 기준, DB now())\
+        \ 1분 주기 작업이 hospital.pause_reminder를 같은 중지에 한 번만. 근무 전 PC는 SHIFT_REQUIRED.\n\n**요구사항**:\
+        \ SFR-139  \n**화면**: H-02 탭  \n**오류 코드**: SHIFT_REQUIRED, VALIDATION_FAILED  \n**상태 전이 사건**:\
         \ PAUSE_AUTO_REJECT"
       operationId: put_hw_pause
       security: *id013
+      x-error-codes:
+      - SHIFT_REQUIRED
+      - VALIDATION_FAILED
       x-state-events:
       - PAUSE_AUTO_REJECT
       requestBody:

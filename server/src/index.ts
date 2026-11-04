@@ -16,6 +16,7 @@ import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collec
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
+import { PAUSE_REMIND_EVERY_MS, remindLongPauses } from './modules/hospital-web/pause.js';
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
@@ -162,6 +163,16 @@ scheduledJobs.push({
   everyMs: AUTO_END_EVERY_MS,
   run: async () => {
     const events = await endInactiveTransports(pool, logger);
+    realtime?.publish(events);
+  },
+});
+
+// 병원 요청 중지 2시간째 알림 (SFR-139)
+scheduledJobs.push({
+  name: 'hospital-pause-reminder',
+  everyMs: PAUSE_REMIND_EVERY_MS,
+  run: async () => {
+    const events = await remindLongPauses(pool, redis, logger);
     realtime?.publish(events);
   },
 });

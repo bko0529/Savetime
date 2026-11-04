@@ -45,7 +45,14 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
       <p className="text-xl">
         <span className="font-bold">{hospital?.name}</span> · {pc?.name}
       </p>
-      <ShiftScreen shift={shift ?? null} createSocket={createSocket} />
+      <ShiftScreen
+        shift={shift ?? null}
+        pause={{
+          paused: session.data.paused ?? false,
+          pausedAt: session.data.pausedAt ?? null,
+        }}
+        createSocket={createSocket}
+      />
     </div>
   );
 }

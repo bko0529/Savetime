@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { pino } from 'pino';
 import request from 'supertest';
 import { createApp } from '../app.js';
+import type { HospitalWebContext } from '../modules/hospital-web/pcAuth.js';
 import { addHospitalWithKey, WEB_ORIGIN, withHospitalWeb } from './hospitalWeb.js';
 
 export interface RequestHarness {
@@ -11,6 +12,8 @@ export interface RequestHarness {
   registerPc: (pcName: string) => Promise<string>;
   get: (path: string, cookie: string) => request.Test;
   post: (path: string, cookie: string, body?: object) => request.Test;
+  put: (path: string, cookie: string, body?: object) => request.Test;
+  redis: HospitalWebContext['redis'];
 }
 
 export async function withRequestApp(use: (h: RequestHarness) => Promise<void>): Promise<void> {
@@ -23,6 +26,7 @@ export async function withRequestApp(use: (h: RequestHarness) => Promise<void>):
     const { hospitalId, key } = await addHospitalWithKey(hospitalWeb.pool);
     await use({
       pool: hospitalWeb.pool,
+      redis: hospitalWeb.redis,
       hospitalId,
       registerPc: async (pcName) => {
         const res = await request(app)
@@ -39,6 +43,12 @@ export async function withRequestApp(use: (h: RequestHarness) => Promise<void>):
       post: (path, cookie, body = {}) =>
         request(app)
           .post(`/api/v1${path}`)
+          .set('Origin', WEB_ORIGIN)
+          .set('Cookie', cookie)
+          .send(body),
+      put: (path, cookie, body = {}) =>
+        request(app)
+          .put(`/api/v1${path}`)
           .set('Origin', WEB_ORIGIN)
           .set('Cookie', cookie)
           .send(body),
