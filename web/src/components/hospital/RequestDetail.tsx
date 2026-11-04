@@ -77,6 +77,10 @@ export function RequestDetail({
             !!detail.data.respondUntil &&
             Date.parse(detail.data.respondUntil) > nowMs
           }
+          canCancelApproval={
+            !detail.isError &&
+            (detail.data.status === 'approved' || detail.data.status === 'confirmed')
+          }
         />
       )}
     </section>
