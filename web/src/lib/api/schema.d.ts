@@ -1168,11 +1168,11 @@ export interface paths {
         put?: never;
         /**
          * 승인 (+메모)
-         * @description 두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName. 대원 앱에 request.approved, 같은 병원 다른 PC에 request.changed.
+         * @description 두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName·status·version. 응답자 이름은 그 PC의 진행 중 근무 담당자라서 근무 전 PC는 SHIFT_REQUIRED. 우리 병원 유효 승인 수 ≥ 응급실 가용 병상이면 OVER_APPROVAL_CONFIRM_REQUIRED + details.validApprovals·erAvail (병상 정보가 없으면 막지 않음). 대원 앱에 request.approved{firstApproval}, 같은 병원 PC에 request.changed{byName, pcName}.
          *
          *     **요구사항**: SFR-119, SFR-140, SFR-154, SFR-153, SFR-160
          *     **화면**: H-02 요청 상세
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED
          *     **상태 전이 사건**: APPROVE
          */
         post: operations["post_hw_requests__requestId__approve"];
@@ -1193,11 +1193,11 @@ export interface paths {
         put?: never;
         /**
          * 거절 (사유 필수)
-         * @description 제외 병원에 추가, 통계에 들어감.
+         * @description 제외 병원에 추가, 통계에 들어감. etc는 etcText까지 있어야 사유로 본다 (없으면 REASON_REQUIRED). 근무 전 PC는 SHIFT_REQUIRED. 이번 회차에 대기·유효 승인이 하나도 안 남으면 이송 건은 예비 추천(NO_OPEN_REQUEST, all_rejected). 대원 앱에 request.rejected, 같은 병원 PC에 request.changed.
          *
          *     **요구사항**: SFR-119, SFR-126
          *     **화면**: H-02 거절 사유
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, REASON_REQUIRED
          *     **상태 전이 사건**: REJECT
          */
         post: operations["post_hw_requests__requestId__reject"];
