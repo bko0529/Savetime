@@ -87,9 +87,13 @@ interface PcRow {
   hospital_id: string;
   hospital_name: string;
   released: boolean;
+  account_active: boolean;
   unused_too_long: boolean;
   license_days_left: number | null;
 }
+
+export const hospitalSuspended = () =>
+  new AppError(403, 'ACCOUNT_SUSPENDED', '병원 계정이 정지됐어요. 관리자에게 문의하세요');
 
 const notRegistered = () =>
   new AppError(401, 'PC_NOT_REGISTERED', '등록되지 않은 PC예요. 라이선스 키를 입력해 주세요');
@@ -103,7 +107,7 @@ export function requireHospitalPc(ctx: HospitalWebContext): RequestHandler {
 
     const { rows } = await ctx.pool.query<PcRow>(
       `SELECT pc.id AS pc_id, pc.name AS pc_name, h.id AS hospital_id, h.name AS hospital_name,
-              pc.released_at IS NOT NULL AS released,
+              pc.released_at IS NOT NULL AS released, h.account_active,
               pc.last_used_at < now() - make_interval(days => $2) AS unused_too_long,
               (SELECT ceil(extract(epoch FROM max(lk.expires_at) - now()) / 86400)::int
                  FROM license_key lk
@@ -120,6 +124,8 @@ export function requireHospitalPc(ctx: HospitalWebContext): RequestHandler {
       await ctx.pool.query('UPDATE hospital_pc SET released_at = now() WHERE id = $1', [row.pc_id]);
       throw notRegistered();
     }
+    // 관리자가 병원 계정을 정지하면 그 병원의 모든 PC 가 다음 요청부터 바로 막힌다 (SFR-123)
+    if (!row.account_active) throw hospitalSuspended();
     // 병원의 키가 모두 만료·폐기됐으면 PC 등록은 남아 있어도 쓸 수 없다 (SFR-146)
     if (row.license_days_left === null) {
       throw new AppError(403, 'LICENSE_EXPIRED', '라이선스 키 기간이 끝났어요');

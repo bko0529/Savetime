@@ -10,6 +10,7 @@ import {
   checkOrigin,
   hashPcToken,
   hospitalPc,
+  hospitalSuspended,
   newPcToken,
   requireHospitalPc,
   setPcCookie,
@@ -74,9 +75,12 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       hospital_id: string;
       revoked: boolean;
       expired: boolean;
+      account_active: boolean;
     }>(
-      `SELECT hospital_id, revoked_at IS NOT NULL AS revoked, expires_at <= now() AS expired
-         FROM license_key WHERE key_hash = $1`,
+      `SELECT lk.hospital_id, lk.revoked_at IS NOT NULL AS revoked, lk.expires_at <= now() AS expired,
+              h.account_active
+         FROM license_key lk JOIN hospital h ON h.id = lk.hospital_id
+        WHERE lk.key_hash = $1`,
       [hashLicenseKey(input.licenseKey)],
     );
     const key = keys[0];
@@ -87,6 +91,8 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     }
     // 맞는 키지만 기간이 끝남: 틀린 입력이 아니라서 실패로 세지 않는다
     if (key.expired) throw new AppError(403, 'LICENSE_EXPIRED', '라이선스 키 기간이 끝났어요');
+    // 맞는 키지만 병원 계정이 정지됨: 역시 실패로 세지 않는다 (SFR-123)
+    if (!key.account_active) throw hospitalSuspended();
     await ctx.redis.del(failKey(ip));
 
     // 같은 병원 PC 등록을 한 줄로 세운다 (병원 행 FOR UPDATE).

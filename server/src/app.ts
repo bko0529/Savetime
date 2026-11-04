@@ -7,7 +7,9 @@ import { serverNow } from './http/serverNow.js';
 import { requireApproved, requireParamedic } from './modules/auth/guards.js';
 import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
-import { adminAuthRouter, type AdminContext } from './modules/admin/auth.js';
+import { auditRouter } from './modules/admin/audit.js';
+import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
+import { adminHospitalRouter } from './modules/admin/hospitals.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
@@ -73,7 +75,12 @@ export function createApp({
     app.use('/api/v1', hospitalWebRouter(hospitalWeb));
   }
   if (admin) {
+    // adminAuthRouter 가 /admin 전체에 Origin 검사를 건다. 그래서 로그인 라우터를 맨 앞에 둔다
     app.use('/api/v1', adminAuthRouter(admin));
+    // 로그인 말고는 모두 관리자 토큰이 있어야 한다 (SER-010)
+    const adminOnly = requireAdmin(admin);
+    app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly));
+    app.use('/api/v1', auditRouter(admin.pool, adminOnly));
   }
 
   app.use(notFoundHandler);
