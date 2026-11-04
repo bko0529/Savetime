@@ -1,4 +1,4 @@
-// SFR-032 전화 확인 시작 · SFR-034 전화 확인 결과 기록을 임시 DB와 실제 Redis로 확인한다.
+// SFR-032 전화 확인 시작 · SFR-034 결과 기록 · SFR-074 거절 시 다음 후보 · SFR-075 결과 미선택을 임시 DB와 실제 Redis로 확인한다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type pg from 'pg';
@@ -220,9 +220,8 @@ test('결과: 대상 병원이 다르거나, 같은 결과를 두 번 보내거�
     assert.equal(wrong.status, 400);
     assert.equal(wrong.body.error.code, 'VALIDATION_FAILED');
 
-    // 거절·결과 미선택은 아직 받지 않는다 (SFR-074·075에서)
-    const rejected = await result(ctx, s, { hospitalId: e, result: 'rejected', version: 2 });
-    assert.equal(rejected.status, 400);
+    const unknown = await result(ctx, s, { hospitalId: e, result: 'maybe', version: 2 });
+    assert.equal(unknown.status, 400);
 
     // 팀원 두 명이 같이 '수용 확정'을 눌러도 한 번만 기록된다 (버전)
     const first = await result(ctx, s, { hospitalId: e, result: 'accepted', version: 2 });
@@ -234,5 +233,127 @@ test('결과: 대상 병원이 다르거나, 같은 결과를 두 번 보내거�
       [s.transportId],
     );
     assert.equal(rows[0].n, 1);
+  });
+});
+
+// B·C병원에 응급실 빈 병상을 넣어 추천 1·2순위로 만든다. D병원은 병상 정보가 없어 추천 카드에 안 나온다
+async function withBeds(pool: pg.Pool): Promise<Record<string, number>> {
+  const { rows } = await pool.query<{ id: string; name: string }>(
+    `SELECT id, name FROM hospital WHERE name IN ('B병원', 'C병원', 'D병원')`,
+  );
+  const ids = Object.fromEntries(rows.map((r) => [r.name, Number(r.id)]));
+  for (const name of ['B병원', 'C병원']) {
+    await pool.query(
+      `INSERT INTO bed_current (hospital_id, er_avail, er_total, source_time) VALUES ($1, 3, 10, now())`,
+      [ids[name]],
+    );
+  }
+  return ids;
+}
+
+async function excludedOf(pool: pg.Pool, transportId: string) {
+  const { rows } = await pool.query(
+    'SELECT hospital_id, reason FROM excluded_hospital WHERE transport_id = $1 ORDER BY hospital_id',
+    [transportId],
+  );
+  return rows.map((r) => [Number(r.hospital_id), r.reason]);
+}
+
+test('거절하면 제외 병원에 넣고 다음 순위 병원으로 전화 확인을 이어 간다 (SFR-074, A16·A17)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const h = await withBeds(ctx.pool);
+    await toFallback(ctx.pool, s);
+    await start(ctx, s, { hospitalId: h['B병원'], version: 1 });
+    const since = await lastSeq(ctx.pool);
+
+    // 1순위 B 거절 → 2순위 C
+    const first = await result(ctx, s, { hospitalId: h['B병원'], result: 'rejected', version: 2 });
+    assert.equal(first.status, 201);
+    assert.equal(first.body.status, 'phone_check');
+    assert.equal(first.body.phoneTarget.hospitalId, h['C병원']);
+    assert.deepEqual(await excludedOf(ctx.pool, s.transportId), [[h['B병원'], 'phone_rejected']]);
+    const events = await eventsSince(ctx.pool, since);
+    assert.deepEqual(
+      events.map((x) => x.name),
+      ['transport.status', 'transport.phone_target'],
+    );
+    assert.equal(events[0].payload.event, 'PHONE_REJECTED_NEXT');
+    assert.equal(events[1].payload.hospitalId, h['C병원']);
+
+    // 2순위 C도 거절 → 추천 후보가 없어 예비 추천 (D는 병상 정보 없음 묶음이라 다음 후보가 아님)
+    const last = await result(ctx, s, { hospitalId: h['C병원'], result: 'rejected', version: 3 });
+    assert.equal(last.status, 201);
+    assert.equal(last.body.status, 'fallback');
+    assert.equal(last.body.phoneTarget, null);
+    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [s.transportId]);
+    assert.equal(t.rows[0].fallback_reason, 'phone_rejected_last');
+
+    // 추천 목록에서도 B·C가 빠지고 반경 넓히기 안내가 나온다 (SFR-029)
+    const rec = await request(appFor(ctx))
+      .get(`/api/v1/transports/${s.transportId}/recommendations`)
+      .set('Authorization', `Bearer ${s.kim}`);
+    assert.equal(rec.status, 200);
+    assert.deepEqual(rec.body.items, []);
+    assert.equal(rec.body.emptyGuide, 'expand_radius');
+
+    // 병원 요청은 건드리지 않고, 결과는 두 번 다 기록된다
+    const { rows } = await ctx.pool.query(
+      'SELECT result FROM phone_check WHERE transport_id = $1 ORDER BY id',
+      [s.transportId],
+    );
+    assert.deepEqual(rows.map((r) => r.result), ['rejected', 'rejected']);
+  });
+});
+
+test('요청이 열린 채로 마지막 후보를 거절하면 요청 중으로 돌아간다 (A17, D-127)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const e = await addHospital(ctx.pool, 'E병원');
+    await start(ctx, s, { hospitalId: e, version: 1 });
+    const before = await requestStates(ctx.pool);
+
+    const res = await result(ctx, s, { hospitalId: e, result: 'rejected', version: 2 });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.status, 'requesting');
+    assert.deepEqual(await requestStates(ctx.pool), before);
+    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [s.transportId]);
+    assert.equal(t.rows[0].fallback_reason, null);
+  });
+});
+
+test('결과를 고르지 않고 닫으면 예비 추천으로, 제외하지 않아 다시 고를 수 있다 (SFR-075, A18)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const h = await withBeds(ctx.pool);
+    await toFallback(ctx.pool, s);
+    await start(ctx, s, { hospitalId: h['B병원'], version: 1 });
+
+    const res = await result(ctx, s, { hospitalId: h['B병원'], result: 'dismissed', version: 2 });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.status, 'fallback');
+    assert.equal(res.body.phoneTarget, null);
+    assert.deepEqual(await excludedOf(ctx.pool, s.transportId), []);
+    const { rows: history } = await ctx.pool.query(
+      `SELECT event, reason FROM transport_status_history WHERE transport_id = $1 ORDER BY id DESC LIMIT 1`,
+      [s.transportId],
+    );
+    assert.deepEqual(history, [{ event: 'PHONE_DISMISSED', reason: 'phone_dismissed' }]);
+
+    // 같은 병원을 다시 누르면 전화 확인 화면이 다시 열린다
+    const again = await start(ctx, s, { hospitalId: h['B병원'], version: 3 });
+    assert.equal(again.status, 200);
+    assert.equal(again.body.status, 'phone_check');
+  });
+});
+
+test('요청이 열린 채로 닫으면 요청 중으로 돌아간다 (A18)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const e = await addHospital(ctx.pool, 'E병원');
+    await start(ctx, s, { hospitalId: e, version: 1 });
+    const res = await result(ctx, s, { hospitalId: e, result: 'dismissed', version: 2 }, s.lee);
+    assert.equal(res.status, 201);
+    assert.equal(res.body.status, 'requesting');
   });
 });
