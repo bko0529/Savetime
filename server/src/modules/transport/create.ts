@@ -20,6 +20,8 @@ import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { currentTeamId } from '../team/routes.js';
+import type { EtaLookup } from './eta.js';
+import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
 // 요청용 도착 예상 시간 초안: 직선거리 ÷ 평균 40km/h (SFR-129). 길찾기 갱신은 뒤에 붙인다.
@@ -372,6 +374,8 @@ export function transportRouter(
   pool: pg.Pool,
   guards: RequestHandler[],
   realtime?: Realtime,
+  // 카카오 키가 없으면 비어 있다. 그러면 직선거리 추정값만 쓴다 (SFR-129)
+  eta?: EtaLookup,
 ): Router {
   const router = Router();
 
@@ -389,7 +393,16 @@ export function transportRouter(
     );
     // 커밋된 뒤에만 보낸다. 팀원 화면 갱신 + 병원 PC에 request.new (SFR-109·161) + 2분 타이머 (SFR-124)
     realtime?.publish(outcome.events);
-    if (outcome.roundId) realtime?.startRound(outcome.roundId);
+    if (outcome.roundId) {
+      realtime?.startRound(outcome.roundId);
+      // 10km 안 병원은 길찾기로 도착 예상을 바꾼다. 느릴 수 있어 응답을 기다리게 하지 않는다.
+      // 실패하면 추정값이 그대로 남을 뿐이라(SFR-129) 오류를 밖으로 내지 않는다
+      if (eta) {
+        refineRoundEtas(pool, eta, outcome.roundId)
+          .then((events) => realtime?.publish(events))
+          .catch(() => {});
+      }
+    }
     res.status(201).json(await loadTransport(pool, outcome.transportId, paramedicId));
   });
 

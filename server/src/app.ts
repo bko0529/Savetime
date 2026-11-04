@@ -71,7 +71,7 @@ export function createApp({
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
-    app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime));
+    app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime, eta));
     app.use('/api/v1', confirmRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
   }
