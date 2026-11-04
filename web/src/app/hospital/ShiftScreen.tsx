@@ -7,9 +7,11 @@ import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
+import { IncomingList } from '@/components/hospital/IncomingList';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
+import { useIncoming } from './useIncoming';
 import { useNewRequests } from './useNewRequests';
 
 type ShiftBody = ApiPaths['/hw/shifts']['post']['requestBody']['content']['application/json'];
@@ -85,6 +87,7 @@ export function ShiftScreen({
   const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
+  const arriving = useIncoming(shift ? socket : null);
   const [startedHere, setStartedHere] = useState(false);
   // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
   // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
@@ -157,6 +160,18 @@ export function ShiftScreen({
               onClose={() => setSelectedId(null)}
             />
           )}
+
+          <h2 className="text-2xl font-bold">도착 예정</h2>
+          {arriving.isError && (
+            <p role="alert" className="text-xl font-bold text-destructive">
+              {errorText(arriving.error)}
+            </p>
+          )}
+          <IncomingList
+            items={arriving.items}
+            notices={arriving.notices}
+            onDismiss={arriving.dismiss}
+          />
         </>
       )}
     </div>

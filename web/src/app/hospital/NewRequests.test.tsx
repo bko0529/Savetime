@@ -46,6 +46,7 @@ beforeEach(async () => {
     'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
     'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
     [LIST]: list(),
+    'GET /hw/incoming': { status: 200, body: { items: [] } },
   });
   renderWithQuery(<HospitalHome createSocket={() => socket.asSocket()} />);
   await screen.findByText('알림 켜기를 다시 누르세요.');
