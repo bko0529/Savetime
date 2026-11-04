@@ -20,15 +20,24 @@ async function query<T extends pg.QueryResultRow>(url: string, sql: string): Pro
   }
 }
 
+// 연결은 이 함수가 만들고 끝까지 닫는다. node-pg-migrate에 주소만 넘기면 끝날 때 닫힘을 기다리지 않아서,
+// 연결이 남은 채로 임시 DB를 강제로 지우면 끊긴 연결의 오류가 테스트를 가끔 실패시킨다.
 async function migrate(url: string, direction: 'up' | 'down', count?: number): Promise<void> {
-  await runner({
-    databaseUrl: url,
-    dir: MIGRATIONS_DIR,
-    direction,
-    count,
-    migrationsTable: 'pgmigrations',
-    log: () => {},
-  });
+  const client = new pg.Client({ connectionString: url });
+  client.on('error', () => {});
+  await client.connect();
+  try {
+    await runner({
+      dbClient: client,
+      dir: MIGRATIONS_DIR,
+      direction,
+      count,
+      migrationsTable: 'pgmigrations',
+      log: () => {},
+    });
+  } finally {
+    await client.end();
+  }
 }
 
 // 테이블·컬럼·제약·인덱스를 문자열로 뽑아 정렬한다. 컬럼 순서는 달라도 괜찮다.
