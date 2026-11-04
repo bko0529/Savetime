@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+body{margin:0;background:oklch(0.93 0.004 250);color:oklch(0.13 0 0);font-family:'Pretendard Variable','Pretendard','Malgun Gothic',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.45 0.2 260)}a:hover{color:oklch(0.35 0.2 260)}
+*{box-sizing:border-box}
+</style>
+</helmet>
+
+<div style="padding:64px;display:flex;flex-direction:column;gap:72px;width:max-content">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <span style="font-size:16px;font-weight:700;color:oklch(0.4 0 0)">bko0529/Savetime · web/</span>
+    <h1 style="margin:0;font-size:44px;font-weight:800;letter-spacing:-0.03em">세이브타임 화면 흐름</h1>
+    <p style="margin:0;font-size:18px;color:oklch(0.4 0 0)">현재 구조를 유지하고 스타일을 다듬은 시안입니다. 각 화면은 <a href="SavetimeWeb.dc.html">SavetimeWeb</a>에서 직접 눌러 볼 수 있어요.</p>
+  </header>
+
+  <sc-for list="{{ flows }}" as="f" hint-placeholder-count="3">
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:16px">
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">{{ f.title }}</h2>
+        <span style="font-size:17px;color:oklch(0.4 0 0)">{{ f.about }}</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:20px">
+        <sc-for list="{{ f.steps }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex;align-items:flex-start;gap:20px">
+            <sc-if value="{{ s.arrow }}" hint-placeholder-val="{{ false }}">
+              <div style="height:360px;display:flex;align-items:center;font-size:32px;color:oklch(0.55 0 0);font-weight:300">→</div>
+            </sc-if>
+            <figure style="margin:0;display:flex;flex-direction:column;gap:12px;width:576px">
+              <div style="width:576px;height:360px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 2px oklch(0.13 0 0 / 8%),0 8px 24px oklch(0.13 0 0 / 8%);position:relative">
+                <div style="position:absolute;top:0;left:0;width:1440px;height:900px;transform:scale(0.4);transform-origin:0 0;overflow:hidden;display:flex;flex-direction:column;background:oklch(0.965 0.004 250)">
+                  <dc-import name="SavetimeWeb" hide-nav="{{ true }}" screen="{{ s.screen }}" sel="{{ s.sel }}" overlay="{{ s.overlay }}" reject="{{ s.reject }}" reason="{{ s.reason }}" pc-full="{{ s.pcFull }}" issued="{{ s.issued }}" disconnected="{{ s.disconnected }}" alarm-off="{{ s.alarmOff }}" hint-size="1440px,900px"></dc-import>
+                </div>
+              </div>
+              <figcaption style="display:flex;gap:12px;align-items:flex-start">
+                <span style="flex:none;width:30px;height:30px;border-radius:50%;background:{{ f.color }};color:#fff;display:grid;place-items:center;font-size:15px;font-weight:800">{{ s.n }}</span>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:19px;font-weight:800">{{ s.title }}</span>
+                  <span style="font-size:15px;color:oklch(0.4 0 0);line-height:1.45">{{ s.desc }}</span>
+                </div>
+              </figcaption>
+            </figure>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const RED = 'oklch(0.53 0.22 27)', INK = 'oklch(0.205 0 0)', GRY = 'oklch(0.5 0 0)';
+const mk = (steps) => steps.map((s, i) => ({ sel: 1042, screen: 'shift', overlay: false, reject: false, reason: null, pcFull: false, issued: false, disconnected: false, alarmOff: false, ...s, n: i + 1, arrow: i > 0 }));
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      flows: [
+        { title: '병원 웹', about: '응급실 데스크 PC · 등록부터 응답까지', color: RED, steps: mk([
+          { screen: 'register', title: 'PC 등록', desc: '라이선스 키와 PC 이름만 입력해요.' },
+          { screen: 'register', pcFull: true, title: 'PC 3대가 가득 찬 경우', desc: '바꿀 PC를 골라 다시 등록해요.' },
+          { title: '근무 화면', desc: '요청 목록·상세·도착 예정을 한 화면에서 봐요.' },
+          { overlay: true, title: '새 요청 알림', desc: '확인을 누를 때까지 화면을 덮어요.' },
+          { sel: 1043, title: '요청 상세 · 승인', desc: '이상 수치를 강조하고 승인·거절을 크게 둬요.' },
+          { sel: 1043, reject: true, reason: 'icu', title: '거절 사유', desc: '사유를 골라야 거절을 보낼 수 있어요.' },
+        ]) },
+        { title: '병원 웹 · 예외 상태', about: '근무 중 놓치면 안 되는 상태', color: GRY, steps: mk([
+          { alarmOff: true, title: '알림 꺼짐', desc: '새로고침 뒤에는 알림 켜기를 다시 눌러야 해요.' },
+          { disconnected: true, title: '연결 끊김', desc: '맨 위에 빨간 띠를 고정해요.' },
+        ]) },
+        { title: '관리자 웹', about: '로그인 → 병원 계정 발급 → 기록 확인', color: INK, steps: mk([
+          { screen: 'adminLogin', title: '로그인', desc: '아이디·비밀번호·OTP 6자리.' },
+          { screen: 'adminHome', title: '관리자 홈', desc: '계정 · 모니터링 · 병원 관리.' },
+          { screen: 'hospitals', title: '병원 관리', desc: '병원을 찾아 계정을 발급하거나 정지해요.' },
+          { screen: 'hospitals', issued: true, title: '라이선스 키 발급', desc: '키 전체는 이 창에서 한 번만 보여요.' },
+          { screen: 'monitoring', title: '모니터링', desc: '고칠 수 없는 관리자 작업 이력.' },
+        ]) },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
