@@ -84,6 +84,29 @@ describe('승인 (SFR-119)', () => {
     expect(await screen.findByText('응답 시간(2분)이 지났어요')).toBeTruthy();
   });
 
+  it('병상보다 많이 승인하면 경고하고, 그래도 승인을 누르면 확인 표시와 함께 다시 보낸다 (SFR-154)', async () => {
+    const server = open({
+      [APPROVE]: {
+        status: 409,
+        body: apiError('OVER_APPROVAL_CONFIRM_REQUIRED', { validApprovals: 2, erAvail: 1 }),
+      },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '승인' }));
+    expect(
+      await screen.findByText(
+        '지금 유효한 승인 2건 · 응급실 가용 병상 1개예요. 병상보다 많이 승인해요',
+      ),
+    ).toBeTruthy();
+
+    server.set(APPROVE, {
+      status: 200,
+      body: { status: 'approved', respondedBy: '박서연', version: 4 },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '그래도 승인' }));
+    await waitFor(() => expect(server.callsTo(APPROVE)).toHaveLength(2));
+    expect(server.callsTo(APPROVE)[1].body).toEqual({ version: 3, overApprovalConfirmed: true });
+  });
+
   it('누르는 중에는 두 번 보내지 않는다', async () => {
     const server = open({ [APPROVE]: { status: 200, body: { status: 'approved', version: 4 } } });
     const button = await screen.findByRole('button', { name: '승인' });

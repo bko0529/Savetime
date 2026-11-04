@@ -17,6 +17,7 @@ import {
   type HospitalWebContext,
 } from './pcAuth.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
+import { approveSchema, rejectSchema, respondToRequest } from './respond.js';
 
 export const MAX_PCS = 3;
 
@@ -283,6 +284,27 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
   router.get('/hw/requests/:requestId', pcOnly, async (req, res) => {
     const { requestId } = parseBody(requestIdParams, req.params);
     res.json(await getRequestDetail(ctx.pool, hospitalPc(res), requestId));
+  });
+
+  // 승인·거절: 두 PC 가 동시에 눌러도 먼저 반영된 것만 (SFR-119·160). 실시간 알림은 커밋된 뒤에만 보낸다
+  router.post('/hw/requests/:requestId/approve', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(approveSchema, req.body);
+    const outcome = await withTransaction(ctx.pool, (client) =>
+      respondToRequest(client, hospitalPc(res), requestId, { event: 'APPROVE', input }),
+    );
+    ctx.realtime?.publish(outcome.events);
+    res.json(outcome.body);
+  });
+
+  router.post('/hw/requests/:requestId/reject', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(rejectSchema, req.body);
+    const outcome = await withTransaction(ctx.pool, (client) =>
+      respondToRequest(client, hospitalPc(res), requestId, { event: 'REJECT', input }),
+    );
+    ctx.realtime?.publish(outcome.events);
+    res.json(outcome.body);
   });
 
   return router;

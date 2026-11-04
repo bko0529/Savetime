@@ -12,7 +12,7 @@ export interface HospitalWebContext {
   // 병원 웹 주소(예: https://savetime.example). 비어 있으면 Origin 검사를 하지 않는다
   allowedOrigins: string[];
   // 실시간 서버. 알림 켜기·근무 종료가 탭을 요청 대상 방에 넣고 뺀다. 없으면(일부 테스트) 알림 켜기를 못 한다
-  realtime?: Pick<Realtime, 'alarmOn' | 'alarmOff'>;
+  realtime?: Pick<Realtime, 'alarmOn' | 'alarmOff' | 'publish'>;
 }
 
 export const PC_COOKIE = 'st_pc';
