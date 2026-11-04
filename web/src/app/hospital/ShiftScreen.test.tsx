@@ -9,6 +9,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 const HOSPITAL = { hospital: { id: 1, name: 'A병원' }, pc: { id: 7, name: '접수대' } };
 const SHIFT = { id: 5, staffName: '김간호', alarmOn: false };
 const NO_REQUESTS = { status: 200, body: { items: [], nextCursor: null } };
+const NO_INCOMING = { status: 200, body: { items: [] } };
 
 let socket: FakeSocket;
 let createSocket: () => ReturnType<FakeSocket['asSocket']>;
@@ -34,6 +35,7 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
       'POST /hw/shifts': { status: 201, body: { shiftId: 9 } },
       'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     // 소켓은 PC 확인(GET /hw/session)이 끝나고 화면이 뜬 뒤에 만들어진다
@@ -67,6 +69,7 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
     fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     expect(await screen.findByText('알림 켜기를 다시 누르세요.')).toBeDefined();
@@ -76,6 +79,7 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
     fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     await screen.findByText('알림 켜기를 다시 누르세요.');
@@ -91,6 +95,7 @@ describe('연결 끊김·자동 복구·꺼짐', () => {
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     await screen.findByText('알림 켜기를 다시 누르세요.');
@@ -127,6 +132,7 @@ describe('연결 끊김·자동 복구·꺼짐', () => {
     fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     await screen.findByText('알림 켜기를 다시 누르세요.');
@@ -154,6 +160,7 @@ describe('알림 켜기 실패', () => {
     fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'GET /hw/requests?status=open': NO_REQUESTS,
+      'GET /hw/incoming': NO_INCOMING,
       'POST /hw/shifts/current/alarm-on': {
         status: 404,
         body: { error: { code: 'NOT_FOUND', message: '근무 중이 아니에요' } },
