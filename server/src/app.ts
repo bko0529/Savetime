@@ -7,6 +7,7 @@ import { serverNow } from './http/serverNow.js';
 import { requireApproved, requireParamedic } from './modules/auth/guards.js';
 import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
+import { adminAuthRouter, type AdminContext } from './modules/admin/auth.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
@@ -31,6 +32,8 @@ export interface AppDeps {
   geocoder?: Geocoder;
   // 없으면 병원 웹 API(/hw)를 켜지 않는다 (관리자 서버·테스트)
   hospitalWeb?: HospitalWebContext;
+  // 없으면 관리자 API(/admin)를 켜지 않는다
+  admin?: AdminContext;
 }
 
 export function createApp({
@@ -41,6 +44,7 @@ export function createApp({
   geocoder,
   realtime,
   hospitalWeb,
+  admin,
 }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -67,6 +71,9 @@ export function createApp({
   }
   if (hospitalWeb) {
     app.use('/api/v1', hospitalWebRouter(hospitalWeb));
+  }
+  if (admin) {
+    app.use('/api/v1', adminAuthRouter(admin));
   }
 
   app.use(notFoundHandler);
