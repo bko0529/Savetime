@@ -15,6 +15,7 @@
     "account:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAccount.js",
     "admin:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAdmin.js",
     "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
+    "request:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevRequest.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {
