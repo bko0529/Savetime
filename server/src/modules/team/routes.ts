@@ -219,11 +219,14 @@ export function teamRouter(
   router.post('/teams/current/leave', ...guards, async (req, res) => {
     const { paramedicId } = paramedicAuth(res);
     const confirmCancelActive = req.query.confirmCancelActive === 'true';
-    await withTransaction(ctx.pool, async (client) => {
+    const events = await withTransaction(ctx.pool, async (client) => {
       const result = await endDuty(client, ctx, paramedicId, 'duty_end', confirmCancelActive);
       // 팀이 없으면 아무것도 바꾸지 않고 돌려보낸다 (롤백되어 로그인도 그대로)
       if (result.teamId === null) throw notInTeam();
+      return result.events;
     });
+    // 마지막 1명이라 이송이 취소됐으면 병원 웹에도 알린다 (커밋 뒤)
+    realtime?.publish(events);
     await forgetSessionState(ctx, paramedicId);
     await realtime?.disconnectParamedic(paramedicId);
     res.status(204).end();

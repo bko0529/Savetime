@@ -117,7 +117,8 @@ async function finishPrevious(
   });
   const { rows } = await client.query<{ version: number }>(
     `UPDATE transport
-        SET status = $2, arrived_at = now(), arrival_method = 'finish_previous', version = version + 1
+        SET status = $2, arrived_at = now(), arrival_method = 'finish_previous', version = version + 1,
+            origin_lat = NULL, origin_lng = NULL
       WHERE id = $1 RETURNING version`,
     [previous.id, to],
   );

@@ -3,6 +3,7 @@
 // '탈퇴' 상태만 남긴다. 그러면 기록의 연결은 깨지지 않으면서 누구였는지는 더 이상 알 수 없다.
 // 부르는 쪽이 트랜잭션을 열고 client를 넘긴다. 커밋한 뒤에는 forgetSessionState를 한 번 더 부른다.
 import type pg from 'pg';
+import type { LoggedEvent } from '../realtime/eventLog.js';
 import { endDuty } from '../team/endDuty.js';
 import type { AuthContext } from './session.js';
 
@@ -11,9 +12,9 @@ export async function withdrawParamedic(
   ctx: Pick<AuthContext, 'redis'>,
   paramedicId: string,
   confirmCancelActive: boolean,
-): Promise<void> {
+): Promise<LoggedEvent[]> {
   // 탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인만 받는다 (확인 없으면 여기서 409)
-  await endDuty(client, ctx, paramedicId, 'withdrawal', confirmCancelActive);
+  const { events } = await endDuty(client, ctx, paramedicId, 'withdrawal', confirmCancelActive);
 
   // 아이디도 바꿔 둔다: 옛 아이디로는 로그인되지 않고, 같은 아이디로 새로 가입할 수 있다
   await client.query(
@@ -34,4 +35,5 @@ export async function withdrawParamedic(
   await client.query('UPDATE signup_request SET photo_key = NULL WHERE paramedic_id = $1', [
     paramedicId,
   ]);
+  return events;
 }
