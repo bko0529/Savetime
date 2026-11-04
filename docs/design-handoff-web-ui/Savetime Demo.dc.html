@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+html{font-size:112.5%}
+body{margin:0;background:oklch(0.965 0.004 250);color:oklch(0.13 0 0);font-family:'Pretendard Variable','Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.45 0.2 260)}a:hover{color:oklch(0.35 0.2 260)}
+*{box-sizing:border-box}
+button{font-family:inherit}
+</style>
+</helmet>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <div style="min-height:100vh;display:flex;flex-direction:column;justify-content:center;gap:48px;padding:64px 48px;max-width:1280px;margin:0 auto">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:44px;height:44px;border-radius:11px;background:oklch(0.53 0.22 27);display:grid;place-items:center;color:#fff;font-weight:800;font-size:22px">S</div>
+        <span style="font-size:24px;font-weight:800">세이브타임</span>
+      </div>
+      <h1 style="margin:0;font-size:48px;font-weight:800;letter-spacing:-0.03em;line-height:1.15">시연할 화면을 고르세요</h1>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px">
+      <button onClick="{{ goHospital }}" style="text-align:left;display:flex;flex-direction:column;gap:20px;padding:40px;border-radius:24px;border:0;background:oklch(0.53 0.22 27);color:#fff;cursor:pointer;min-height:340px">
+        <span style="font-size:18px;font-weight:700;opacity:0.85">응급실 데스크 PC</span>
+        <span style="font-size:52px;font-weight:800;letter-spacing:-0.03em">병원 웹</span>
+        <span style="font-size:20px;line-height:1.55;opacity:0.92;text-wrap:pretty">PC 등록 → 근무 화면 → 새 요청 알림 → 요청 상세 · 승인/거절 → 도착 예정</span>
+        <span style="margin-top:auto;display:inline-flex;align-self:flex-start;padding:14px 24px;border-radius:12px;background:#fff;color:oklch(0.5 0.21 27);font-size:20px;font-weight:800;white-space:nowrap">시연 시작 →</span>
+      </button>
+      <button onClick="{{ goAdmin }}" style="text-align:left;display:flex;flex-direction:column;gap:20px;padding:40px;border-radius:24px;border:0;background:oklch(0.205 0 0);color:#fff;cursor:pointer;min-height:340px">
+        <span style="font-size:18px;font-weight:700;opacity:0.75">세이브타임 운영</span>
+        <span style="font-size:52px;font-weight:800;letter-spacing:-0.03em">관리자 웹</span>
+        <span style="font-size:20px;line-height:1.55;opacity:0.85;text-wrap:pretty">로그인 → 관리자 홈 → 병원 관리 · 라이선스 키 발급 → 모니터링</span>
+        <span style="margin-top:auto;display:inline-flex;align-self:flex-start;padding:14px 24px;border-radius:12px;background:#fff;color:oklch(0.205 0 0);font-size:20px;font-weight:800;white-space:nowrap">시연 시작 →</span>
+      </button>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isHospital }}" hint-placeholder-val="{{ false }}">
+  <dc-import name="SavetimeWeb" mode="hospital" screen="register" on-back="{{ goHome }}" hint-size="100%,100vh"></dc-import>
+</sc-if>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+  <dc-import name="SavetimeWeb" mode="admin" screen="adminLogin" on-back="{{ goHome }}" hint-size="100%,100vh"></dc-import>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { mode: 'home' };
+  renderVals() {
+    const go = mode => () => { this.setState({ mode }); window.scrollTo(0, 0); };
+    return {
+      isHome: this.state.mode === 'home', isHospital: this.state.mode === 'hospital', isAdmin: this.state.mode === 'admin',
+      goHospital: go('hospital'), goAdmin: go('admin'), goHome: go('home'),
+    };
+  }
+}
+</script>
+</body>
+</html>

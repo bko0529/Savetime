@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+html{font-size:112.5%}
+body{margin:0;background:oklch(0.965 0.004 250);color:oklch(0.13 0 0);font-family:'Pretendard Variable','Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.45 0.2 260)}a:hover{color:oklch(0.35 0.2 260)}
+*{box-sizing:border-box}
+button{font-family:inherit}
+</style>
+</helmet>
+
+<div style="min-height:{{ rootMinH }};display:flex;flex-direction:column">
+
+  <sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+  <nav style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 16px;background:oklch(0.2 0.01 250);color:#fff;font-size:14px">
+    <sc-if value="{{ hasBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ back }}" style="border:0;border-radius:6px;padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;background:oklch(1 0 0 / 12%);color:#fff;margin-right:6px">← 처음으로</button></sc-if>
+    <span style="font-weight:700;margin-right:10px;opacity:0.7">{{ navTitle }}</span>
+    <sc-for list="{{ screens }}" as="s" hint-placeholder-count="6">
+      <button onClick="{{ s.go }}" style="border:0;border-radius:6px;padding:6px 12px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</button>
+    </sc-for>
+    <sc-if value="{{ isShift }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ openOverlay }}" style="margin-left:auto;border:1px solid oklch(1 0 0 / 30%);border-radius:6px;padding:6px 12px;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#fff;white-space:nowrap;flex:none">새 요청 오게 하기</button>
+    </sc-if>
+  </nav>
+  </sc-if>
+
+  <sc-if value="{{ isShift }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;flex:1">
+      <header style="display:flex;flex-wrap:wrap;align-items:center;gap:16px 24px;padding:14px 32px;background:#fff;border-bottom:1px solid oklch(0.88 0.004 250)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:36px;height:36px;border-radius:9px;background:oklch(0.53 0.22 27);display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px">S</div>
+          <div style="display:flex;flex-direction:column;line-height:1.2">
+            <span style="font-size:20px;font-weight:800;letter-spacing:-0.02em">천안중앙병원</span>
+            <span style="font-size:15px;color:oklch(0.4 0 0)">응급실 접수대 PC</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-left:auto">
+          <sc-if value="{{ alarmOn }}" hint-placeholder-val="{{ true }}">
+            <span style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-radius:999px;background:oklch(0.95 0.04 155);color:oklch(0.38 0.11 155);font-size:18px;font-weight:700;white-space:nowrap">
+              <span style="width:10px;height:10px;border-radius:50%;background:oklch(0.55 0.15 155)"></span>
+              🔔 알림 켜짐 · 김하늘 님 근무 중
+            </span>
+          </sc-if>
+          <span style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid oklch(0.88 0.004 250);font-size:16px;font-weight:600;white-space:nowrap;flex:none;color:{{ connColor }}">
+            <span style="width:8px;height:8px;border-radius:50%;background:{{ connColor }}"></span>{{ connText }}
+          </span>
+          <button style="height:44px;padding:0 18px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:17px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none">근무 종료</button>
+        </div>
+      </header>
+
+      <sc-if value="{{ disconnected }}" hint-placeholder-val="{{ false }}">
+        <p role="alert" style="position:sticky;top:0;z-index:40;margin:0;padding:18px 32px;background:oklch(0.53 0.22 27);color:#fff;font-size:26px;font-weight:800">연결 끊김 — 새 요청을 받을 수 없어요</p>
+      </sc-if>
+
+      <main style="display:flex;flex-direction:column;gap:24px;padding:24px 32px 48px;max-width:1600px;width:100%;margin:0 auto">
+
+        <sc-if value="{{ alarmOff }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-radius:14px;background:oklch(0.96 0.03 27);border:2px solid oklch(0.53 0.22 27)">
+            <p style="margin:0;font-size:26px;font-weight:800;color:oklch(0.48 0.2 27)">알림 켜기를 눌러야 새 요청을 받아요.</p>
+            <button style="height:64px;padding:0 32px;border:0;border-radius:10px;background:oklch(0.205 0 0);color:#fff;font-size:24px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">알림 켜기</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasWaiting }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:14px">
+            <span style="width:14px;height:14px;border-radius:50%;background:oklch(0.53 0.22 27);box-shadow:0 0 0 6px oklch(0.53 0.22 27 / 18%)"></span>
+            <p style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em;color:oklch(0.5 0.21 27)">새 이송 요청 {{ waitingCount }}건</p>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+          <section style="flex:1.5 1 600px;min-width:0;background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:16px;overflow:hidden">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:20px 24px 14px">
+              <h2 style="margin:0;font-size:24px;font-weight:800;letter-spacing:-0.02em">요청 목록</h2>
+              <span style="font-size:15px;color:oklch(0.4 0 0)">남은 시간 짧은 순</span>
+            </div>
+            <div style="overflow-x:auto">
+              <div role="table" style="display:table;width:100%;border-collapse:collapse;font-size:19px">
+                <div role="rowgroup" style="display:table-header-group">
+                  <div role="row" style="display:table-row;text-align:left;background:oklch(0.975 0.003 250);color:oklch(0.4 0 0);font-size:15px;font-weight:700">
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px;border-bottom:1px solid oklch(0.88 0.004 250)">번호</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">주 증상</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">이상 수치</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">도착 예상</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">상태</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px 12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">남은 시간</div>
+                  </div>
+                </div>
+                <div role="rowgroup" style="display:table-row-group">
+                  <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3">
+                    <div role="row" onClick="{{ r.open }}" style="display:table-row;cursor:pointer;background:{{ r.rowBg }};box-shadow:{{ r.rowEdge }}">
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 24px;border-bottom:1px solid oklch(0.92 0.003 250)">
+                        <button onClick="{{ r.open }}" style="border:0;background:none;padding:0;font-size:19px;font-weight:800;text-decoration:underline;text-underline-offset:4px;cursor:pointer;color:inherit;font-variant-numeric:tabular-nums">{{ r.label }}</button>
+                      </div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-weight:600">{{ r.cc }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">
+                        <span style="display:inline-flex;padding:{{ r.abPad }};border-radius:8px;background:{{ r.abBg }};color:{{ r.abFg }};font-weight:{{ r.abW }};font-size:17px">{{ r.abnormal }}</span>
+                      </div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-variant-numeric:tabular-nums">{{ r.eta }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">
+                        <span style="display:inline-flex;padding:4px 10px;border-radius:999px;font-size:16px;font-weight:700;white-space:nowrap;background:{{ r.stBg }};color:{{ r.stFg }}">{{ r.statusText }}</span>
+                      </div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 24px 16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);min-width:130px">
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                          <span style="font-variant-numeric:tabular-nums;font-size:22px;font-weight:{{ r.remW }};color:{{ r.remFg }}">{{ r.remain }}</span>
+                          <sc-if value="{{ r.waiting }}" hint-placeholder-val="{{ true }}">
+                            <div style="height:5px;border-radius:3px;background:oklch(0.92 0.003 250);overflow:hidden">
+                              <div style="height:100%;width:{{ r.pct }};background:{{ r.remFg }}"></div>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section aria-label="요청 상세" style="flex:1 1 440px;min-width:0;position:sticky;top:16px;background:#fff;border:2px solid oklch(0.13 0 0);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:20px">
+            <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:20px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:15px;font-weight:700;color:oklch(0.4 0 0)">요청 상세</span>
+                    <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">요청 {{ sel.label }}</h2>
+                  </div>
+                  <button onClick="{{ closeDetail }}" style="height:44px;padding:0 18px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:17px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none">닫기</button>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+                  <div style="padding:12px 14px;border-radius:12px;background:oklch(0.975 0.003 250);display:flex;flex-direction:column;gap:4px">
+                    <span style="font-size:14px;color:oklch(0.4 0 0);font-weight:600">상태</span>
+                    <span style="font-size:20px;font-weight:800">{{ sel.statusText }}</span>
+                  </div>
+                  <div style="padding:12px 14px;border-radius:12px;background:{{ sel.remBg }};display:flex;flex-direction:column;gap:4px">
+                    <span style="font-size:14px;color:oklch(0.4 0 0);font-weight:600">남은 시간</span>
+                    <span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:{{ sel.remFg }}">{{ sel.remain }}</span>
+                  </div>
+                  <div style="padding:12px 14px;border-radius:12px;background:oklch(0.975 0.003 250);display:flex;flex-direction:column;gap:4px">
+                    <span style="font-size:14px;color:oklch(0.4 0 0);font-weight:600">도착 예상</span>
+                    <span style="font-size:20px;font-weight:800;font-variant-numeric:tabular-nums">{{ sel.eta }}</span>
+                  </div>
+                </div>
+
+                <p style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.02em">{{ sel.cc }}</p>
+
+                <dl style="margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+                  <sc-for list="{{ sel.fields }}" as="f" hint-placeholder-count="8">
+                    <div style="padding:10px 14px;border-radius:10px;border:1px solid {{ f.bd }};background:{{ f.bg }};display:flex;flex-direction:column;gap:2px">
+                      <dt style="font-size:14px;color:oklch(0.4 0 0);font-weight:600">{{ f.label }}</dt>
+                      <dd style="margin:0;font-size:19px;font-weight:{{ f.w }};color:{{ f.fg }}">{{ f.text }}</dd>
+                    </div>
+                  </sc-for>
+                </dl>
+
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <span style="font-size:16px;font-weight:800">우리 병원 병상</span>
+                  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                    <div style="padding:10px 14px;border-radius:10px;border:1px solid oklch(0.88 0.004 250);display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;color:oklch(0.4 0 0)">응급실</span><span style="font-size:22px;font-weight:800">4</span></div>
+                    <div style="padding:10px 14px;border-radius:10px;border:1px solid oklch(0.88 0.004 250);display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;color:oklch(0.4 0 0)">수술실</span><span style="font-size:22px;font-weight:800">1</span></div>
+                    <div style="padding:10px 14px;border-radius:10px;border:1px solid oklch(0.88 0.004 250);display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;color:oklch(0.4 0 0)">중환자실</span><span style="font-size:18px;font-weight:700;color:oklch(0.4 0 0)">정보 없음</span></div>
+                  </div>
+                </div>
+
+                <sc-if value="{{ sel.canAnswer }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:4px">
+                    <button style="height:72px;border:0;border-radius:12px;background:oklch(0.205 0 0);color:#fff;font-size:26px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none">승인</button>
+                    <button onClick="{{ openReject }}" style="height:72px;border:0;border-radius:12px;background:oklch(0.53 0.22 27);color:#fff;font-size:26px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none">거절</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ sel.approved }}" hint-placeholder-val="{{ false }}">
+                  <p style="margin:0;padding:14px 16px;border-radius:12px;background:oklch(0.95 0.04 155);color:oklch(0.38 0.11 155);font-size:19px;font-weight:700">김하늘 님이 승인함 · 메모: CT 준비</p>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noSel }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:48px 8px;text-align:center;display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:22px;font-weight:800">요청을 고르세요</span>
+                <span style="font-size:17px;color:oklch(0.4 0 0)">목록에서 번호를 누르면 여기에 상세가 열려요.</span>
+              </div>
+            </sc-if>
+          </section>
+        </div>
+
+        <section style="background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:16px;overflow:hidden">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding:20px 24px 14px">
+            <h2 style="margin:0;font-size:24px;font-weight:800;letter-spacing:-0.02em">도착 예정</h2>
+            <span style="font-size:15px;color:oklch(0.4 0 0)">구급차 위치는 표시하지 않아요</span>
+          </div>
+          <sc-if value="{{ showNotice }}" hint-placeholder-val="{{ true }}">
+            <div role="alert" style="margin:0 24px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 12px 12px 18px;border-radius:12px;background:oklch(0.96 0.03 27);border:1px solid oklch(0.8 0.1 27);color:oklch(0.48 0.2 27);font-size:19px;font-weight:700">
+              <span>R-1038 목적지가 다른 병원으로 바뀌었어요</span>
+              <button onClick="{{ dismissNotice }}" style="height:44px;padding:0 18px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;color:oklch(0.13 0 0);font-size:17px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none">확인</button>
+            </div>
+          </sc-if>
+          <div style="overflow-x:auto">
+            <div role="table" style="display:table;width:100%;border-collapse:collapse;font-size:19px">
+              <div role="rowgroup" style="display:table-header-group">
+                <div role="row" style="display:table-row;text-align:left;background:oklch(0.975 0.003 250);color:oklch(0.4 0 0);font-size:15px;font-weight:700">
+                  <div role="columnheader" style="display:table-cell;padding:12px 24px;border-bottom:1px solid oklch(0.88 0.004 250)">번호</div>
+                  <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">환자</div>
+                  <div role="columnheader" style="display:table-cell;padding:12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">상태</div>
+                  <div role="columnheader" style="display:table-cell;padding:12px 24px 12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">도착</div>
+                </div>
+              </div>
+              <div role="rowgroup" style="display:table-row-group">
+                <sc-for list="{{ arriving }}" as="a" hint-placeholder-count="3">
+                  <div role="row" style="display:table-row">
+                    <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 24px;border-bottom:1px solid oklch(0.92 0.003 250);font-weight:800;font-variant-numeric:tabular-nums">{{ a.label }}</div>
+                    <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">{{ a.summary }}</div>
+                    <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250)"><span style="display:inline-flex;padding:4px 10px;border-radius:999px;font-size:16px;font-weight:700;white-space:nowrap;background:{{ a.bg }};color:{{ a.fg }}">{{ a.status }}</span></div>
+                    <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 24px 16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-variant-numeric:tabular-nums;font-weight:700">{{ a.eta }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ overlayOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:100;padding:16px;background:oklch(0.13 0 0 / 60%)">
+      <div role="dialog" style="height:100%;border-radius:20px;background:oklch(0.53 0.22 27);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;padding:40px;text-align:center">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <span style="padding:8px 18px;border-radius:999px;background:oklch(1 0 0 / 18%);font-size:24px;font-weight:700">대기 {{ waitingCount }}건</span>
+          <h2 style="margin:0;font-size:64px;line-height:1.1;font-weight:800;letter-spacing:-0.03em">🔴 새 이송 요청</h2>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:2px;width:100%;max-width:960px;border-radius:16px;overflow:hidden;background:oklch(1 0 0 / 25%)">
+          <div style="padding:22px;background:oklch(0.47 0.2 27);display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;opacity:0.85">번호</span><span style="font-size:36px;font-weight:800">R-1043</span></div>
+          <div style="padding:22px;background:oklch(0.47 0.2 27);display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;opacity:0.85">주 증상</span><span style="font-size:36px;font-weight:800">호흡곤란</span></div>
+          <div style="padding:22px;background:oklch(0.47 0.2 27);display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;opacity:0.85">도착 예상</span><span style="font-size:36px;font-weight:800">12분</span></div>
+          <div style="padding:22px;background:oklch(0.47 0.2 27);display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;opacity:0.85">응답 남은 시간</span><span style="font-size:36px;font-weight:800;font-variant-numeric:tabular-nums">{{ overlayRemain }}</span></div>
+        </div>
+        <button onClick="{{ confirmOverlay }}" style="height:88px;min-width:300px;border:0;border-radius:14px;background:#fff;color:oklch(0.5 0.21 27);font-size:34px;font-weight:800;cursor:pointer;box-shadow:0 8px 24px oklch(0.2 0.1 27 / 35%);white-space:nowrap;flex:none">확인</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ rejectOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:90;background:oklch(0.13 0 0 / 50%);display:grid;place-items:center;padding:24px">
+      <div role="dialog" style="width:100%;max-width:620px;background:#fff;border-radius:18px;box-shadow:0 24px 60px oklch(0.13 0 0 / 30%);overflow:hidden">
+        <div style="padding:24px 28px 0;display:flex;flex-direction:column;gap:6px">
+          <h2 style="margin:0;font-size:26px;font-weight:800">거절 사유</h2>
+          <p style="margin:0;font-size:18px;color:oklch(0.4 0 0)">대원 앱에 병원 이름과 함께 이 사유가 보여요.</p>
+        </div>
+        <div style="padding:20px 28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+          <sc-for list="{{ reasons }}" as="o" hint-placeholder-count="7">
+            <button onClick="{{ o.pick }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 16px;border-radius:12px;border:2px solid {{ o.bd }};background:{{ o.bg }};font-size:19px;font-weight:{{ o.w }};text-align:left;cursor:pointer;color:oklch(0.13 0 0)">
+              <span style="width:20px;height:20px;flex:none;border-radius:50%;border:2px solid {{ o.dotBd }};box-shadow:inset 0 0 0 4px #fff;background:{{ o.dot }}"></span>{{ o.label }}
+            </button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ etcPicked }}" hint-placeholder-val="{{ false }}">
+          <label style="margin:0 28px 16px;display:flex;flex-direction:column;gap:6px;font-size:17px;font-weight:600">
+            기타 사유 (20자까지)
+            <input maxlength="20" placeholder="환자 이름·연락처는 쓰지 마세요" style="height:52px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 14px;font-size:19px;font-family:inherit">
+          </label>
+        </sc-if>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:18px 28px;background:oklch(0.975 0.003 250);border-top:1px solid oklch(0.9 0.003 250)">
+          <button onClick="{{ closeReject }}" style="height:56px;padding:0 24px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:20px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">취소</button>
+          <button onClick="{{ closeReject }}" style="height:56px;padding:0 24px;border-radius:10px;border:0;background:oklch(0.53 0.22 27);color:#fff;font-size:20px;font-weight:700;cursor:pointer;opacity:{{ rejectOpacity }};white-space:nowrap;flex:none">거절 보내기</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isRegister }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:grid;place-items:center;padding:48px 24px">
+      <div style="width:100%;max-width:560px;display:flex;flex-direction:column;gap:28px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:oklch(0.53 0.22 27);display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px">S</div>
+          <span style="font-size:22px;font-weight:800">세이브타임 병원 웹</span>
+        </div>
+        <div style="background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:24px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">이 PC 등록</h1>
+            <p style="margin:0;font-size:17px;color:oklch(0.4 0 0)">처음 한 번만 등록하면 다음부터 바로 근무를 시작해요.</p>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:19px;font-weight:700">라이선스 키</span>
+            <input style="height:56px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:20px;font-family:ui-monospace,Consolas,monospace;letter-spacing:0.06em" value="CHA1-7K2Q-9MXP-04TR">
+            <span style="font-size:15px;color:oklch(0.4 0 0)">관리자에게 받은 병원 키를 입력해요.</span>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:19px;font-weight:700">PC 이름</span>
+            <input style="height:56px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:20px;font-family:inherit" placeholder="예: 응급실 접수대">
+          </label>
+          <sc-if value="{{ pcFull }}" hint-placeholder-val="{{ false }}">
+            <fieldset style="margin:0;display:flex;flex-direction:column;gap:8px;border-radius:14px;border:2px solid oklch(0.53 0.22 27);background:oklch(0.97 0.02 27);padding:16px">
+              <legend style="padding:0 8px;font-size:18px;font-weight:800;color:oklch(0.48 0.2 27)">이 병원은 PC 3대가 모두 등록돼 있어요. 바꿀 PC를 골라 주세요.</legend>
+              <sc-for list="{{ pcs }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.pick }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 14px;border-radius:10px;border:2px solid {{ p.bd }};background:#fff;font-size:18px;text-align:left;cursor:pointer;color:oklch(0.13 0 0)">
+                  <span style="width:20px;height:20px;flex:none;border-radius:50%;border:2px solid {{ p.dotBd }};box-shadow:inset 0 0 0 4px #fff;background:{{ p.dot }}"></span>
+                  <span style="font-weight:800">{{ p.name }}</span>
+                  <span style="margin-left:auto;color:oklch(0.4 0 0);font-size:16px">{{ p.last }}</span>
+                </button>
+              </sc-for>
+            </fieldset>
+          </sc-if>
+          <button onClick="{{ submitRegister }}" style="height:64px;border:0;border-radius:12px;background:oklch(0.205 0 0);color:#fff;font-size:24px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none">{{ registerLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAdminLogin }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:grid;place-items:center;padding:48px 24px">
+      <div style="width:100%;max-width:520px;background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:15px;font-weight:700;color:oklch(0.4 0 0)">세이브타임 관리자</span>
+          <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">로그인</h1>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:19px;font-weight:700">아이디</span><input style="height:56px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:20px;font-family:inherit"></label>
+        <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:19px;font-weight:700">비밀번호</span><input type="password" style="height:56px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:20px;font-family:inherit"></label>
+        <label style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-size:19px;font-weight:700">OTP 6자리</span>
+          <input inputmode="numeric" style="height:56px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:24px;letter-spacing:0.3em;font-family:ui-monospace,Consolas,monospace">
+          <span style="font-size:15px;color:oklch(0.4 0 0)">처음 로그인해서 아직 OTP 앱을 연결하지 않았다면 비워 두세요.</span>
+        </label>
+        <button onClick="{{ goAdminHome }}" style="height:64px;border:0;border-radius:12px;background:oklch(0.205 0 0);color:#fff;font-size:24px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none">로그인</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-direction:column">
+      <header style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:14px 32px;background:#fff;border-bottom:1px solid oklch(0.88 0.004 250)">
+        <button onClick="{{ goAdminHome }}" style="display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;cursor:pointer;color:inherit">
+          <span style="width:34px;height:34px;border-radius:9px;background:oklch(0.205 0 0);display:grid;place-items:center;color:#fff;font-weight:800;font-size:17px">S</span>
+          <span style="font-size:21px;font-weight:800">세이브타임 관리자</span>
+        </button>
+        <nav aria-label="관리자 메뉴" style="display:flex;gap:4px;margin-left:24px;padding:4px;border-radius:12px;background:oklch(0.965 0.004 250)">
+          <sc-for list="{{ adminMenus }}" as="m" hint-placeholder-count="3">
+            <button onClick="{{ m.go }}" style="border:0;border-radius:9px;padding:8px 18px;font-size:17px;font-weight:700;cursor:pointer;white-space:nowrap;background:{{ m.bg }};color:{{ m.fg }};box-shadow:{{ m.sh }}">{{ m.label }}</button>
+          </sc-for>
+        </nav>
+        <button onClick="{{ goAdminLogin }}" style="margin-left:auto;height:44px;padding:0 18px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:17px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none">로그아웃</button>
+      </header>
+
+      <main style="display:flex;flex-direction:column;gap:24px;padding:32px;max-width:1400px;width:100%;margin:0 auto">
+        <sc-if value="{{ isAdminHome }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">관리자</h1>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+              <sc-for list="{{ adminMenus }}" as="m" hint-placeholder-count="3">
+                <button onClick="{{ m.go }}" style="text-align:left;display:flex;flex-direction:column;gap:10px;padding:24px;border-radius:16px;border:1px solid oklch(0.88 0.004 250);background:#fff;cursor:pointer;color:inherit;font-family:inherit">
+                  <span style="font-size:14px;font-weight:700;color:oklch(0.4 0 0);font-family:ui-monospace,Consolas,monospace">{{ m.screen }}</span>
+                  <span style="font-size:24px;font-weight:800">{{ m.label }}</span>
+                  <span style="font-size:17px;color:oklch(0.4 0 0);line-height:1.5">{{ m.about }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">계정</h1>
+            <div style="background:#fff;border:1px dashed oklch(0.75 0 0);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:12px">
+              <p style="margin:0;font-size:19px;font-weight:700">아직 준비 중이에요. 아래 기능이 차례로 들어와요.</p>
+              <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:17px">
+                <li>· 구급대원 가입 승인·반려 <span style="color:oklch(0.4 0 0)">(S5)</span></li>
+                <li>· 계정 정지·해제 <span style="color:oklch(0.4 0 0)">(S5)</span></li>
+              </ul>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHospitals }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">병원 관리</h1>
+            <div role="search" style="display:flex;gap:10px;max-width:640px">
+              <input placeholder="병원 이름 (예: 천안)" style="flex:1;height:52px;border-radius:10px;border:2px solid oklch(0.75 0 0);padding:0 16px;font-size:18px;font-family:inherit;background:#fff">
+              <button style="height:52px;padding:0 24px;border:0;border-radius:10px;background:oklch(0.205 0 0);color:#fff;font-size:19px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">검색</button>
+            </div>
+            <div style="background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:16px;overflow:auto">
+              <div role="table" style="display:table;width:100%;border-collapse:collapse;font-size:18px">
+                <div role="rowgroup" style="display:table-header-group">
+                  <div role="row" style="display:table-row;text-align:left;background:oklch(0.975 0.003 250);color:oklch(0.4 0 0);font-size:15px;font-weight:700">
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px;border-bottom:1px solid oklch(0.88 0.004 250)">병원</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">계정</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">등록 PC</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">라이선스 키</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px;border-bottom:1px solid oklch(0.88 0.004 250)"></div>
+                  </div>
+                </div>
+                <div role="rowgroup" style="display:table-row-group">
+                  <sc-for list="{{ hospitals }}" as="h" hint-placeholder-count="4">
+                    <div role="row" style="display:table-row">
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 24px;border-bottom:1px solid oklch(0.92 0.003 250);font-weight:800">{{ h.name }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250)"><span style="display:inline-flex;padding:4px 10px;border-radius:999px;font-size:15px;font-weight:700;white-space:nowrap;background:{{ h.bg }};color:{{ h.fg }}">{{ h.account }}</span></div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-variant-numeric:tabular-nums">{{ h.pcs }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:16px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-family:ui-monospace,Consolas,monospace;font-size:16px">{{ h.key }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:12px 24px;border-bottom:1px solid oklch(0.92 0.003 250);text-align:right">
+                        <sc-if value="{{ h.canIssue }}" hint-placeholder-val="{{ false }}"><button onClick="{{ openIssued }}" style="height:44px;padding:0 18px;border:0;border-radius:10px;background:oklch(0.205 0 0);color:#fff;font-size:17px;font-weight:700;cursor:pointer;white-space:nowrap">계정 발급</button></sc-if>
+                        <sc-if value="{{ h.canSuspend }}" hint-placeholder-val="{{ false }}"><button style="height:44px;padding:0 18px;border:0;border-radius:10px;background:oklch(0.53 0.22 27);color:#fff;font-size:17px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">정지</button></sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMonitoring }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.02em">모니터링</h1>
+            <div style="background:#fff;border:1px solid oklch(0.88 0.004 250);border-radius:16px;overflow:auto">
+              <div style="padding:20px 24px 14px;display:flex;align-items:baseline;justify-content:space-between">
+                <h2 style="margin:0;font-size:22px;font-weight:800">관리자 작업 이력</h2>
+                <span style="font-size:15px;color:oklch(0.4 0 0)">고치거나 지울 수 없는 기록이에요</span>
+              </div>
+              <div role="table" style="display:table;width:100%;border-collapse:collapse;font-size:17px">
+                <div role="rowgroup" style="display:table-header-group">
+                  <div role="row" style="display:table-row;text-align:left;background:oklch(0.975 0.003 250);color:oklch(0.4 0 0);font-size:15px;font-weight:700">
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px;border-bottom:1px solid oklch(0.88 0.004 250)">시각</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">관리자</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">작업</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px;border-bottom:1px solid oklch(0.88 0.004 250)">대상</div>
+                    <div role="columnheader" style="display:table-cell;padding:12px 24px 12px 12px;border-bottom:1px solid oklch(0.88 0.004 250)">사유</div>
+                  </div>
+                </div>
+                <div role="rowgroup" style="display:table-row-group">
+                  <sc-for list="{{ logs }}" as="l" hint-placeholder-count="4">
+                    <div role="row" style="display:table-row">
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:14px 24px;border-bottom:1px solid oklch(0.92 0.003 250);font-variant-numeric:tabular-nums;color:oklch(0.4 0 0)">{{ l.at }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:14px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">{{ l.admin }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:14px 12px;border-bottom:1px solid oklch(0.92 0.003 250);font-weight:800">{{ l.action }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:14px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">{{ l.target }}</div>
+                      <div role="cell" style="display:table-cell;vertical-align:middle;padding:14px 24px 14px 12px;border-bottom:1px solid oklch(0.92 0.003 250)">{{ l.reason }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="padding:16px 24px"><button style="height:52px;padding:0 22px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:18px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">더 보기</button></div>
+            </div>
+          </div>
+        </sc-if>
+      </main>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ issuedOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:90;background:oklch(0.13 0 0 / 50%);display:grid;place-items:center;padding:24px">
+      <div role="dialog" style="width:100%;max-width:580px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px oklch(0.13 0 0 / 30%)">
+        <div style="padding:24px 28px;display:flex;flex-direction:column;gap:16px">
+          <h2 style="margin:0;font-size:26px;font-weight:800">단국대학교병원 라이선스 키</h2>
+          <p style="margin:0;font-size:18px;font-weight:700;color:oklch(0.48 0.2 27)">이 창을 닫으면 키 전체를 다시 볼 수 없어요. 병원 담당자에게 정해진 방법으로 전달해 주세요.</p>
+          <p style="margin:0;padding:20px;border-radius:12px;border:2px solid oklch(0.13 0 0);background:oklch(0.975 0.003 250);text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:28px;font-weight:800;letter-spacing:0.08em">DKU7-3HQ2-8VNA-5LXE</p>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:18px 28px;background:oklch(0.975 0.003 250);border-top:1px solid oklch(0.9 0.003 250)">
+          <button onClick="{{ copyKey }}" style="height:56px;padding:0 24px;border-radius:10px;border:1px solid oklch(0.75 0 0);background:#fff;font-size:20px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">{{ copyLabel }}</button>
+          <button onClick="{{ closeIssued }}" style="height:56px;padding:0 24px;border:0;border-radius:10px;background:oklch(0.205 0 0);color:#fff;font-size:20px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none">확인했어요</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;disconnected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;근무 화면 상태&quot;},&quot;alarmOff&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;근무 화면 상태&quot;}}">
+const RED = 'oklch(0.53 0.22 27)', REDT = 'oklch(0.96 0.03 27)', REDD = 'oklch(0.48 0.2 27)';
+const GRN = 'oklch(0.38 0.11 155)', GRNT = 'oklch(0.95 0.04 155)';
+const BLU = 'oklch(0.4 0.13 255)', BLUT = 'oklch(0.95 0.03 255)';
+const MUT = 'oklch(0.4 0 0)', GRYT = 'oklch(0.95 0.003 250)', INK = 'oklch(0.13 0 0)';
+
+const REQS = [
+  { id: 1042, cc: '흉통', ab: 2, eta: '8분', status: 'waiting', base: 28,
+    fields: [['성별','남'],['나이대','60대'],['의식','명료 (A)'],['혈압','82/50 mmHg',1],['맥박','128회/분',1],['호흡수','22회/분'],['산소포화도','94%'],['체온','36.8℃'],['통증 부위','가슴'],['통증 정도','8 / 10'],['발생 시각','13:42'],['Pre-KTAS','2']] },
+  { id: 1043, cc: '호흡곤란', ab: 1, eta: '12분', status: 'waiting', base: 84,
+    fields: [['성별','여'],['나이대','70대'],['의식','언어 반응 (V)'],['혈압','134/86 mmHg'],['맥박','104회/분'],['호흡수','30회/분'],['산소포화도','86%',1],['체온','37.9℃'],['병력','COPD'],['Pre-KTAS','2']] },
+  { id: 1040, cc: '두부 외상', ab: 0, eta: '약 15분', status: 'approved', base: 0,
+    fields: [['성별','남'],['나이대','20대'],['의식','명료 (A)'],['혈압','122/78 mmHg'],['맥박','88회/분'],['외상','있음'],['외상 원인','교통사고'],['Pre-KTAS','3']] },
+];
+const REASONS = [['er_bed','응급실 병상 부족'],['or_room','수술실 부족'],['ward','입원실 부족'],['icu','중환자실 부족'],['no_specialist','해당 전문의 부재'],['equipment','의료장비 고장(CT 등)'],['etc','기타']];
+const SCREENS = [['register','병원 · PC 등록'],['shift','병원 · 근무 화면'],['adminLogin','관리자 · 로그인'],['adminHome','관리자 · 홈'],['hospitals','관리자 · 병원 관리'],['monitoring','관리자 · 모니터링']];
+const MENUS = [['accounts','계정','A-01','구급대원 가입 승인·반려, 계정 정지·해제'],['monitoring','모니터링','A-02','알림, 관리자 작업 이력, 통계'],['hospitals','병원 관리','A-03','병원 계정·라이선스 키 발급, 등록 PC']];
+
+const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+class Component extends DCLogic {
+  state = (() => { const p = this.props || {}; return { screen: p.screen || 'shift', sel: p.sel ?? 1042, tick: 0, overlay: !!p.overlay, reject: !!p.reject, reason: p.reason ?? null, notice: true, pcFull: !!p.pcFull, pcPick: p.pcFull ? 0 : null, issued: !!p.issued, copied: false }; })();
+  componentDidMount() { this.t = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.t); }
+  remain(base) { return ((base - this.state.tick) % 120 + 120) % 120; }
+
+  renderVals() {
+    const st = this.state, set = o => () => this.setState(o);
+    const disconnected = !!this.props.disconnected, alarmOff = !!this.props.alarmOff;
+    const requests = REQS.map(r => {
+      const w = r.status === 'waiting', sec = w ? this.remain(r.base) : 0, urgent = w && sec <= 30, selected = st.sel === r.id;
+      return {
+        label: `R-${r.id}`, cc: r.cc, eta: r.eta, waiting: w,
+        abnormal: r.ab ? `⚠ 이상 ${r.ab}` : '—', abBg: r.ab ? REDT : 'transparent', abFg: r.ab ? REDD : MUT, abW: r.ab ? 800 : 400, abPad: r.ab ? '4px 10px' : '0',
+        statusText: w ? '응답 대기' : '승인 · 김하늘', stBg: w ? 'oklch(0.96 0.04 85)' : GRNT, stFg: w ? 'oklch(0.42 0.1 70)' : GRN,
+        remain: w ? mmss(sec) : '—', remFg: urgent ? RED : (w ? INK : MUT), remW: urgent ? 800 : 600, pct: `${(sec / 120) * 100}%`,
+        rowBg: selected ? 'oklch(0.97 0.01 250)' : (urgent ? 'oklch(0.985 0.012 27)' : '#fff'),
+        rowEdge: selected ? `inset 4px 0 0 ${INK}` : (urgent ? `inset 4px 0 0 ${RED}` : 'none'),
+        open: set({ sel: r.id }),
+      };
+    });
+    const s = REQS.find(r => r.id === st.sel);
+    let sel = null;
+    if (s) {
+      const w = s.status === 'waiting', sec = w ? this.remain(s.base) : 0, urgent = w && sec <= 30;
+      sel = {
+        label: `R-${s.id}`, cc: s.cc, eta: s.eta, statusText: w ? '응답 대기' : '승인함',
+        remain: w ? mmss(sec) : '—', remFg: urgent ? RED : INK, remBg: urgent ? REDT : 'oklch(0.975 0.003 250)',
+        canAnswer: w, approved: !w,
+        fields: s.fields.map(([label, text, ab]) => ({ label, text: ab ? `⚠ ${text}` : text, bg: ab ? REDT : '#fff', bd: ab ? 'oklch(0.8 0.1 27)' : 'oklch(0.9 0.003 250)', fg: ab ? REDD : INK, w: ab ? 800 : 600 })),
+      };
+    }
+    const isAdminScr = ['adminHome', 'accounts', 'hospitals', 'monitoring'].includes(st.screen);
+    return {
+      hasBack: !!this.props.onBack, back: () => this.props.onBack && this.props.onBack(), navTitle: this.props.mode === 'hospital' ? '병원 웹 시연' : this.props.mode === 'admin' ? '관리자 웹 시연' : '시안 화면',
+      screens: SCREENS.filter(([k]) => !this.props.mode || (this.props.mode === 'hospital') === ['shift', 'register'].includes(k)).map(([k, label]) => ({ label, go: set({ screen: k }), bg: st.screen === k ? '#fff' : 'transparent', fg: st.screen === k ? INK : 'oklch(0.9 0 0)' })),
+      showNav: !this.props.hideNav, rootMinH: this.props.hideNav ? '100%' : '100vh', isShift: st.screen === 'shift', showFire: st.screen === 'shift' && !this.props.hideNav, isRegister: st.screen === 'register', isAdminLogin: st.screen === 'adminLogin', isAdmin: isAdminScr,
+      isAdminHome: st.screen === 'adminHome', isAccounts: st.screen === 'accounts', isHospitals: st.screen === 'hospitals', isMonitoring: st.screen === 'monitoring',
+      disconnected, alarmOff, alarmOn: !alarmOff,
+      connText: disconnected ? '연결 끊김' : '실시간 연결됨', connColor: disconnected ? RED : GRN,
+      waitingCount: 2, hasWaiting: true,
+      requests, sel, hasSel: !!sel, noSel: !sel, closeDetail: set({ sel: null }),
+      showNotice: st.notice, dismissNotice: set({ notice: false }),
+      arriving: [
+        { label: 'R-1036', summary: '60대 남 · 흉통', status: '이동 중', bg: BLUT, fg: BLU, eta: '도착 예상 4분' },
+        { label: 'R-1040', summary: '20대 남 · 두부 외상', status: '이동 중', bg: BLUT, fg: BLU, eta: '도착 예상 15분' },
+        { label: 'R-1031', summary: '80대 여 · 낙상', status: '도착', bg: GRYT, fg: MUT, eta: '13:28 도착' },
+      ],
+      overlayOpen: st.overlay, openOverlay: set({ overlay: true }), overlayRemain: (() => { const x = this.remain(84); return `${Math.floor(x / 60)}분 ${String(x % 60).padStart(2, '0')}초`; })(),
+      confirmOverlay: set({ overlay: false, sel: 1043 }),
+      rejectOpen: st.reject, openReject: set({ reject: true, reason: null }), closeReject: set({ reject: false }),
+      rejectOpacity: st.reason ? 1 : 0.5, etcPicked: st.reason === 'etc',
+      reasons: REASONS.map(([v, label]) => { const on = st.reason === v; return { label, pick: set({ reason: v }), bd: on ? RED : 'oklch(0.88 0.004 250)', bg: on ? REDT : '#fff', w: on ? 800 : 600, dot: on ? RED : '#fff', dotBd: on ? RED : 'oklch(0.7 0 0)' }; }),
+      pcFull: st.pcFull,
+      pcs: [['응급실 접수대', '마지막 사용 26. 11. 3. 오후 11:40'], ['처치실 1', '마지막 사용 26. 10. 28. 오전 9:12'], ['간호사실', '사용 기록 없음']].map(([name, last], i) => { const on = st.pcPick === i; return { name, last, pick: set({ pcPick: i }), bd: on ? INK : 'oklch(0.88 0.004 250)', dot: on ? INK : '#fff', dotBd: on ? INK : 'oklch(0.7 0 0)' }; }),
+      registerLabel: st.pcFull ? '이 PC로 바꿔 등록' : '이 PC 등록',
+      submitRegister: () => this.setState(x => x.pcFull ? { screen: 'shift' } : { pcFull: true }),
+      goAdminHome: set({ screen: 'adminHome' }), goAdminLogin: set({ screen: 'adminLogin' }),
+      adminMenus: MENUS.map(([k, label, screen, about]) => { const on = st.screen === k; return { label, screen, about, go: set({ screen: k }), bg: on ? '#fff' : 'transparent', fg: on ? INK : MUT, sh: on ? '0 1px 3px oklch(0.13 0 0 / 12%)' : 'none' }; }),
+      hospitals: [
+        { name: '천안중앙병원', account: '사용 중', bg: GRNT, fg: GRN, pcs: '3/3', key: 'CHA1-····  (212일 남음)', canSuspend: true },
+        { name: '단국대학교병원', account: '계정 없음', bg: GRYT, fg: MUT, pcs: '0/3', key: '—', canIssue: true },
+        { name: '순천향대학교 천안병원', account: '정지됨', bg: REDT, fg: REDD, pcs: '1/3', key: 'SCH4-····  (41일 남음)' },
+        { name: '천안충무병원', account: '사용 중', bg: GRNT, fg: GRN, pcs: '2/3', key: 'CMH2-····  (330일 남음)', canSuspend: true },
+      ],
+      issuedOpen: st.issued, openIssued: set({ issued: true, copied: false }), closeIssued: set({ issued: false }),
+      copyKey: set({ copied: true }), copyLabel: st.copied ? '복사됨' : '복사',
+      logs: [
+        { at: '2026. 11. 4. 오후 2:05:12', admin: 'admin01', action: '라이선스 키 발급', target: '천안충무병원', reason: '—' },
+        { at: '2026. 11. 4. 오전 10:41:03', admin: 'admin01', action: '병원 계정 정지', target: '순천향대학교 천안병원', reason: '라이선스 갱신 대기' },
+        { at: '2026. 11. 3. 오후 5:18:47', admin: 'admin02', action: '등록 PC 해제', target: '천안중앙병원 · 처치실 2', reason: 'PC 교체' },
+        { at: '2026. 11. 3. 오전 9:02:30', admin: 'admin02', action: '라이선스 키 발급', target: '천안중앙병원', reason: '—' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
