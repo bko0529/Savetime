@@ -12,6 +12,7 @@ import {
   type Assessment,
 } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
+import { RequestActions } from './RequestActions';
 
 type Detail =
   ApiPaths['/hw/requests/{requestId}']['get']['responses'][200]['content']['application/json'];
@@ -64,6 +65,19 @@ export function RequestDetail({
         <DetailError error={detail.error} />
       ) : (
         detail.data && <DetailBody detail={detail.data} nowMs={nowMs} />
+      )}
+      {/* 응답 결과 문구(다른 PC 가 먼저 응답 등)는 요청이 끝나 상세가 닫혀도 남아 있어야 해서 본문 밖에 둔다 */}
+      {detail.data && (
+        <RequestActions
+          requestId={requestId}
+          version={detail.data.version ?? 1}
+          canAnswer={
+            !detail.isError &&
+            detail.data.status === 'waiting' &&
+            !!detail.data.respondUntil &&
+            Date.parse(detail.data.respondUntil) > nowMs
+          }
+        />
       )}
     </section>
   );
