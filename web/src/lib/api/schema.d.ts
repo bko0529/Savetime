@@ -1140,11 +1140,11 @@ export interface paths {
         };
         /**
          * 요청 상세 (열람 기록 남김)
-         * @description 다른 병원 요청이면 404. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.
+         * @description 다른 병원 요청이면 404. 열람 기록에 담당자 이름을 남겨야 해서 근무를 시작하지 않은 PC는 SHIFT_REQUIRED. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.
          *
          *     **요구사항**: SFR-118, SFR-137, SER-014
          *     **화면**: H-02 요청 상세
-         *     **오류 코드**: NOT_FOUND, REQUEST_CLOSED
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, REQUEST_CLOSED
          */
         get: operations["get_hw_requests__requestId"];
         put?: never;
@@ -2342,10 +2342,11 @@ export interface components {
                     name?: string;
                     available?: boolean;
                 } | null;
+                /** @description 가용/전체 (예: 5/20). 수집된 값이 없으면 null */
                 beds?: {
-                    er?: string;
-                    icu?: string;
-                    or?: string;
+                    er?: string | null;
+                    icu?: string | null;
+                    or?: string | null;
                 };
             };
             /** @description 우리 병원의 지금 유효한 승인 수 (과승인 경고용) */

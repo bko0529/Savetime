@@ -84,6 +84,12 @@ describe('요청 상세 (SFR-118)', () => {
     expect(screen.queryByText('갑작스러운 두통')).toBeNull();
   });
 
+  it('근무 전이면(SHIFT_REQUIRED) 근무를 먼저 시작하라고 안내', async () => {
+    fakeServer({ 'GET /hw/requests/102': { status: 409, body: apiError('SHIFT_REQUIRED') } });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    expect((await screen.findByRole('alert')).textContent).toContain('근무를 먼저 시작해 주세요');
+  });
+
   it('닫기를 누르면 닫는다', async () => {
     fakeServer({ 'GET /hw/requests/102': { status: 200, body: detail() } });
     const onClose = vi.fn();

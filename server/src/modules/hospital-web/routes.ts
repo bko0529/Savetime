@@ -16,8 +16,11 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 
 export const MAX_PCS = 3;
+
+const requestIdParams = z.object({ requestId: z.coerce.number().int().positive() });
 
 // 실시간 서버는 PC·병원 id 를 문자열로 다룬다 (DB bigint 를 그대로)
 const pcKey = (pc: { pcId: number; hospitalId: number }) => ({
@@ -268,6 +271,18 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     if (rowCount === 0) throw new AppError(404, 'NOT_FOUND', '진행 중인 근무가 없어요');
     await ctx.realtime?.alarmOff(pcKey(pc), 'shift_ended');
     res.status(204).end();
+  });
+
+  // 요청 목록: 새 요청 알림을 받으면, 그리고 다시 연결될 때마다 이걸로 전체를 새로 받는다 (실시간 설계 3장)
+  router.get('/hw/requests', pcOnly, async (req, res) => {
+    const pc = hospitalPc(res);
+    res.json(await listRequests(ctx.pool, pc.hospitalId, parseBody(listQuerySchema, req.query)));
+  });
+
+  // 요청 상세: 환자 평가·이상 수치·우리 병원 병상. 열 때마다 열람 기록이 남는다 (SFR-118, SFR-137)
+  router.get('/hw/requests/:requestId', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    res.json(await getRequestDetail(ctx.pool, hospitalPc(res), requestId));
   });
 
   return router;

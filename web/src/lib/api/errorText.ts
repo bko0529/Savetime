@@ -5,6 +5,7 @@ const ERROR_TEXT: Record<string, string> = {
   INVALID_LICENSE: '라이선스 키가 맞지 않아요. 다시 확인해 주세요.',
   LICENSE_EXPIRED: '라이선스 키 기간이 끝났어요. 관리자에게 새 키를 요청해 주세요.',
   TOO_MANY_ATTEMPTS: '키를 5번 틀려서 이 PC에서 10분 동안 입력할 수 없어요.',
+  SHIFT_REQUIRED: '근무를 먼저 시작해 주세요. 누가 봤는지 기록해야 해서 근무 중에만 열 수 있어요.',
   INVALID_CREDENTIALS: '아이디 또는 비밀번호가 맞지 않아요.',
   INVALID_OTP: 'OTP 코드가 맞지 않아요. 앱에 지금 떠 있는 6자리를 입력해 주세요.',
   ACCOUNT_LOCKED: '5번 틀려서 10분 동안 로그인할 수 없어요.',
