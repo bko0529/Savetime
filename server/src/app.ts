@@ -14,19 +14,29 @@ import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 import type { EtaLookup } from './modules/transport/eta.js';
 import { recommendRouter } from './modules/transport/recommend.js';
 import { transportRouter } from './modules/transport/create.js';
+import type { Realtime } from './modules/realtime/server.js';
 
 export interface AppDeps {
   logger: Logger;
   healthChecks: HealthChecks;
   // 없으면 /health만 켠다 (관리자 서버·테스트)
   auth?: AuthContext;
+  // 실시간 서버. 없으면(테스트·관리자 서버) 이벤트는 기록만 되고 보내지 않는다
+  realtime?: Realtime;
   // 카카오 키가 없으면 비워 둔다. 예상 이동시간만 빠진다 (SFR-073)
   eta?: EtaLookup;
   // 카카오 키가 없으면 비워 둔다. 주소→좌표만 503이 된다
   geocoder?: Geocoder;
 }
 
-export function createApp({ logger, healthChecks, auth, eta, geocoder }: AppDeps): express.Express {
+export function createApp({
+  logger,
+  healthChecks,
+  auth,
+  eta,
+  geocoder,
+  realtime,
+}: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
 
@@ -39,13 +49,13 @@ export function createApp({ logger, healthChecks, auth, eta, geocoder }: AppDeps
   if (auth) {
     // 로그인한 승인 대원만 쓰는 API에 붙인다. 로그인·재발급·내 정보는 그 전 단계라 따로 둔다.
     const approvedParamedic = [requireParamedic(auth), requireApproved];
-    app.use('/api/v1', authRouter(auth));
-    app.use('/api/v1', teamRouter(auth, approvedParamedic));
+    app.use('/api/v1', authRouter(auth, realtime));
+    app.use('/api/v1', teamRouter(auth, approvedParamedic, realtime));
     // /hospitals/nearby가 /hospitals/:hospitalId보다 먼저 와야 'nearby'를 병원 ID로 읽지 않는다
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', geocodeRouter(approvedParamedic, geocoder));
-    app.use('/api/v1', transportRouter(auth.pool, approvedParamedic));
+    app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime));
   }
 
   app.use(notFoundHandler);

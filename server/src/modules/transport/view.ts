@@ -83,7 +83,11 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
 
   const { rows: rounds } = await db.query<RoundRow>(
     `SELECT id, round_no, kind, radius_km, sent_at, respond_until, approval_valid_until,
-            now() >= sent_at + interval '5 seconds' AS delivery_final
+            -- 5초 판정이 끝남 = 받았음도 전달 실패도 아닌 대기 요청이 남아 있지 않음 (SFR-161)
+            NOT EXISTS (
+              SELECT 1 FROM hospital_request hr
+               WHERE hr.round_id = request_round.id AND hr.status = 'waiting' AND hr.delivered_at IS NULL
+            ) AS delivery_final
        FROM request_round WHERE transport_id = $1 ORDER BY round_no DESC LIMIT 1`,
     [transportId],
   );

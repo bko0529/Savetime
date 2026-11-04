@@ -11,6 +11,7 @@ import { loadMe } from './me.js';
 import { verifyPassword } from './password.js';
 import { forgetSessionState, type AuthContext, type ParamedicStatus } from './session.js';
 import { hashRefreshToken, newRefreshToken, signAccessToken } from './tokens.js';
+import type { Realtime } from '../realtime/server.js';
 import { withdrawParamedic } from './withdraw.js';
 
 const MAX_FAILURES = 5;
@@ -71,7 +72,7 @@ async function issueRefreshToken(
   return token;
 }
 
-export function authRouter(ctx: AuthContext): Router {
+export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
   const router = Router();
 
   router.post('/auth/login', async (req, res) => {
@@ -198,6 +199,8 @@ export function authRouter(ctx: AuthContext): Router {
     );
     // 커밋 전에 지운 캐시에 그사이 옛 값이 다시 들어갔을 수 있어 한 번 더 지운다
     await forgetSessionState(ctx, paramedicId);
+    // 이 대원의 실시간 연결도 끊는다. 토큰이 막혀서 다시 붙지 못한다 (SER-016)
+    await realtime?.disconnectParamedic(paramedicId);
     res.status(204).end();
   });
 
@@ -215,6 +218,8 @@ export function authRouter(ctx: AuthContext): Router {
       withdrawParamedic(client, ctx, paramedicId, confirmCancelActive),
     );
     await forgetSessionState(ctx, paramedicId);
+    // 이 대원의 실시간 연결도 끊는다. 토큰이 막혀서 다시 붙지 못한다 (SER-016)
+    await realtime?.disconnectParamedic(paramedicId);
     res.status(204).end();
   });
 
