@@ -11,11 +11,9 @@ import {
 } from './modules/collector/capabilities.js';
 import { COLLECT_HOSPITALS_EVERY_MS, runHospitalCollect } from './modules/collector/hospitals.js';
 import { createFetchBeds, createFetchItems } from './modules/collector/publicApi.js';
-import { hospitalNamespace } from './modules/hospital-web/realtime.js';
 import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
-import { createRealtime } from './modules/realtime/io.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
 
@@ -29,8 +27,8 @@ const redis = new Redis(config.REDIS_URL, { lazyConnect: false });
 pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오류'));
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
-// 서명 키 없이 켜면 대원·관리자 모두 로그인을 못 한다. 빠뜨렸으면 켜지 않는다.
-if (!config.JWT_SECRET) {
+// 서명 키 없이 대원 API를 켜면 로그인을 아무도 못 한다. 빠뜨렸으면 켜지 않는다.
+if (config.APP_ROLE === 'main' && !config.JWT_SECRET) {
   throw new Error('환경 변수를 확인하세요: JWT_SECRET');
 }
 
@@ -50,9 +48,6 @@ const eta = config.KAKAO_REST_API_KEY
       }),
     })
   : undefined;
-if (config.ALLOWED_ORIGINS.length === 0) {
-  logger.warn('ALLOWED_ORIGINS가 비어 있어 병원 웹 요청의 Origin을 검사하지 않습니다');
-}
 if (!eta) logger.warn('KAKAO_REST_API_KEY가 없어 예상 이동시간을 구하지 않습니다');
 
 // 같은 카카오 키를 쓴다. 키가 없으면 주소→좌표만 503이 된다 (SFR-009)
@@ -70,9 +65,6 @@ const geocoder = config.KAKAO_REST_API_KEY
     })
   : undefined;
 
-// 실시간 연결 (Socket.IO). http 서버를 켠 뒤에 붙인다
-const realtime = createRealtime({ redis });
-
 const app = createApp({
   logger,
   eta,
@@ -81,29 +73,6 @@ const app = createApp({
     config.APP_ROLE === 'main' && config.JWT_SECRET
       ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
       : undefined,
-  // 병원 웹 API 는 대원·병원 서버(main)에서만 켠다 (T-11)
-  hospitalWeb:
-    config.APP_ROLE === 'main'
-      ? {
-          pool,
-          redis,
-          allowedOrigins: config.ALLOWED_ORIGINS,
-          hospitalIo: hospitalNamespace(realtime.io, {
-            pool,
-            allowedOrigins: config.ALLOWED_ORIGINS,
-          }),
-        }
-      : undefined,
-  // 관리자 API 는 관리자 서버와, S7 에 서버를 나누기 전까지는 대원·병원 서버에서도 켠다 (T-11)
-  admin: config.JWT_SECRET
-    ? {
-        pool,
-        redis,
-        jwtKey: signingKey(config.JWT_SECRET),
-        sessionHours: config.SHIFT_MAX_HOURS,
-        allowedOrigins: config.ALLOWED_ORIGINS,
-      }
-    : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),
@@ -113,7 +82,6 @@ const app = createApp({
 const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
-realtime.io.attach(server);
 
 // 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
 const scheduledJobs: ScheduledJob[] = [];
@@ -171,8 +139,6 @@ function shutdown(signal: string): void {
     logger.error('제한 시간 안에 종료하지 못해 강제로 끝냅니다');
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS).unref();
-  // 웹소켓이 열려 있으면 server.close 가 끝나지 않으므로 먼저 끊는다
-  void realtime.close();
   server.close(async () => {
     await Promise.allSettled(jobRunners.map((runner) => runner.close()));
     await Promise.allSettled([pool.end(), redis.quit()]);
