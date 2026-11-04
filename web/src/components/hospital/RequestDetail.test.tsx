@@ -77,10 +77,11 @@ describe('요청 상세 (SFR-118)', () => {
     ).toBeTruthy();
   });
 
-  it('근무 전이면 근무를 시작하라고 안내', async () => {
-    fakeServer({ 'GET /hw/requests/102': { status: 409, body: apiError('SHIFT_REQUIRED') } });
+  it('다른 병원 요청·없는 요청(404)이면 서버 문구로 안내', async () => {
+    fakeServer({ 'GET /hw/requests/102': { status: 404, body: apiError('NOT_FOUND') } });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
-    expect(await screen.findByText(/근무를 먼저 시작해 주세요/)).toBeTruthy();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByText('갑작스러운 두통')).toBeNull();
   });
 
   it('닫기를 누르면 닫는다', async () => {

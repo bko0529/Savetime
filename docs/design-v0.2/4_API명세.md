@@ -221,7 +221,6 @@
 | 409 | `REQUEST_EXPIRED` | 2분이 지나 응답할 수 없음 |
 | 409 | `REQUEST_NOT_APPROVED` | 승인 상태가 아닌 요청 |
 | 409 | `RE_REQUEST_NOT_ALLOWED` | 다시 요청은 확정 병원이 승인 취소했을 때만 |
-| 409 | `SHIFT_REQUIRED` | 병원 PC 근무 시작 전 → 근무 시작 화면 (열람 기록에 담당자 이름이 필요, SFR-137) |
 | 409 | `SIGNUP_NOT_REJECTED` | 반려된 계정만 재신청 가능 |
 | 409 | `TARGET_IN_TEAM` | 초대 대상이 이미 다른 팀 |
 | 409 | `TEAM_FULL` | 팀 4명 꽉 참 |
