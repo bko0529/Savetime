@@ -105,11 +105,14 @@ describe('연결 끊김·자동 복구·꺼짐', () => {
     return server;
   }
 
-  it('끊기면 빨간 배너, 탭을 유지한 채 다시 붙으면 shiftId 로 자동 복구', async () => {
+  it('끊기면 맨 위에 빨간 연결 끊김 배너, 탭을 유지한 채 다시 붙으면 shiftId 로 자동 복구', async () => {
     await renderWithAlarmOn();
 
     socket.serverDisconnect();
-    expect(screen.getByRole('alert').textContent).toContain('서버 연결이 끊겼어요');
+    const banner = screen.getByRole('alert');
+    expect(banner.textContent).toBe('연결 끊김 — 새 요청을 받을 수 없어요');
+    // 근무 화면의 맨 위 (SFR-122)
+    expect(banner.parentElement?.firstElementChild).toBe(banner);
 
     socket.serverConnect('sock-2');
     expect(screen.queryByRole('alert')).toBeNull();

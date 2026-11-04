@@ -49,6 +49,9 @@ const eta = config.KAKAO_REST_API_KEY
       }),
     })
   : undefined;
+if (config.ALLOWED_ORIGINS.length === 0) {
+  logger.warn('ALLOWED_ORIGINS가 비어 있어 병원 웹 요청의 Origin을 검사하지 않습니다');
+}
 if (!eta) logger.warn('KAKAO_REST_API_KEY가 없어 예상 이동시간을 구하지 않습니다');
 
 // 같은 카카오 키를 쓴다. 키가 없으면 주소→좌표만 503이 된다 (SFR-009)
@@ -79,6 +82,11 @@ const app = createApp({
   geocoder,
   auth,
   realtime,
+  // 병원 웹 API 는 대원·병원 서버(main)에서만 켠다 (T-11)
+  hospitalWeb:
+    config.APP_ROLE === 'main'
+      ? { pool, redis, allowedOrigins: config.ALLOWED_ORIGINS, realtime }
+      : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),

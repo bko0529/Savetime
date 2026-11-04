@@ -979,7 +979,7 @@ export interface paths {
         put?: never;
         /**
          * 라이선스 키로 PC 등록
-         * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict), 1년. PC_LIMIT_REACHED는 details.pcs(이름·마지막 사용)를 준다. 관리자 알림 발생.
+         * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict · Path=/, 실시간 연결에도 씀), 1년. PC_LIMIT_REACHED는 details.pcs[{id, name, lastUsedAt}]를 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds. 관리자 알림(pc_change) 발생.
          *
          *     **요구사항**: SFR-116, SFR-147, COR-012
          *     **화면**: H-01 PC 등록
@@ -1025,7 +1025,9 @@ export interface paths {
         put?: never;
         /**
          * 근무 시작 (담당자 이름)
-         * @description **요구사항**: SFR-117
+         * @description PC 1대에 진행 중 근무는 1개. 앞 근무가 남아 있으면 끝내고 새로 시작하고, 그 PC 탭들에 hospital.alarm_off{shift_ended}. 새 근무는 알림이 꺼진 채로 시작한다.
+         *
+         *     **요구사항**: SFR-117
          *     **화면**: H-01 근무 시작
          */
         post: operations["post_hw_shifts"];
@@ -1046,7 +1048,7 @@ export interface paths {
         put?: never;
         /**
          * 알림 켜기 (이때부터 요청 대상)
-         * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다.
+         * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다. 진행 중 근무가 없거나 socketId가 이 PC의 /hospital 연결이 아니면 NOT_FOUND.
          *
          *     **요구사항**: SFR-117, SFR-136
          *     **화면**: H-01 근무 시작
@@ -1070,7 +1072,7 @@ export interface paths {
         put?: never;
         /**
          * 근무 종료
-         * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.
+         * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}. 진행 중 근무가 없으면 NOT_FOUND.
          *
          *     **요구사항**: SFR-117
          *     **화면**: H-02
@@ -1965,7 +1967,7 @@ export interface components {
                 code: string;
                 /** @description 사람이 읽는 한국어 메시지 */
                 message: string;
-                /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
+                /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[{id, name, lastUsedAt}], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
                 details?: Record<string, never> | null;
             };
         };
