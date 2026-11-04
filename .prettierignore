@@ -13,3 +13,5 @@ shared/
 next-env.d.ts
 # openapi-typescript 가 만드는 파일 (npm run gen:api -w web)
 web/src/lib/api/schema.d.ts
+# 부하 테스트 결과 원본 (git 에 올리지 않음, perf/.gitignore)
+perf/results/
