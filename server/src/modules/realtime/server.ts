@@ -324,11 +324,12 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     } catch {
       socket.leave(room);
       socket.emit('hospital.alarm_off', directEnvelope(room, { reason: 'no_ack' }));
-      if (socket.data.shiftId) {
-        await pool.query('UPDATE hospital_shift SET alarm_on_at = NULL WHERE id = $1', [
-          socket.data.shiftId,
-        ]);
-      }
+      // 근무 id가 아니라 PC로 찾는다. REST '알림 켜기'로 방에 들어간 탭은 다른 서버가 넣었을 수 있어
+      // socket.data.shiftId가 비어 있다. 그래도 DB 알림을 꺼야 다음 요청 대상에서 빠진다 (SFR-117·161)
+      await pool.query(
+        'UPDATE hospital_shift SET alarm_on_at = NULL WHERE pc_id = $1 AND ended_at IS NULL',
+        [socket.data.pcId],
+      );
     }
   }
 
