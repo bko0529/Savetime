@@ -27,8 +27,8 @@ const redis = new Redis(config.REDIS_URL, { lazyConnect: false });
 pool.on('error', (err) => logger.error({ message: err.message }, 'DB 연결 오류'));
 redis.on('error', (err) => logger.error({ message: err.message }, 'Redis 연결 오류'));
 
-// 서명 키 없이 켜면 대원·관리자 모두 로그인을 못 한다. 빠뜨렸으면 켜지 않는다.
-if (!config.JWT_SECRET) {
+// 서명 키 없이 대원 API를 켜면 로그인을 아무도 못 한다. 빠뜨렸으면 켜지 않는다.
+if (config.APP_ROLE === 'main' && !config.JWT_SECRET) {
   throw new Error('환경 변수를 확인하세요: JWT_SECRET');
 }
 
@@ -48,9 +48,6 @@ const eta = config.KAKAO_REST_API_KEY
       }),
     })
   : undefined;
-if (config.ALLOWED_ORIGINS.length === 0) {
-  logger.warn('ALLOWED_ORIGINS가 비어 있어 병원 웹 요청의 Origin을 검사하지 않습니다');
-}
 if (!eta) logger.warn('KAKAO_REST_API_KEY가 없어 예상 이동시간을 구하지 않습니다');
 
 // 같은 카카오 키를 쓴다. 키가 없으면 주소→좌표만 503이 된다 (SFR-009)
@@ -76,21 +73,6 @@ const app = createApp({
     config.APP_ROLE === 'main' && config.JWT_SECRET
       ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
       : undefined,
-  // 병원 웹 API 는 대원·병원 서버(main)에서만 켠다 (T-11)
-  hospitalWeb:
-    config.APP_ROLE === 'main'
-      ? { pool, redis, allowedOrigins: config.ALLOWED_ORIGINS }
-      : undefined,
-  // 관리자 API 는 관리자 서버와, S7 에 서버를 나누기 전까지는 대원·병원 서버에서도 켠다 (T-11)
-  admin: config.JWT_SECRET
-    ? {
-        pool,
-        redis,
-        jwtKey: signingKey(config.JWT_SECRET),
-        sessionHours: config.SHIFT_MAX_HOURS,
-        allowedOrigins: config.ALLOWED_ORIGINS,
-      }
-    : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),

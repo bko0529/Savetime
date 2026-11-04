@@ -13,8 +13,6 @@
     "migrate": "node --env-file-if-exists=.env ../node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m db/migrations",
     "collect:hospitals": "tsc -p . && node --env-file-if-exists=.env dist/scripts/collectHospitals.js",
     "account:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAccount.js",
-    "admin:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevAdmin.js",
-    "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
   "devDependencies": {
@@ -33,7 +31,6 @@
     "ioredis": "^5.11.1",
     "jose": "^6.2.15",
     "node-pg-migrate": "^9.0.0",
-    "otplib": "^13.6.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
