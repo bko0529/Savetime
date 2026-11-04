@@ -25,6 +25,13 @@ const loginSchema = z.object({
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1).max(100) });
 
+// FCM 토큰은 길이가 정해져 있지 않다. 넉넉히 받되 끝없이 받지는 않는다
+const pushDeviceSchema = z.object({
+  deviceId: z.string().min(1).max(80),
+  platform: z.enum(['android', 'ios']),
+  fcmToken: z.string().min(1).max(4096),
+});
+
 interface LoginRow {
   id: string;
   password_hash: string;
@@ -203,6 +210,20 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
     await forgetSessionState(ctx, paramedicId);
     // 이 대원의 실시간 연결도 끊는다. 토큰이 막혀서 다시 붙지 못한다 (SER-016)
     await realtime?.disconnectParamedic(paramedicId);
+    res.status(204).end();
+  });
+
+  // 푸시 받을 기기 등록 (SFR-130, COR-009). 앱이 시작할 때와 FCM 토큰이 바뀔 때마다 부른다.
+  // 대원·기기마다 1개: 같은 기기면 토큰만 바꾼다. 승인 전에도 가입 결과 푸시(SFR-083)를 받아야 해서 승인 확인은 붙이지 않는다
+  router.put('/me/push-device', requireParamedic(ctx), async (req, res) => {
+    const input = parseBody(pushDeviceSchema, req.body);
+    await ctx.pool.query(
+      `INSERT INTO push_device (paramedic_id, device_id, platform, fcm_token)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (paramedic_id, device_id)
+       DO UPDATE SET platform = excluded.platform, fcm_token = excluded.fcm_token, updated_at = now()`,
+      [paramedicAuth(res).paramedicId, input.deviceId, input.platform, input.fcmToken],
+    );
     res.status(204).end();
   });
 
