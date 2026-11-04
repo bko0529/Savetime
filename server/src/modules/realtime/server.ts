@@ -12,8 +12,6 @@ import { Server, type DefaultEventsMap, type Namespace, type RemoteSocket } from
 import { withTransaction } from '../../db/transaction.js';
 import {
   transitionHreq,
-  transitionTransport,
-  transportEventAfterHreqChange,
   type HreqStatus,
   type TransportStatus,
 } from '../../domain/stateMachine.js';
@@ -23,6 +21,8 @@ import type { AuthContext } from '../auth/session.js';
 // 쿠키 해시는 PC 등록 API와 같은 함수를 쓴다. 저장할 때와 찾을 때 방식이 달라지지 않게 (COR-012)
 import { hashPcToken } from '../hospital-web/pcAuth.js';
 import { currentTeamId } from '../team/routes.js';
+import { expireRound } from '../transport/expire.js';
+import { applyReverseCascade, roundCounts } from '../transport/hreqCascade.js';
 import {
   appendEvents,
   EVENT_COLUMNS,
@@ -36,8 +36,9 @@ import {
 export interface Realtime {
   // 트랜잭션이 커밋된 뒤에만 부른다. 롤백된 이벤트는 절대 나가지 않는다
   publish(events: LoggedEvent[]): void;
-  // 새 회차의 병원 요청을 알림 켠 PC에 보내고 5초 '받았음'을 센다 (SFR-161). 응답을 기다리지 않는다
-  deliverRound(roundId: string): void;
+  // 새 회차를 시작한다: 알림 켠 PC에 보내고 5초 '받았음'을 세고(SFR-161), 2분 응답 제한 타이머를 건다(SFR-124).
+  // 트랜잭션이 커밋된 뒤에 부른다. 응답을 기다리지 않는다
+  startRound(roundId: string): void;
   joinTeam(paramedicId: string, teamId: string): Promise<void>;
   // 근무 종료·로그아웃·탈퇴: 그 대원의 연결을 모두 끊는다 (SER-016)
   disconnectParamedic(paramedicId: string): Promise<void>;
@@ -73,6 +74,7 @@ interface HospitalSocketData {
 }
 
 const DELIVERY_QUEUE = 'delivery-check';
+const EXPIRY_QUEUE = 'respond-timeout';
 const REPLAY_LIMIT = 500;
 // 병원 웹은 다시 받기를 하지 않고 재연결 때 목록을 새로 받으므로(설계 3장) 직접 보내는 이벤트에는 seq를 쓰지 않는다
 const NO_SEQ = 0;
@@ -306,6 +308,58 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     .then(({ rows }) => Promise.all(rows.map((row) => scheduleCheck(row.id, 0))))
     .catch((err: Error) => logger.error({ message: err.message }, '전달 확인 다시 걸기 실패'));
 
+  // ---------- 응답 제한 2분 (SFR-124) ----------
+  const expiryQueue = new Queue(EXPIRY_QUEUE, { connection, prefix });
+  const expiryWorker = new Worker(
+    EXPIRY_QUEUE,
+    async (job) => {
+      const result = await expireRound(pool, String(job.data.roundId));
+      // 일찍 깨어났으면 실패로 돌려 조금 뒤 다시 한다 (판정은 DB 시각)
+      if (result === 'not_due') throw new Error('아직 응답 제한 시간이 안 됐어요');
+      if (result) publish(result);
+    },
+    { connection, prefix, concurrency: 10, autorun: false },
+  );
+  expiryQueue.on('error', (err) => logger.error({ message: err.message }, '2분 타이머 큐 오류'));
+  expiryWorker.on('error', (err) => logger.error({ message: err.message }, '2분 타이머 워커 오류'));
+  expiryWorker.on('failed', (_job, err) =>
+    logger.error({ message: err.message }, '2분 타이머 실행 실패'),
+  );
+  void expiryWorker
+    .run()
+    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+
+  // 마감까지 남은 시간도 DB 시각으로 잰다. 이미 지났으면 바로 실행
+  async function scheduleExpiry(roundId: string): Promise<void> {
+    const { rows } = await pool.query<{ delay: number }>(
+      `SELECT GREATEST(0, ceil(extract(epoch FROM respond_until - now()) * 1000))::int AS delay
+         FROM request_round WHERE id = $1`,
+      [roundId],
+    );
+    if (!rows[0]) return;
+    await expiryQueue.add(
+      'expire',
+      { roundId },
+      {
+        jobId: `expire-${roundId}`,
+        delay: rows[0].delay,
+        attempts: 5,
+        backoff: { type: 'fixed', delay: 500 },
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      },
+    );
+  }
+
+  // 재시작 때: 마감이 지났거나 다가오는데 아직 대기 요청이 남은 회차의 타이머를 다시 건다
+  void pool
+    .query<{ id: string }>(
+      `SELECT DISTINCT r.id FROM request_round r JOIN hospital_request hr ON hr.round_id = r.id
+        WHERE hr.status = 'waiting' AND r.respond_until > now() - interval '1 hour'`,
+    )
+    .then(({ rows }) => Promise.all(rows.map((row) => scheduleExpiry(row.id))))
+    .catch((err: Error) => logger.error({ message: err.message }, '2분 타이머 다시 걸기 실패'));
+
   // 1대라도 ack하면 그 병원에 '전달'. ack 안 한 PC는 :on에서 빼고 알림을 끈다 (설계 4-2 전달 판정)
   async function sendToPc(
     socket: RemoteSocket<DefaultEventsMap, HospitalSocketData>,
@@ -470,57 +524,15 @@ export function createRealtime(options: RealtimeOptions): Realtime {
 
       // 역방향 연쇄: 지금 회차에 대기·유효 승인이 하나도 없으면 이송 건을 예비 추천으로 (SFR-112·161)
       if (failedHospitalIds.length > 0 && round.is_current) {
-        const counts = {
-          waiting: requests.filter((r) => r.status === 'waiting').length,
-          validApproved: requests.filter(
-            (r) => r.status === 'approved' && now < round.approval_valid_until,
-          ).length,
-        };
-        const next = transportEventAfterHreqChange(
-          transport.status,
-          { event: 'NO_ACK_5S', fromStatus: 'waiting' },
-          counts,
-        );
-        if (next) {
-          const { to, history } = transitionTransport(transport.status, next.event, {
-            now,
-            version: transport.version,
-            fallbackReason: next.reason,
-          });
-          const { rows: updated } = await client.query<{ version: number }>(
-            `UPDATE transport
-                SET status = $2, version = version + 1,
-                    fallback_reason = CASE WHEN $2::transport_status = 'fallback' THEN $3 ELSE fallback_reason END
-              WHERE id = $1 RETURNING version`,
-            [round.transport_id, to, history.reason],
-          );
-          await client.query(
-            `INSERT INTO transport_status_history (transport_id, from_status, to_status, event, reason, at)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              round.transport_id,
-              history.from,
-              history.to,
-              history.event,
-              history.reason,
-              history.at,
-            ],
-          );
-          events.push({
-            room,
-            name: 'transport.status',
-            entityType: 'transport',
-            entityId: round.transport_id,
-            entityVersion: updated[0].version,
-            payload: {
-              transportId: round.transport_id,
-              status: to,
-              event: history.event,
-              reason: history.reason,
-              byName: null,
-            },
-          });
-        }
+        const changed = await applyReverseCascade(client, {
+          transportId: round.transport_id,
+          transport,
+          room,
+          now,
+          changed: { event: 'NO_ACK_5S', fromStatus: 'waiting' },
+          counts: roundCounts(requests, round.approval_valid_until, now),
+        });
+        if (changed) events.push(changed);
       }
       return appendEvents(client, events);
     });
@@ -528,7 +540,10 @@ export function createRealtime(options: RealtimeOptions): Realtime {
 
   return {
     publish,
-    deliverRound(roundId) {
+    startRound(roundId) {
+      scheduleExpiry(roundId).catch((err: Error) =>
+        logger.error({ message: err.message, roundId }, '2분 타이머 걸기 실패'),
+      );
       deliver(roundId).catch((err: Error) =>
         logger.error({ message: err.message, roundId }, '요청 전달 실패'),
       );
@@ -567,8 +582,8 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     // HTTP 서버는 부르는 쪽이 닫는다. 연결이 남아 있으면 HTTP 서버가 닫히지 않으므로 이걸 먼저 부른다
     async close() {
       io.local.disconnectSockets(true);
-      await worker.close();
-      await queue.close();
+      await Promise.all([worker.close(), expiryWorker.close()]);
+      await Promise.all([queue.close(), expiryQueue.close()]);
       pub.disconnect();
       sub.disconnect();
     },

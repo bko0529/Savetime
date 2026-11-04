@@ -464,3 +464,82 @@ test('병원 계정을 정지하면 그 병원 탭에만 pc.revoked를 보내고
     assert.ok(bTab.connected);
   });
 });
+
+// 회차를 직접 만든다 (마감을 짧게 잡으려고). 병원 요청은 이미 받았음 처리돼 있다
+async function addRound(h: Harness, token: string, hospitalId: number, respondIn: string) {
+  const team = await request(h.app)
+    .get('/api/v1/teams/current')
+    .set('Authorization', `Bearer ${token}`);
+  const transportId = randomUUID();
+  await h.ctx.pool.query(
+    `INSERT INTO transport (id, team_id, status, location_consent) VALUES ($1, $2, 'requesting', true)`,
+    [transportId, team.body.id],
+  );
+  const { rows } = await h.ctx.pool.query<{ id: string }>(
+    `INSERT INTO request_round (transport_id, round_no, radius_km, respond_until, approval_valid_until)
+     VALUES ($1, 1, 20, now() + $2::interval, now() + interval '5 minutes') RETURNING id`,
+    [transportId, respondIn],
+  );
+  await h.ctx.pool.query(
+    `INSERT INTO hospital_request (round_id, hospital_id, delivered_at) VALUES ($1, $2, now())`,
+    [rows[0].id, hospitalId],
+  );
+  return { transportId, roundId: rows[0].id };
+}
+
+test('2분 타이머: 마감이 되면 팀에 request.expired·transport.status, 병원 탭에 request.changed가 간다 (SFR-124·112)', async () => {
+  await withRealtime(async (h) => {
+    const kim = await login(h, 'kim01');
+    await makeTeam(h, kim);
+    const app = await h.connect('/app', { auth: { token: kim } });
+    const pc = await addHospitalPc(h.ctx.pool, 'A병원');
+    const tab = await h.connect('/hospital', asCookie(pc.token));
+    await tab.emitWithAck('alarm.resume', { shiftId: pc.shiftId });
+    tab.on('request.new', (_e, ack: (r: { received: true }) => void) => ack({ received: true }));
+
+    const expired = nextEvent(app, 'request.expired');
+    const status = nextEvent(app, 'transport.status');
+    const changed = nextEvent(tab, 'request.changed');
+    const round = await addRound(h, kim, pc.hospitalId, '800 milliseconds');
+    h.realtime.startRound(round.roundId);
+
+    assert.deepEqual((await expired).data, {
+      transportId: round.transportId,
+      roundNo: 1,
+      anyApproved: false,
+    });
+    assert.equal((await status).data.reason, 'expired_no_approval');
+    assert.equal((await changed).data.status, 'expired');
+  });
+});
+
+test('서버가 다시 켜지면 마감이 지난 회차를 DB에서 찾아 만료 처리한다', async () => {
+  await withRealtime(async (h) => {
+    const kim = await login(h, 'kim01');
+    await makeTeam(h, kim);
+    const pc = await addHospitalPc(h.ctx.pool, 'A병원');
+    const round = await addRound(h, kim, pc.hospitalId, '-5 seconds');
+
+    // 같은 DB에 서버를 하나 더 켠 것처럼
+    const restarted = createRealtime({
+      auth: h.ctx,
+      redisUrl: TEST_REDIS_URL,
+      logger,
+      deliveryTimeoutMs: DELIVERY_MS,
+      prefix: `t_${randomBytes(6).toString('hex')}`,
+    });
+    try {
+      await eventually(
+        async () =>
+          (
+            await h.ctx.pool.query('SELECT status FROM transport WHERE id = $1', [
+              round.transportId,
+            ])
+          ).rows[0].status,
+        (v) => v === 'fallback',
+      );
+    } finally {
+      await restarted.close();
+    }
+  });
+});
