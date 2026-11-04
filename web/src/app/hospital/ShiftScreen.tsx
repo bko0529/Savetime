@@ -7,6 +7,8 @@ import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
+import { RequestDetail } from '@/components/hospital/RequestDetail';
+import { RequestList } from '@/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
 import { useNewRequests } from './useNewRequests';
 
@@ -84,6 +86,9 @@ export function ShiftScreen({
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
   const [startedHere, setStartedHere] = useState(false);
+  // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
+  // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -96,7 +101,11 @@ export function ShiftScreen({
         request={incoming.overlay}
         pendingCount={incoming.waiting.length}
         nowMs={incoming.nowMs}
-        onConfirm={incoming.confirm}
+        onConfirm={(id) => {
+          // '확인'을 누르면 덮개를 닫고 그 요청의 상세를 바로 연다
+          incoming.confirm(id);
+          setSelectedId(id);
+        }}
       />
       {connection === 'disconnected' && (
         <p
@@ -129,6 +138,26 @@ export function ShiftScreen({
             {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
           </Button>
         </div>
+      )}
+
+      {shift !== null && (
+        <>
+          <h2 className="text-2xl font-bold">요청 목록</h2>
+          <RequestList
+            items={incoming.items}
+            nowMs={incoming.nowMs}
+            selectedId={selectedId}
+            onOpen={setSelectedId}
+          />
+          {selectedId !== null && (
+            <RequestDetail
+              key={selectedId}
+              requestId={selectedId}
+              nowMs={incoming.nowMs}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
+        </>
       )}
     </div>
   );
