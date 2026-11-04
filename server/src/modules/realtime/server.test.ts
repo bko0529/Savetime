@@ -12,7 +12,8 @@ import { createApp } from '../../app.js';
 import { addParamedic, TEST_PASSWORD, withAuthContext } from '../../testing/auth.js';
 import { TEST_REDIS_URL } from '../../testing/services.js';
 import type { AuthContext } from '../auth/session.js';
-import { createRealtime, hashPcToken } from './server.js';
+import { hashPcToken } from '../hospital-web/pcAuth.js';
+import { createRealtime } from './server.js';
 
 const logger = pino({ level: 'silent' });
 const ok = async () => 'ok';
@@ -24,6 +25,7 @@ interface Harness {
   ctx: AuthContext;
   app: ReturnType<typeof createApp>;
   connect: (ns: '/app' | '/hospital', opts: object) => Promise<ClientSocket>;
+  realtime: ReturnType<typeof createRealtime>;
 }
 
 async function withRealtime(use: (h: Harness) => Promise<void>): Promise<void> {
@@ -55,7 +57,7 @@ async function withRealtime(use: (h: Harness) => Promise<void>): Promise<void> {
         socket.once('connect_error', (err) => reject(err));
       });
     try {
-      await use({ ctx, app, connect });
+      await use({ ctx, app, connect, realtime });
     } finally {
       for (const c of clients) c.disconnect();
       await realtime.close();
@@ -439,5 +441,26 @@ test('서버가 다시 켜지면 판정이 안 끝난 회차를 DB에서 찾아 
     } finally {
       await realtime.close();
     }
+  });
+});
+
+test('병원 계정을 정지하면 그 병원 탭에만 pc.revoked를 보내고 연결을 끊는다 (SFR-123)', async () => {
+  await withRealtime(async (h) => {
+    const a = await addHospitalPc(h.ctx.pool, 'A병원');
+    const b = await addHospitalPc(h.ctx.pool, 'B병원', 0.04);
+    const aTab = await h.connect('/hospital', asCookie(a.token));
+    const bTab = await h.connect('/hospital', asCookie(b.token));
+
+    const revoked = nextEvent(aTab, 'pc.revoked');
+    const closed = new Promise((resolve) => aTab.once('disconnect', resolve));
+    let bRevoked = false;
+    bTab.on('pc.revoked', () => (bRevoked = true));
+
+    await h.realtime.revokeHospital(String(a.hospitalId), 'account_suspended');
+    assert.deepEqual((await revoked).data, { reason: 'account_suspended' });
+    await closed;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(bRevoked, false);
+    assert.ok(bTab.connected);
   });
 });

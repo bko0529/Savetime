@@ -9,6 +9,7 @@ import { createApp } from '../../app.js';
 import { signAccessToken, signingKey } from '../auth/tokens.js';
 import { hashLicenseKey } from '../hospital-web/licenseKey.js';
 import { WEB_ORIGIN, withHospitalWeb } from '../../testing/hospitalWeb.js';
+import type { Realtime } from '../realtime/server.js';
 import { signAdminAccessToken } from './tokens.js';
 
 const logger = pino({ level: 'silent' });
@@ -21,16 +22,25 @@ interface Harness {
   admin: (method: 'get' | 'post', path: string, token?: string) => request.Test;
   hw: (method: 'get' | 'post', path: string, cookie?: string) => request.Test;
   addHospital: (name: string, publicId: string) => Promise<number>;
+  // 실시간 서버 대신: 정지 때 부른 병원 id 를 모은다
+  revoked: string[];
 }
 
 async function withAdminHospitals(use: (h: Harness) => Promise<void>): Promise<void> {
   await withHospitalWeb(async (hospitalWeb) => {
     const { pool, redis } = hospitalWeb;
     const jwtKey = signingKey(randomBytes(32).toString('base64'));
+    const revoked: string[] = [];
+    const realtime = {
+      revokeHospital: async (hospitalId: string) => {
+        revoked.push(hospitalId);
+      },
+    } as unknown as Realtime;
     const app = createApp({
       logger,
       healthChecks: { db: ok, redis: ok },
       hospitalWeb,
+      realtime,
       admin: { pool, redis, jwtKey, sessionHours: 14, allowedOrigins: [WEB_ORIGIN] },
     });
     const { rows } = await pool.query<{ id: string }>(
@@ -38,6 +48,7 @@ async function withAdminHospitals(use: (h: Harness) => Promise<void>): Promise<v
     );
     const adminToken = await signAdminAccessToken(jwtKey, rows[0].id);
     await use({
+      revoked,
       pool,
       adminToken,
       jwtKey,
@@ -260,5 +271,15 @@ test('관리자 토큰이 없거나 대원 토큰이면 막는다 (SER-010)', as
       }
     }
     assert.equal((await auditRows(h.pool)).length, 0);
+  });
+});
+
+test('정지하면 커밋 뒤 실시간 서버에 그 병원 탭을 끊게 하고, 이미 정지된 병원은 다시 부르지 않는다', async () => {
+  await withAdminHospitals(async (h) => {
+    const id = await h.addHospital('A병원', 'A1');
+    await h.admin('post', `/admin/hospitals/${id}/account`);
+    assert.equal((await h.admin('post', `/admin/hospitals/${id}/suspend`)).status, 204);
+    assert.equal((await h.admin('post', `/admin/hospitals/${id}/suspend`)).status, 204);
+    assert.deepEqual(h.revoked, [String(id)]);
   });
 });

@@ -79,7 +79,7 @@ export function createApp({
     app.use('/api/v1', adminAuthRouter(admin));
     // 로그인 말고는 모두 관리자 토큰이 있어야 한다 (SER-010)
     const adminOnly = requireAdmin(admin);
-    app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', auditRouter(admin.pool, adminOnly));
   }
 

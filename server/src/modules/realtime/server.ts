@@ -3,7 +3,6 @@
 // - /hospital: 병원 웹. 등록 PC 쿠키(st_pc)로 PC를 알아보고 hospital:{id} 방에, 알림을 켠 PC는 hospital:{id}:on 방에 넣는다.
 // - 서버 2대 대비: 방 정보는 Redis 어댑터로 서버끼리 나눠 보고, 5초 판정 같은 타이머는 BullMQ 예약 작업으로 돌린다.
 //   서버 메모리에 상태를 두지 않는다 (절대 규칙 7). 알림 켜짐 여부의 기준도 DB(hospital_shift.alarm_on_at)다.
-import { createHash } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Queue, Worker } from 'bullmq';
@@ -21,6 +20,8 @@ import {
 import { AppError } from '../../http/errors.js';
 import { authenticateParamedic } from '../auth/guards.js';
 import type { AuthContext } from '../auth/session.js';
+// 쿠키 해시는 PC 등록 API와 같은 함수를 쓴다. 저장할 때와 찾을 때 방식이 달라지지 않게 (COR-012)
+import { hashPcToken } from '../hospital-web/pcAuth.js';
 import { currentTeamId } from '../team/routes.js';
 import {
   appendEvents,
@@ -45,6 +46,8 @@ export interface Realtime {
   alarmOn(pc: { pcId: string; hospitalId: string }, socketId: string): Promise<boolean>;
   // 근무 종료 등: 이 PC 의 탭들을 :on 방에서 빼고 hospital.alarm_off 를 보낸다
   alarmOff(pc: { pcId: string; hospitalId: string }, reason: 'shift_ended'): Promise<void>;
+  // 병원 계정 정지 등: 그 병원 PC 탭에 pc.revoked 를 보내고 연결을 끊는다 (SFR-123). 다시 붙으면 인증에서 막힌다
+  revokeHospital(hospitalId: string, reason: 'account_suspended'): Promise<void>;
   attach(httpServer: HttpServer): void;
   close(): Promise<void>;
 }
@@ -94,11 +97,6 @@ function readCookie(header: string | undefined, name: string): string | undefine
     if (key === name) return decodeURIComponent(rest.join('='));
   }
   return undefined;
-}
-
-// PC 쿠키는 추측할 수 없는 무작위 값이라 빠른 해시로 충분하다. PC 등록 API도 같은 방식으로 저장해야 한다 (COR-012)
-export function hashPcToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }
 
 export function createRealtime(options: RealtimeOptions): Realtime {
@@ -546,6 +544,12 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       if (!socket || (socket.data as HospitalSocketData).pcId !== pc.pcId) return false;
       socket.join(onRoom(pc.hospitalId));
       return true;
+    },
+    async revokeHospital(hospitalId, reason) {
+      const room = `hospital:${hospitalId}`;
+      hospital.to(room).emit('pc.revoked', directEnvelope(room, { reason }));
+      // close=false: 같은 연결로 방금 보낸 pc.revoked 가 먼저 가고 그다음 끊김이 간다
+      hospital.in(room).disconnectSockets(false);
     },
     async alarmOff(pc, reason) {
       const room = onRoom(pc.hospitalId);
