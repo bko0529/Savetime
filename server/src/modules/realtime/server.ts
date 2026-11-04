@@ -20,6 +20,12 @@ import { authenticateParamedic } from '../auth/guards.js';
 import type { AuthContext } from '../auth/session.js';
 // 쿠키 해시는 PC 등록 API와 같은 함수를 쓴다. 저장할 때와 찾을 때 방식이 달라지지 않게 (COR-012)
 import { hashPcToken } from '../hospital-web/pcAuth.js';
+import {
+  createPushDispatcher,
+  forgetConnection,
+  setVisible,
+  type PushSender,
+} from '../push/dispatch.js';
 import { currentTeamId } from '../team/routes.js';
 import { expireRound } from '../transport/expire.js';
 import { applyReverseCascade, roundCounts } from '../transport/hreqCascade.js';
@@ -61,6 +67,8 @@ export interface RealtimeOptions {
   deliveryTimeoutMs?: number;
   // 테스트 파일끼리 Redis 채널·큐가 섞이지 않게 이름 앞에 붙인다
   prefix?: string;
+  // FCM 발송 함수. 없으면(키 없음·테스트) 푸시 없이 웹소켓만 보낸다 (SFR-130)
+  push?: PushSender;
 }
 
 interface AppSocketData {
@@ -104,6 +112,9 @@ function readCookie(header: string | undefined, name: string): string | undefine
 export function createRealtime(options: RealtimeOptions): Realtime {
   const { auth, logger } = options;
   const { pool } = auth;
+  const pushDispatcher = options.push
+    ? createPushDispatcher({ pool, redis: auth.redis, sender: options.push, logger })
+    : undefined;
   const timeoutMs = options.deliveryTimeoutMs ?? 5000;
   const prefix = options.prefix ?? 'savetime';
 
@@ -140,6 +151,14 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     if (teamId) void socket.join(`team:${teamId}`);
 
     // 연결·재연결 직후 앱이 1번 부른다. 놓친 이벤트를 순서대로 보내고 ack (설계 3장)
+    // 앱이 화면에 보이는지 (포그라운드·백그라운드 바뀔 때마다). 보이면 푸시 대신 앱이 직접 울린다 (실시간 설계 5장)
+    socket.on('app.visibility', (req: { visible?: unknown }) => {
+      setVisible(auth.redis, paramedicId, socket.id, req?.visible === true).catch(() => {});
+    });
+    socket.on('disconnect', () => {
+      forgetConnection(auth.redis, paramedicId, socket.id).catch(() => {});
+    });
+
     socket.on('sync', async (req: { lastSeq?: unknown }, ack: unknown) => {
       if (typeof ack !== 'function') return;
       try {
@@ -279,6 +298,8 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       const ns = event.room.startsWith('hospital:') ? hospital : app;
       ns.to(event.room).emit(event.name, toEnvelope(event));
     }
+    // 화면에 앱이 안 보이는 팀원에게는 FCM 푸시도 (첫 승인·전부 거절·2분 만료). 기다리지 않는다
+    void pushDispatcher?.handle(events);
   }
 
   // ---------- 요청 전달 확인 (SFR-161) ----------
