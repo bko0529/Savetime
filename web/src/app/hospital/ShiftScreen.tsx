@@ -95,6 +95,16 @@ export function ShiftScreen({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* 연결이 끊기면 새 요청을 못 받으니 화면 맨 위에 크게, 내려도 보이게 고정한다 (SFR-122).
+          다시 붙으면 목록을 새로 받아 놓친 요청을 불러온다 (useNewRequests) */}
+      {connection === 'disconnected' && (
+        <p
+          role="alert"
+          className="sticky top-0 z-40 rounded-lg bg-destructive px-4 py-4 text-2xl font-extrabold text-white"
+        >
+          연결 끊김 — 새 요청을 받을 수 없어요
+        </p>
+      )}
       {incoming.waiting.length > 0 && (
         <p className="text-3xl font-extrabold text-destructive">
           🔴 새 이송 요청 {incoming.waiting.length}건
@@ -110,14 +120,6 @@ export function ShiftScreen({
           setSelectedId(id);
         }}
       />
-      {connection === 'disconnected' && (
-        <p
-          role="alert"
-          className="rounded-lg bg-destructive px-4 py-3 text-xl font-bold text-white"
-        >
-          서버 연결이 끊겼어요 · 다시 연결 중…
-        </p>
-      )}
 
       {shift === null ? (
         <StartShift onStarted={() => setStartedHere(true)} />

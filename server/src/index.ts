@@ -85,7 +85,7 @@ const app = createApp({
   // 병원 웹 API 는 대원·병원 서버(main)에서만 켠다 (T-11)
   hospitalWeb:
     config.APP_ROLE === 'main'
-      ? { pool, redis, allowedOrigins: config.ALLOWED_ORIGINS }
+      ? { pool, redis, allowedOrigins: config.ALLOWED_ORIGINS, realtime }
       : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),

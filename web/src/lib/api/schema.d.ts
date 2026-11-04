@@ -1025,7 +1025,9 @@ export interface paths {
         put?: never;
         /**
          * 근무 시작 (담당자 이름)
-         * @description **요구사항**: SFR-117
+         * @description PC 1대에 진행 중 근무는 1개. 앞 근무가 남아 있으면 끝내고 새로 시작하고, 그 PC 탭들에 hospital.alarm_off{shift_ended}. 새 근무는 알림이 꺼진 채로 시작한다.
+         *
+         *     **요구사항**: SFR-117
          *     **화면**: H-01 근무 시작
          */
         post: operations["post_hw_shifts"];
@@ -1046,7 +1048,7 @@ export interface paths {
         put?: never;
         /**
          * 알림 켜기 (이때부터 요청 대상)
-         * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다.
+         * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다. 진행 중 근무가 없거나 socketId가 이 PC의 /hospital 연결이 아니면 NOT_FOUND.
          *
          *     **요구사항**: SFR-117, SFR-136
          *     **화면**: H-01 근무 시작
@@ -1070,7 +1072,7 @@ export interface paths {
         put?: never;
         /**
          * 근무 종료
-         * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}.
+         * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}. 진행 중 근무가 없으면 NOT_FOUND.
          *
          *     **요구사항**: SFR-117
          *     **화면**: H-02

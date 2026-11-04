@@ -40,6 +40,11 @@ export interface Realtime {
   joinTeam(paramedicId: string, teamId: string): Promise<void>;
   // 근무 종료·로그아웃·탈퇴: 그 대원의 연결을 모두 끊는다 (SER-016)
   disconnectParamedic(paramedicId: string): Promise<void>;
+  // 병원 웹 '알림 켜기'(REST): 이 PC 의 그 탭만 hospital:{id}:on 방에 넣는다 (SFR-117).
+  // 다른 PC 의 연결 id 면 넣지 않고 false. 다른 서버에 붙은 탭도 Redis 어댑터로 찾는다
+  alarmOn(pc: { pcId: string; hospitalId: string }, socketId: string): Promise<boolean>;
+  // 근무 종료 등: 이 PC 의 탭들을 :on 방에서 빼고 hospital.alarm_off 를 보낸다
+  alarmOff(pc: { pcId: string; hospitalId: string }, reason: 'shift_ended'): Promise<void>;
   attach(httpServer: HttpServer): void;
   close(): Promise<void>;
 }
@@ -243,6 +248,18 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       data.shiftId = shiftId!;
       await socket.join(onRoom(data.hospitalId));
       ack({ ok: true });
+    });
+
+    // REST(알림 켜기)로 방에 들어간 탭은 shiftId 를 모른다(다른 서버가 넣었을 수도 있다).
+    // 그래서 끊기기 직전 아직 :on 방에 있었으면 이 PC 의 진행 중 근무로 알림을 푼다
+    socket.on('disconnecting', () => {
+      if (data.shiftId || !socket.rooms.has(onRoom(data.hospitalId))) return;
+      pool
+        .query(
+          'UPDATE hospital_shift SET alarm_on_at = NULL WHERE pc_id = $1 AND ended_at IS NULL',
+          [data.pcId],
+        )
+        .catch((err: Error) => logger.error({ message: err.message }, '알림 끄기 실패'));
     });
 
     // 브라우저를 닫거나 연결이 끊기면 '요청 받을 수 있음'을 푼다 (SFR-117). 요청 대상 판정은 DB 값을 본다
@@ -522,6 +539,21 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     },
     async disconnectParamedic(paramedicId) {
       app.in(`paramedic:${paramedicId}`).disconnectSockets(true);
+    },
+    async alarmOn(pc, socketId) {
+      const [socket] = await hospital.in(socketId).fetchSockets();
+      if (!socket || (socket.data as HospitalSocketData).pcId !== pc.pcId) return false;
+      socket.join(onRoom(pc.hospitalId));
+      return true;
+    },
+    async alarmOff(pc, reason) {
+      const room = onRoom(pc.hospitalId);
+      const sockets = await hospital.in(`hospital:${pc.hospitalId}`).fetchSockets();
+      for (const socket of sockets) {
+        if ((socket.data as HospitalSocketData).pcId !== pc.pcId) continue;
+        socket.leave(room);
+        socket.emit('hospital.alarm_off', directEnvelope(room, { reason }));
+      }
     },
     attach(httpServer) {
       io.attach(httpServer);
