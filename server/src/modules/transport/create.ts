@@ -386,9 +386,9 @@ export function transportRouter(
     const outcome = await withTransaction(pool, (client) =>
       createTransport(client, paramedicId, input),
     );
-    // 커밋된 뒤에만 보낸다. 팀원 화면 갱신 + 병원 PC에 request.new (SFR-109·161)
+    // 커밋된 뒤에만 보낸다. 팀원 화면 갱신 + 병원 PC에 request.new (SFR-109·161) + 2분 타이머 (SFR-124)
     realtime?.publish(outcome.events);
-    if (outcome.roundId) realtime?.deliverRound(outcome.roundId);
+    if (outcome.roundId) realtime?.startRound(outcome.roundId);
     res.status(201).json(await loadTransport(pool, outcome.transportId, paramedicId));
   });
 
