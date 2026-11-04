@@ -15,6 +15,7 @@ import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 import { createRealtime } from './modules/realtime/server.js';
+import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
 
@@ -146,6 +147,16 @@ if (config.PUBLIC_DATA_API_KEY) {
 } else {
   logger.warn('PUBLIC_DATA_API_KEY가 없어 병상 수집을 켜지 않습니다');
 }
+
+// 2시간 활동 없는 이송 건 자동 종료 (SFR-086). 키와 상관없이 항상 켠다
+scheduledJobs.push({
+  name: 'transport-auto-end',
+  everyMs: AUTO_END_EVERY_MS,
+  run: async () => {
+    const events = await endInactiveTransports(pool, logger);
+    realtime?.publish(events);
+  },
+});
 
 // 관리자 서버는 주기 작업을 맡지 않는다 (T-11).
 const jobRunners: JobRunner[] =

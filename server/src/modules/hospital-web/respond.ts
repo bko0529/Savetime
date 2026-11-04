@@ -179,6 +179,11 @@ export async function respondToRequest(
     ],
   );
   const version = updated[0].version;
+  // 병원 응답도 '활동'이다. 2시간 활동 없음 자동 종료의 시계를 다시 시작한다 (SFR-086)
+  // version은 올리지 않는다: 이송 건 행의 상태가 바뀐 게 아니다 (stateMachine.ts 규칙 4)
+  await client.query('UPDATE transport SET last_activity_at = now() WHERE id = $1', [
+    target.transport_id,
+  ]);
 
   // 거절한 병원은 이번 이송에서 다시 추천하지 않는다 (SFR-086·119)
   if (response.event === 'REJECT') {

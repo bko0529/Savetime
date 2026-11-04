@@ -412,3 +412,25 @@ test('거절: 사유 필수, 제외 병원에 추가. 마지막 열린 요청까
     });
   });
 });
+
+test('병원 응답은 활동이라 2시간 자동 종료 시계를 다시 시작한다 (SFR-086)', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const desk = await h.pcOnShift(a.key, '접수대', '박서연');
+    const {
+      transportId,
+      requestIds: [id],
+    } = await sendRound(h.pool, [a.id]);
+    await h.pool.query(
+      `UPDATE transport SET last_activity_at = now() - interval '1 hour' WHERE id = $1`,
+      [transportId],
+    );
+    assert.equal((await h.post(`/hw/requests/${id}/approve`, desk, { version: 1 })).status, 200);
+    const { rows } = await h.pool.query(
+      `SELECT now() - last_activity_at < interval '1 minute' AS fresh, version FROM transport WHERE id = $1`,
+      [transportId],
+    );
+    // 이송 건 상태는 그대로라 version은 오르지 않는다
+    assert.deepEqual(rows[0], { fresh: true, version: 1 });
+  });
+});
