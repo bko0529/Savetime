@@ -2,7 +2,7 @@
 // 임시 DB·실제 Redis·실제 웹소켓 연결(실시간 서버 #28)로 확인한다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type pg from 'pg';
@@ -10,7 +10,7 @@ import { pino } from 'pino';
 import { io as connectClient, type Socket as ClientSocket } from 'socket.io-client';
 import request from 'supertest';
 import { createApp } from '../../app.js';
-import { withAuthContext } from '../../testing/auth.js';
+import { addParamedic, TEST_PASSWORD, withAuthContext } from '../../testing/auth.js';
 import { addHospitalWithKey, WEB_ORIGIN } from '../../testing/hospitalWeb.js';
 import { TEST_REDIS_URL } from '../../testing/services.js';
 import { createRealtime } from '../realtime/server.js';
@@ -25,6 +25,8 @@ interface Harness {
   session: (cookie: string) => request.Test;
   // 브라우저 탭 하나처럼 /hospital 에 붙는다
   openTab: (cookie: string) => Promise<ClientSocket>;
+  // 대원 API 등 쿠키 없이 부를 때
+  api: () => ReturnType<typeof request>;
 }
 
 async function withShiftApp(use: (h: Harness) => Promise<void>): Promise<void> {
@@ -34,6 +36,8 @@ async function withShiftApp(use: (h: Harness) => Promise<void>): Promise<void> {
       redisUrl: TEST_REDIS_URL,
       logger,
       prefix: `t_${randomBytes(6).toString('hex')}`,
+      // 받았음 판정(5초)을 테스트에서는 짧게
+      deliveryTimeoutMs: 600,
     });
     const hospitalWeb = {
       pool: auth.pool,
@@ -57,6 +61,7 @@ async function withShiftApp(use: (h: Harness) => Promise<void>): Promise<void> {
 
     try {
       await use({
+        api: () => request(server),
         pool: auth.pool,
         registerPc: async (pcName) => {
           const res = await request(server)
@@ -258,5 +263,45 @@ test('담당자 이름이 비었거나 40자를 넘으면 400, 등록 안 된 PC
     }
     const stranger = await h.post('/hw/shifts', 'st_pc=made-up', { staffName: '박서연' });
     assert.equal(stranger.body.error.code, 'PC_NOT_REGISTERED');
+  });
+});
+
+test('REST로 알림을 켠 탭이 받았음을 안 보내면 DB 알림도 꺼져 다음 요청 대상에서 빠진다 (SFR-161)', async () => {
+  await withShiftApp(async (h) => {
+    const cookie = await h.registerPc('접수대');
+    await h.post('/hw/shifts', cookie, { staffName: '박서연' });
+    // 이 탭은 request.new를 받아도 받았음을 보내지 않는다
+    const tab = await h.openTab(cookie);
+    assert.equal(
+      (await h.post('/hw/shifts/current/alarm-on', cookie, { socketId: tab.id })).status,
+      200,
+    );
+    const off = nextEvent<AlarmOff>(tab, 'hospital.alarm_off');
+
+    await addParamedic(h.pool, { loginId: 'kim01' });
+    const login = await h
+      .api()
+      .post('/api/v1/auth/login')
+      .send({ loginId: 'kim01', password: TEST_PASSWORD, deviceId: 'd1' });
+    const auth = `Bearer ${login.body.tokens.accessToken}`;
+    await h.api().post('/api/v1/teams').set('Authorization', auth).send({ role: 'driver' });
+    const created = await h
+      .api()
+      .post('/api/v1/transports')
+      .set('Authorization', auth)
+      .send({
+        id: randomUUID(),
+        radiusKm: 20,
+        location: { lat: 36.81, lng: 127.1 },
+        locationConsent: true,
+        assessment: { chiefComplaint: '두통' },
+      });
+    assert.equal(created.body.status, 'requesting');
+
+    assert.equal((await off).data.reason, 'no_ack');
+    await eventually(
+      () => alarmOnAt(h.pool),
+      (v) => v.length === 1 && v[0] === null,
+    );
   });
 });

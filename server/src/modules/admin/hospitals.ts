@@ -8,6 +8,7 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { hashLicenseKey, licenseKeyPrefix, newLicenseKey } from '../hospital-web/licenseKey.js';
 import { MAX_PCS } from '../hospital-web/routes.js';
+import type { Realtime } from '../realtime/server.js';
 import { adminId } from './auth.js';
 import { recordAudit } from './audit.js';
 
@@ -39,7 +40,11 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 const notFound = () => new AppError(404, 'NOT_FOUND', '병원을 찾을 수 없어요');
 
-export function adminHospitalRouter(pool: pg.Pool, adminOnly: RequestHandler): Router {
+export function adminHospitalRouter(
+  pool: pg.Pool,
+  adminOnly: RequestHandler,
+  realtime?: Realtime,
+): Router {
   const router = Router();
 
   // 병원 검색: 이름 일부로 찾는다. 계정 상태·등록 PC 수·지금 쓰는 키(앞 4자리)를 같이 보여 준다
@@ -134,7 +139,7 @@ export function adminHospitalRouter(pool: pg.Pool, adminOnly: RequestHandler): R
   // 병원 계정 정지: 그 병원의 모든 등록 PC 가 다음 요청부터 막힌다 (requireHospitalPc 가 요청마다 확인)
   router.post('/admin/hospitals/:id/suspend', adminOnly, async (req, res) => {
     const { id } = parseBody(idParams, req.params);
-    await withTransaction(pool, async (client) => {
+    const suspended = await withTransaction(pool, async (client) => {
       const { rows } = await client.query<{ id: string; name: string; account_active: boolean }>(
         'SELECT id, name, account_active FROM hospital WHERE id = $1 FOR UPDATE',
         [id],
@@ -142,7 +147,7 @@ export function adminHospitalRouter(pool: pg.Pool, adminOnly: RequestHandler): R
       const hospital = rows[0];
       if (!hospital) throw notFound();
       // 이미 정지돼 있으면 아무것도 바꾸지 않고, 이력도 두 번 남기지 않는다
-      if (!hospital.account_active) return;
+      if (!hospital.account_active) return false;
 
       await client.query('UPDATE hospital SET account_active = false WHERE id = $1', [id]);
       // 알림 켠 근무를 꺼서 이 병원이 새 요청 대상에서 바로 빠지게 한다
@@ -159,7 +164,10 @@ export function adminHospitalRouter(pool: pg.Pool, adminOnly: RequestHandler): R
         targetId: hospital.id,
         targetName: hospital.name,
       });
+      return true;
     });
+    // 이미 열려 있는 병원 웹 탭도 커밋 뒤 바로 막는다 (SFR-123 인수 기준 '두 PC 모두 막힘')
+    if (suspended) await realtime?.revokeHospital(String(id), 'account_suspended');
     res.status(204).end();
   });
 
