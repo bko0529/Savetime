@@ -8,6 +8,8 @@ const ERROR_TEXT: Record<string, string> = {
   INVALID_CREDENTIALS: '아이디 또는 비밀번호가 맞지 않아요.',
   INVALID_OTP: 'OTP 코드가 맞지 않아요. 앱에 지금 떠 있는 6자리를 입력해 주세요.',
   ACCOUNT_LOCKED: '5번 틀려서 10분 동안 로그인할 수 없어요.',
+  ACCOUNT_SUSPENDED: '병원 계정이 정지됐어요. 관리자에게 문의하세요.',
+  ACCOUNT_EXISTS: '이미 병원 계정이 있어요.',
   ORIGIN_NOT_ALLOWED: '허용되지 않은 주소에서 접속했어요. 병원 웹 주소를 확인해 주세요.',
   [NETWORK_ERROR]: '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.',
 };

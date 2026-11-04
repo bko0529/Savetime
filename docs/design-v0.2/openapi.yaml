@@ -2071,12 +2071,13 @@ paths:
         \ 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds.\
         \ 관리자 알림(pc_change) 발생.\n\n**요구사항**:\
         \ SFR-116, SFR-147, COR-012  \n**화면**: H-01 PC 등록  \n**오류 코드**: INVALID_LICENSE,\
-        \ LICENSE_EXPIRED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
+        \ LICENSE_EXPIRED, ACCOUNT_SUSPENDED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED"
       operationId: post_hw_pc_register
       security: *id001
       x-error-codes:
       - INVALID_LICENSE
       - LICENSE_EXPIRED
+      - ACCOUNT_SUSPENDED
       - PC_LIMIT_REACHED
       - TOO_MANY_ATTEMPTS
       - ORIGIN_NOT_ALLOWED
@@ -2127,14 +2128,16 @@ paths:
       tags:
       - 5. 병원 웹
       summary: 현재 PC·병원 정보
-      description: "**요구사항**: SFR-116, SFR-146, SFR-139  \n**화면**: H-01 · 상단 바  \n\
-        **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED"
+      description: "병원 계정이 정지됐으면 ACCOUNT_SUSPENDED (등록 PC를 쓰는 모든 /hw API 공통, SFR-123).\n\n\
+        **요구사항**: SFR-116, SFR-146, SFR-139  \n**화면**: H-01 · 상단 바  \n\
+        **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED, ACCOUNT_SUSPENDED"
       operationId: get_hw_session
       security: &id013
       - hospitalPc: []
       x-error-codes:
       - PC_NOT_REGISTERED
       - LICENSE_EXPIRED
+      - ACCOUNT_SUSPENDED
       responses:
         '200':
           description: 성공
