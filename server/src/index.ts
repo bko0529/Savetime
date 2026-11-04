@@ -14,6 +14,7 @@ import { createFetchBeds, createFetchItems } from './modules/collector/publicApi
 import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
+import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
 import { createEtaLookup } from './modules/transport/eta.js';
@@ -75,7 +76,14 @@ const auth =
     ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
     : undefined;
 // 실시간(Socket.IO)은 대원·병원 API가 있는 서버에서만 켠다. 관리자 서버(T-11)는 켜지 않는다
-const realtime = auth ? createRealtime({ auth, redisUrl: config.REDIS_URL, logger }) : undefined;
+// 키가 없으면 푸시만 꺼진다. 앱이 켜져 있을 때의 실시간 알림은 그대로 (SFR-130)
+const push = config.FIREBASE_SERVICE_ACCOUNT_BASE64
+  ? createFcmSender(config.FIREBASE_SERVICE_ACCOUNT_BASE64)
+  : undefined;
+if (!push) logger.warn('FIREBASE_SERVICE_ACCOUNT_BASE64가 없어 푸시 알림을 보내지 않습니다');
+const realtime = auth
+  ? createRealtime({ auth, redisUrl: config.REDIS_URL, logger, push })
+  : undefined;
 
 const app = createApp({
   logger,
