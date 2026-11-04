@@ -159,6 +159,91 @@ describe('병원 관리 (SFR-123)', () => {
   });
 });
 
+describe('라이선스 키 폐기·재발급 (SFR-146)', () => {
+  const LICENSE = { id: 9, prefix: 'ABCD', expiresAt: '2027-11-04T00:00:00Z', daysLeft: 300 };
+  const FAKE_NEW = 'WXYZ-EFGH-JKMN-PQRS-TUVW';
+
+  it('재발급: 사유를 써야 보낼 수 있고, 새 키를 한 번만 보여 준다', async () => {
+    const active = hospital(1, 'A병원', { accountActive: true, pcCount: 3, license: LICENSE });
+    const server = fakeServer({
+      'GET /admin/hospitals': [
+        list(active),
+        list({ ...active, pcCount: 0, license: { ...LICENSE, id: 10, prefix: 'WXYZ' } }),
+      ],
+      'POST /admin/hospitals/1/license-keys': {
+        status: 201,
+        body: { licenseKey: FAKE_NEW, expiresAt: '2027-11-04T00:00:00Z' },
+      },
+    });
+    renderAdmin(<HospitalAdmin />);
+    fireEvent.click(await screen.findByRole('button', { name: '키 재발급' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('등록된 PC는 모두 막히고');
+    const send = within(dialog).getByRole('button', { name: '재발급' });
+    expect(send).toHaveProperty('disabled', true);
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /사유/ }), {
+      target: { value: ' 키 유출 의심 ' },
+    });
+    expect(send).toHaveProperty('disabled', false);
+    fireEvent.click(send);
+
+    const keyDialog = await screen.findByRole('dialog', { name: /라이선스 키/ });
+    expect(within(keyDialog).getByText(FAKE_NEW)).toBeTruthy();
+    expect(server.callsTo('POST /admin/hospitals/1/license-keys')[0].body).toEqual({
+      reason: '키 유출 의심',
+    });
+    fireEvent.click(within(keyDialog).getByRole('button', { name: '확인했어요' }));
+    expect(await screen.findByText(/WXYZ-····/)).toBeTruthy();
+  });
+
+  it('폐기: 키 id 로 사유와 함께 보내고, 폐기된 병원은 재발급만 할 수 있다', async () => {
+    const active = hospital(2, 'B병원', { accountActive: true, pcCount: 2, license: LICENSE });
+    const server = fakeServer({
+      'GET /admin/hospitals': [list(active), list({ ...active, pcCount: 0, license: null })],
+      'POST /admin/license-keys/9/revoke': { status: 204 },
+    });
+    renderAdmin(<HospitalAdmin />);
+    fireEvent.click(await screen.findByRole('button', { name: '키 폐기' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('새 키는 만들지 않아요');
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /사유/ }), {
+      target: { value: '병원 탈퇴' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '폐기' }));
+
+    await waitFor(() =>
+      expect(server.callsTo('POST /admin/license-keys/9/revoke')[0].body).toEqual({
+        reason: '병원 탈퇴',
+      }),
+    );
+    const row = (await screen.findByText('키 폐기됨')).closest('tr')!;
+    expect(within(row).getByRole('button', { name: '키 재발급' })).toBeTruthy();
+    expect(within(row).queryByRole('button', { name: '키 폐기' })).toBeNull();
+    // 계정은 이미 있으니 '계정 발급'은 보이지 않는다 (누르면 ACCOUNT_EXISTS)
+    expect(within(row).queryByRole('button', { name: '계정 발급' })).toBeNull();
+  });
+
+  it('취소하면 쓰던 사유를 지운다', async () => {
+    fakeServer({
+      'GET /admin/hospitals': list(
+        hospital(1, 'A병원', { accountActive: true, license: LICENSE }),
+      ),
+    });
+    renderAdmin(<HospitalAdmin />);
+    fireEvent.click(await screen.findByRole('button', { name: '키 폐기' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: /사유/ }), {
+      target: { value: '분실' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: '키 폐기' }));
+    expect(
+      ((await screen.findByRole('textbox', { name: /사유/ })) as HTMLInputElement).value,
+    ).toBe('');
+  });
+});
+
 describe('관리자 작업 이력 (SFR-091)', () => {
   it('시각·관리자·작업·대상을 최신순으로 보여 주고, 더 보기로 이어 받는다', async () => {
     const at = '2026-11-04T01:05:00Z';

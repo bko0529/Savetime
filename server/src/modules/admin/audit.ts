@@ -9,6 +9,8 @@ import { parseBody } from '../../http/validate.js';
 export const AUDIT_ACTIONS = {
   issue_account: '병원 계정 발급',
   suspend_hospital: '병원 계정 정지',
+  revoke_key: '라이선스 키 폐기',
+  reissue_key: '라이선스 키 재발급',
 } as const;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 
