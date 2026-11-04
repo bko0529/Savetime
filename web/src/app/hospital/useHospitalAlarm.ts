@@ -24,10 +24,13 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
   const shiftIdRef = useRef<number | null>(null);
   const [connection, setConnection] = useState<Connection>('connecting');
   const [alarm, setAlarm] = useState<AlarmState>({ kind: 'off' });
+  // 새 요청 받기(useNewRequests)가 같은 연결을 쓰도록 밖으로 내보낸다
+  const [socket, setSocket] = useState<HospitalSocket | null>(null);
 
   useEffect(() => {
     const socket = createSocket();
     socketRef.current = socket;
+    setSocket(socket);
 
     const onConnect = () => {
       setConnection('connected');
@@ -65,6 +68,7 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
       socket.off('hospital.alarm_off', onAlarmOff);
       socket.disconnect();
       socketRef.current = null;
+      setSocket(null);
     };
   }, [createSocket, queryClient]);
 
@@ -87,5 +91,5 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
     },
   });
 
-  return { connection, alarm, turnOn };
+  return { socket, connection, alarm, turnOn };
 }
