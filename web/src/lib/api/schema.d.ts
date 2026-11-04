@@ -1264,11 +1264,11 @@ export interface paths {
         put?: never;
         /**
          * 추가 메모 (1번)
-         * @description 확정 요청에만. 대원 앱에 경보 hospital.extra_memo.
+         * @description 확정 요청에만, 1번만 (상태는 바뀌지 않고 version만 +1). 대원 앱에 경보 hospital.extra_memo {transportId, hospitalRequestId, hospitalName} — 메모 글은 이벤트에 넣지 않고(절대 규칙 5) 앱이 GET /transports/current 의 extraMemo로 받는다. 같은 병원 PC에 request.changed·incoming.updated. 확정 전(대기·승인) 요청은 INVALID_TRANSITION, 끝난 요청은 REQUEST_CLOSED.
          *
          *     **요구사항**: SFR-140
-         *     **화면**: H-03 도착 예정
-         *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT
+         *     **화면**: H-03 도착 예정, H-02 요청 상세
+         *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT, VERSION_REQUIRED, INVALID_TRANSITION, SHIFT_REQUIRED
          */
         post: operations["post_hw_requests__requestId__extra_memo"];
         delete?: never;
@@ -2354,7 +2354,10 @@ export interface components {
             /** @description 우리 병원의 지금 유효한 승인 수 (과승인 경고용) */
             validApprovals?: number;
             respondedBy?: string | null;
+            /** @description 승인 메모 (승인할 때 함께 보낸 것) */
             memo?: string | null;
+            /** @description 확정 뒤 보낸 추가 메모 (SFR-140). 값이 있으면 '추가 메모' 버튼을 숨긴다 */
+            extraMemo?: string | null;
         };
         HwIncoming: {
             id?: number;

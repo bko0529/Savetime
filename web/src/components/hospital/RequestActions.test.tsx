@@ -215,6 +215,81 @@ describe('승인 취소 (SFR-128)', () => {
   });
 });
 
+describe('승인 메모·추가 메모 (SFR-140)', () => {
+  const EXTRA = 'POST /hw/requests/102/extra-memo';
+
+  it('승인 메모를 적으면 승인과 함께 보낸다 (50자까지)', async () => {
+    const server = open({ [APPROVE]: { status: 200, body: { status: 'approved', version: 4 } } });
+    const input = await screen.findByLabelText(/승인 메모/);
+    fireEvent.change(input, { target: { value: '가'.repeat(51) } });
+    expect((input as HTMLInputElement).value).toHaveLength(50);
+    fireEvent.change(input, { target: { value: ' 3번 출입구로 오세요 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    await waitFor(() => expect(server.callsTo(APPROVE)).toHaveLength(1));
+    expect(server.callsTo(APPROVE)[0].body).toEqual({ memo: '3번 출입구로 오세요', version: 3 });
+  });
+
+  it('확정된 요청에서 추가 메모를 보내면 버튼이 사라지고 메모가 보인다', async () => {
+    const server = open({
+      [DETAIL]: detail({
+        status: 'confirmed',
+        respondedBy: '박서연',
+        memo: '3번 출입구',
+        version: 5,
+      }),
+      [EXTRA]: { status: 204 },
+    });
+    expect(await screen.findByText('박서연 님이 승인함 · 메모: 3번 출입구')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '추가 메모' }));
+    const dialog = await reasonDialog();
+
+    // 비어 있으면 보내지 않는다
+    fireEvent.click(within(dialog).getByRole('button', { name: '추가 메모 보내기' }));
+    expect(within(dialog).getByText('메모를 적어 주세요')).toBeTruthy();
+    expect(server.callsTo(EXTRA)).toHaveLength(0);
+
+    server.set(
+      DETAIL,
+      detail({ status: 'confirmed', respondedBy: '박서연', extraMemo: 'CT 고장', version: 6 }),
+    );
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: ' CT 고장 ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '추가 메모 보내기' }));
+    await waitFor(() => expect(server.callsTo(EXTRA)).toHaveLength(1));
+    expect(server.callsTo(EXTRA)[0].body).toEqual({ memo: 'CT 고장', version: 5 });
+
+    expect(await screen.findByText('추가 메모: CT 고장')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByRole('button', { name: '추가 메모' })).toBeNull();
+  });
+
+  it('다른 PC 가 먼저 추가 메모를 보냈으면 알려 주고 최신 상태로 바꾼다', async () => {
+    const server = open({
+      [DETAIL]: detail({ status: 'confirmed', respondedBy: '박서연' }),
+      [EXTRA]: { status: 409, body: apiError('EXTRA_MEMO_USED') },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '추가 메모' }));
+    const dialog = await reasonDialog();
+    server.set(
+      DETAIL,
+      detail({ status: 'confirmed', respondedBy: '박서연', extraMemo: '먼저 보냄' }),
+    );
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'CT 고장' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '추가 메모 보내기' }));
+
+    expect(
+      await screen.findByText('추가 메모는 이미 보냈어요 (한 번만 보낼 수 있어요)'),
+    ).toBeTruthy();
+    expect(await screen.findByText('추가 메모: 먼저 보냄')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '추가 메모' })).toBeNull();
+  });
+
+  it('승인만 한 요청(확정 전)에는 추가 메모가 없다', async () => {
+    open({ [DETAIL]: detail({ status: 'approved', respondedBy: '박서연' }) });
+    await screen.findByText('박서연 님이 승인함');
+    expect(screen.queryByRole('button', { name: '추가 메모' })).toBeNull();
+  });
+});
+
 describe('응답할 수 없는 요청', () => {
   it('이미 승인한 요청에는 버튼이 없다', async () => {
     open({ [DETAIL]: detail({ status: 'approved', respondedBy: '박서연' }) });

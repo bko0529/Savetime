@@ -149,6 +149,7 @@ export async function listRequests(pool: pg.Pool, hospitalId: number, query: Lis
 interface DetailRow extends RequestRow {
   hospital_id: string;
   memo: string | null;
+  extra_memo: string | null;
 }
 
 // 병상 '가용/전체'. 수집된 값이 없으면 null
@@ -159,7 +160,7 @@ const bedText = (avail: number | null, total: number | null) =>
 export async function getRequestDetail(pool: pg.Pool, pc: HospitalPc, requestId: number) {
   const { rows } = await pool.query<DetailRow>(
     `SELECT ${ASSESSMENT_COLUMNS}, hr.id, hr.hospital_id, hr.status, hr.closed_reason, hr.eta_min, hr.eta_source,
-            hr.prev_approved_recheck, hr.responder_name, hr.memo, hr.version, hr.arrived_at,
+            hr.prev_approved_recheck, hr.responder_name, hr.memo, hr.extra_memo, hr.version, hr.arrived_at,
             r.respond_until, now() AS server_now
        FROM hospital_request hr
        JOIN request_round r ON r.id = hr.round_id
@@ -240,5 +241,7 @@ export async function getRequestDetail(pool: pg.Pool, pc: HospitalPc, requestId:
     validApprovals: approvals[0].n,
     respondedBy: row.responder_name,
     memo: row.memo,
+    // 확정 뒤 보낸 추가 메모 (SFR-140). 값이 있으면 화면이 '추가 메모' 버튼을 숨긴다
+    extraMemo: row.extra_memo,
   };
 }

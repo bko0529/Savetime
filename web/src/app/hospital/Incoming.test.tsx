@@ -133,3 +133,44 @@ describe('도착 예정 목록 (SFR-121)', () => {
     await waitFor(() => expect(server.callsTo(INCOMING).length).toBeGreaterThan(before));
   });
 });
+
+describe('도착 예정 목록의 추가 메모 (SFR-140)', () => {
+  const EXTRA = 'POST /hw/requests/102/extra-memo';
+
+  it("이동 중 환자에 '추가 메모'를 보내면 목록을 다시 받고 버튼이 사라진다", async () => {
+    server.set(EXTRA, { status: 204 });
+    const section = await incomingTable();
+    const row = (await within(section).findByText('R-102')).closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: '추가 메모' }));
+    const dialog = await screen.findByRole('dialog');
+
+    server.set(INCOMING, list(incoming(102, { extraMemoUsed: true, version: 2 })));
+    fireEvent.change(within(dialog).getByRole('textbox'), {
+      target: { value: 'CT 고장, 2번 입구로 오세요' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '추가 메모 보내기' }));
+
+    await waitFor(() => expect(server.callsTo(EXTRA)).toHaveLength(1));
+    expect(server.callsTo(EXTRA)[0].body).toEqual({
+      memo: 'CT 고장, 2번 입구로 오세요',
+      version: 1,
+    });
+    await waitFor(() =>
+      expect(within(section).queryByRole('button', { name: '추가 메모' })).toBeNull(),
+    );
+  });
+
+  it('이미 보냈거나 도착한 환자에는 버튼이 없다', async () => {
+    server.set(
+      INCOMING,
+      list(
+        incoming(102, { extraMemoUsed: true }),
+        incoming(103, { status: 'arrived', arrivedAt: new Date().toISOString(), etaMin: null }),
+      ),
+    );
+    socket.fire('incoming.updated', envelope({ requestId: 102 }));
+    const section = await incomingTable();
+    await within(section).findByText('R-103');
+    expect(within(section).queryByRole('button', { name: '추가 메모' })).toBeNull();
+  });
+});

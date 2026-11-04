@@ -17,6 +17,7 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
 
@@ -321,6 +322,17 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       respondToRequest(client, hospitalPc(res), requestId, { event: 'CANCEL_APPROVAL', input }),
     );
     ctx.realtime?.publish(outcome.events);
+    res.status(204).end();
+  });
+
+  // 추가 메모: 확정된 요청에 한 번만 (SFR-140). 대원 앱에 경보
+  router.post('/hw/requests/:requestId/extra-memo', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(extraMemoSchema, req.body);
+    const events = await withTransaction(ctx.pool, (client) =>
+      sendExtraMemo(client, hospitalPc(res), requestId, input),
+    );
+    ctx.realtime?.publish(events);
     res.status(204).end();
   });
 

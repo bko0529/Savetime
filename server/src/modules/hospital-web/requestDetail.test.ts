@@ -51,6 +51,8 @@ test('요청 상세: 환자 평가·이상 수치·도착 예상·우리 병원 
       beds: { er: '5/20', icu: '0/10', or: '1/4' },
     });
     assert.equal(body.validApprovals, 0);
+    // 추가 메모를 아직 안 보냈으면 null (SFR-140)
+    assert.equal(body.extraMemo, null);
     assert.ok(Date.parse(body.serverNow));
     // 구급대 소속·연락처는 어디에도 없다 (절대 규칙 3, D-98)
     assert.doesNotMatch(JSON.stringify(body), /agency|safety|team|paramedic|phone/i);
@@ -141,5 +143,20 @@ test('요청 목록에도 이상 수치 개수가 나온다 (SFR-155)', async ()
     const res = await h.get('/hw/requests', cookie);
     assert.equal(res.body.items[0].id, id);
     assert.equal(res.body.items[0].abnormalCount, 2);
+  });
+});
+
+test('확정 뒤 보낸 추가 메모가 상세에 나온다 (SFR-140)', async () => {
+  await withRequestApp(async (h) => {
+    const cookie = await onShift(h);
+    const id = await addHospitalRequest(h.pool, h.hospitalId, { chiefComplaint: '흉통' });
+    await h.pool.query(
+      "UPDATE hospital_request SET status = 'confirmed', memo = '3번 출입구로 오세요', extra_memo = 'CT 고장', extra_memo_at = now() WHERE id = $1",
+      [id],
+    );
+    const res = await h.get(`/hw/requests/${id}`, cookie);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.memo, '3번 출입구로 오세요');
+    assert.equal(res.body.extraMemo, 'CT 고장');
   });
 });
