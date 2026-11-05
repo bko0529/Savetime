@@ -465,6 +465,28 @@ test('병원 계정을 정지하면 그 병원 탭에만 pc.revoked를 보내고
   });
 });
 
+test('관리자 정지는 그 대원 앱에만 account.force_logout을 보내고 연결을 끊는다 (SFR-151)', async () => {
+  await withRealtime(async (h) => {
+    const kim = await h.connect('/app', { auth: { token: await login(h, 'kim01') } });
+    const lee = await h.connect('/app', { auth: { token: await login(h, 'lee01') } });
+    const { rows } = await h.ctx.pool.query<{ id: string }>(
+      "SELECT id FROM paramedic WHERE login_id = 'kim01'",
+    );
+
+    const forced = nextEvent(kim, 'account.force_logout');
+    const closed = new Promise((resolve) => kim.once('disconnect', resolve));
+    let leeForced = false;
+    lee.on('account.force_logout', () => (leeForced = true));
+
+    await h.realtime.forceLogoutParamedic(rows[0].id, 'suspended');
+    assert.deepEqual((await forced).data, { reason: 'suspended' });
+    await closed;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(leeForced, false);
+    assert.ok(lee.connected);
+  });
+});
+
 test('PC 해제는 그 PC 탭에만 pc.revoked를 보내고, 접속 중 PC 목록에서 빠진다 (SFR-147)', async () => {
   await withRealtime(async (h) => {
     const a = await addHospitalPc(h.ctx.pool, 'A병원');
