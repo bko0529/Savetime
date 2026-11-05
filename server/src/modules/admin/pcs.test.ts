@@ -260,7 +260,14 @@ test('알림 목록은 최근 발생 순으로 나눠 받는다', async () => {
     for (const kind of ['collect_fail', 'signup', 'odd_pc'] as const) {
       await notifyAdmin(h.pool, kind, null);
     }
-    // 가장 먼저 생긴 collect_fail 이 다시 생기면 맨 위로 올라온다
+    // 같은 밀리초에 생기면 순서가 id 로 갈려 테스트가 흔들린다. 발생 시각을 1분씩 벌려 둔다
+    await h.pool.query(
+      `UPDATE admin_notification SET last_at = now() - CASE kind
+         WHEN 'collect_fail' THEN interval '3 minutes'
+         WHEN 'signup' THEN interval '2 minutes'
+         ELSE interval '1 minute' END`,
+    );
+    // 가장 먼저 생긴 collect_fail 이 다시 생기면(30분 안이라 횟수만 늘고 last_at = now()) 맨 위로 올라온다
     await notifyAdmin(h.pool, 'collect_fail', null);
 
     const first = await h.admin('get', '/admin/notifications?limit=2');
