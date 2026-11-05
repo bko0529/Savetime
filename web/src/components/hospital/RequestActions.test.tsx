@@ -180,6 +180,41 @@ describe('거절 (SFR-119)', () => {
   });
 });
 
+describe('승인 취소 (SFR-128)', () => {
+  const CANCEL = 'POST /hw/requests/102/cancel-approval';
+
+  it('승인한 요청에서 사유 없이 누르면 보내지 않고, 사유를 고르면 그 사유와 version 을 보낸다', async () => {
+    const server = open({
+      [DETAIL]: detail({ status: 'approved', respondedBy: '박서연', version: 4 }),
+      [CANCEL]: { status: 204 },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '승인 취소' }));
+    const dialog = await reasonDialog();
+    expect(within(dialog).getByRole('heading', { name: '승인 취소 사유' })).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인 취소 보내기' }));
+    expect(within(dialog).getByText('사유를 골라 주세요')).toBeTruthy();
+    expect(server.callsTo(CANCEL)).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByLabelText('응급실 병상 부족'));
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인 취소 보내기' }));
+    await waitFor(() => expect(server.callsTo(CANCEL)).toHaveLength(1));
+    expect(server.callsTo(CANCEL)[0].body).toEqual({ reason: 'er_bed', etcText: null, version: 4 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('우리 병원으로 확정된 요청에도 승인 취소가 있다', async () => {
+    open({ [DETAIL]: detail({ status: 'confirmed', respondedBy: '박서연' }) });
+    expect(await screen.findByRole('button', { name: '승인 취소' })).toBeTruthy();
+  });
+
+  it('대기 중인 요청에는 승인 취소가 없다', async () => {
+    open({});
+    await screen.findByRole('button', { name: '승인' });
+    expect(screen.queryByRole('button', { name: '승인 취소' })).toBeNull();
+  });
+});
+
 describe('응답할 수 없는 요청', () => {
   it('이미 승인한 요청에는 버튼이 없다', async () => {
     open({ [DETAIL]: detail({ status: 'approved', respondedBy: '박서연' }) });

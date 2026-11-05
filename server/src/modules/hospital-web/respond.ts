@@ -1,4 +1,4 @@
-// 병원 웹 승인·거절 (SFR-119, SFR-140, SFR-153, SFR-154, SFR-160). 상태 변경은 stateMachine.ts 를 거친다 (절대 규칙 4).
+// 병원 웹 승인·거절·승인 취소 (SFR-119, SFR-128, SFR-140, SFR-153, SFR-154, SFR-160). 상태 변경은 stateMachine.ts 를 거친다 (절대 규칙 4).
 // 이송 건 → 병원 요청 순서로 잠그고, 한 트랜잭션에서 병원 요청·제외 병원·이송 건(역방향 연쇄)·event_log 를 함께 바꾼다.
 import type pg from 'pg';
 import { z } from 'zod';
@@ -31,10 +31,15 @@ export const rejectSchema = z.object({
   etcText: z.string().trim().max(20).nullish(),
 });
 
+// 승인 취소도 거절과 같은 사유 7가지 (부록 G). 사유가 빠지면 422 REASON_REQUIRED
+export const cancelApprovalSchema = rejectSchema;
+
 export type ApproveInput = z.infer<typeof approveSchema>;
 export type RejectInput = z.infer<typeof rejectSchema>;
 
-type Response = { event: 'APPROVE'; input: ApproveInput } | { event: 'REJECT'; input: RejectInput };
+type Response =
+  | { event: 'APPROVE'; input: ApproveInput }
+  | { event: 'REJECT' | 'CANCEL_APPROVAL'; input: RejectInput };
 
 export interface RespondResult {
   body: { status: HreqStatus; respondedBy?: string; version: number };
@@ -129,8 +134,8 @@ export async function respondToRequest(
     overApproval = erAvail !== null && validApprovals >= erAvail;
   }
 
-  const reason = response.event === 'REJECT' ? (response.input.reason ?? null) : null;
-  const etcText = response.event === 'REJECT' ? response.input.etcText || null : null;
+  const reason = response.event === 'APPROVE' ? null : (response.input.reason ?? null);
+  const etcText = response.event === 'APPROVE' ? null : response.input.etcText || null;
   let result;
   try {
     result = transitionHreq(request.status, response.event, {
@@ -160,37 +165,49 @@ export async function respondToRequest(
     throw err;
   }
 
+  const cancelling = response.event === 'CANCEL_APPROVAL';
+  // 승인 취소는 '누가 승인했는지'(응답자·메모)를 남겨 두고 닫힘 사유와 취소 사유만 적는다.
+  // 취소한 사람 이름은 실시간 이벤트(byName)로 같은 병원 PC 에 알린다
   const { rows: updated } = await client.query<{ version: number }>(
-    `UPDATE hospital_request
-        SET status = $2, responded_at = now(), responder_name = $3, responder_pc_id = $4,
-            memo = $5, reason = $6, reason_text = $7, in_stats = $8,
-            version = version + 1, updated_at = now()
-      WHERE id = $1
-     RETURNING version`,
-    [
-      requestId,
-      result.to,
-      staffName,
-      pc.pcId,
-      response.event === 'APPROVE' ? response.input.memo || null : null,
-      reason,
-      reason === 'etc' ? etcText : null,
-      result.inStats,
-    ],
+    cancelling
+      ? `UPDATE hospital_request
+            SET status = $2, closed_reason = $3, reason = $4, reason_text = $5,
+                version = version + 1, updated_at = now()
+          WHERE id = $1
+         RETURNING version`
+      : `UPDATE hospital_request
+            SET status = $2, responded_at = now(), responder_name = $3, responder_pc_id = $4,
+                memo = $5, reason = $6, reason_text = $7, in_stats = $8,
+                version = version + 1, updated_at = now()
+          WHERE id = $1
+         RETURNING version`,
+    cancelling
+      ? [requestId, result.to, result.closeReason, reason, reason === 'etc' ? etcText : null]
+      : [
+          requestId,
+          result.to,
+          staffName,
+          pc.pcId,
+          response.event === 'APPROVE' ? response.input.memo || null : null,
+          reason,
+          reason === 'etc' ? etcText : null,
+          result.inStats,
+        ],
   );
   const version = updated[0].version;
+  const wasConfirmed = request.status === 'confirmed';
   // 병원 응답도 '활동'이다. 2시간 활동 없음 자동 종료의 시계를 다시 시작한다 (SFR-086)
   // version은 올리지 않는다: 이송 건 행의 상태가 바뀐 게 아니다 (stateMachine.ts 규칙 4)
   await client.query('UPDATE transport SET last_activity_at = now() WHERE id = $1', [
     target.transport_id,
   ]);
 
-  // 거절한 병원은 이번 이송에서 다시 추천하지 않는다 (SFR-086·119)
-  if (response.event === 'REJECT') {
+  // 거절·승인 취소한 병원은 이번 이송에서 다시 추천·요청하지 않는다 (SFR-086·119·128, '다시 요청'도 이 병원을 뺀다)
+  if (response.event !== 'APPROVE') {
     await client.query(
-      `INSERT INTO excluded_hospital (transport_id, hospital_id, reason) VALUES ($1, $2, 'rejected')
+      `INSERT INTO excluded_hospital (transport_id, hospital_id, reason) VALUES ($1, $2, $3)
        ON CONFLICT DO NOTHING`,
-      [target.transport_id, target.hospital_id],
+      [target.transport_id, target.hospital_id, cancelling ? 'approval_cancelled' : 'rejected'],
     );
   }
 
@@ -214,31 +231,45 @@ export async function respondToRequest(
       entityVersion: version,
     };
     events.push(
-      response.event === 'APPROVE'
+      cancelling
         ? {
             room: teamRoom,
-            name: 'request.approved',
-            ...common,
-            payload: {
-              transportId: target.transport_id,
-              hospitalRequestId: requestId,
-              hospitalId: pc.hospitalId,
-              // 이번 회차에서 처음 온 승인이면 앱이 진동·소리 (SFR-110·130)
-              firstApproval: roundCounts.validApproved === 1,
-              afterReconnect: false,
-            },
-          }
-        : {
-            room: teamRoom,
-            name: 'request.rejected',
+            name: 'request.cancelled',
             ...common,
             payload: {
               transportId: target.transport_id,
               hospitalRequestId: requestId,
               hospitalName: target.hospital_name,
               reason: reason ?? '',
+              // 확정(이동 중) 병원이 취소하면 앱이 경보 + '다시 요청' 버튼. 자동 재요청은 없다 (SFR-128)
+              wasConfirmed,
             },
-          },
+          }
+        : response.event === 'APPROVE'
+          ? {
+              room: teamRoom,
+              name: 'request.approved',
+              ...common,
+              payload: {
+                transportId: target.transport_id,
+                hospitalRequestId: requestId,
+                hospitalId: pc.hospitalId,
+                // 이번 회차에서 처음 온 승인이면 앱이 진동·소리 (SFR-110·130)
+                firstApproval: roundCounts.validApproved === 1,
+                afterReconnect: false,
+              },
+            }
+          : {
+              room: teamRoom,
+              name: 'request.rejected',
+              ...common,
+              payload: {
+                transportId: target.transport_id,
+                hospitalRequestId: requestId,
+                hospitalName: target.hospital_name,
+                reason: reason ?? '',
+              },
+            },
     );
   }
   // 같은 병원 다른 PC 화면도 "박서연 님이 승인함"으로 바꾼다 (SFR-153). 이름·상태만, 환자 정보 없음 (규칙 5)
@@ -251,14 +282,25 @@ export async function respondToRequest(
     payload: {
       requestId,
       status: result.to,
-      closeReason: null,
+      closeReason: result.closeReason,
       byName: staffName,
       pcName: pc.pcName,
     },
   });
+  // 확정 병원이 취소하면 도착 예정 목록에서도 빠진다 (SFR-121)
+  if (wasConfirmed) {
+    events.push({
+      room: `hospital:${pc.hospitalId}`,
+      name: 'incoming.removed',
+      entityType: 'hospital_request',
+      entityId: String(requestId),
+      payload: { requestId, reason: 'approval_cancelled' },
+    });
+  }
 
-  // 역방향 연쇄: 지금 회차에 대기·유효 승인이 하나도 안 남으면 이송 건을 예비 추천으로 (부록 A8)
-  if (target.is_current && transport) {
+  // 역방향 연쇄: 지금 회차에 대기·유효 승인이 하나도 안 남으면 이송 건을 예비 추천으로 (부록 A8·A10).
+  // 확정 병원의 승인 취소는 회차와 상관없이 이동 중 이송 건에 경보 (A20, 상태는 moving 유지)
+  if ((target.is_current || wasConfirmed) && transport) {
     const next = transportEventAfterHreqChange(
       transport.status,
       { event: response.event as HreqEvent, fromStatus: request.status },
