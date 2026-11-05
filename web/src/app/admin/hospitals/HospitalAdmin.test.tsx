@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, fakeServer } from '@/testing/render';
 import { AdminAuthProvider, useAdminAuth } from '../AdminAuth';
 import { AuditLog } from '../monitoring/AuditLog';
+import { Notifications } from '../monitoring/Notifications';
 import { HospitalAdmin, type AdminHospital } from './HospitalAdmin';
 
 const replace = vi.fn();
@@ -239,6 +240,135 @@ describe('라이선스 키 폐기·재발급 (SFR-146)', () => {
     expect(((await screen.findByRole('textbox', { name: /사유/ })) as HTMLInputElement).value).toBe(
       '',
     );
+  });
+});
+
+describe('병원 등록 PC 관리 (SFR-147)', () => {
+  const LICENSE = { id: 9, prefix: 'ABCD', expiresAt: '2027-11-04T00:00:00Z', daysLeft: 300 };
+  const PC = (id: number, name: string, online = false) => ({
+    id,
+    name,
+    registeredAt: '2026-10-01T00:00:00Z',
+    lastUsedAt: '2026-11-04T00:00:00Z',
+    online,
+  });
+
+  it("PC 목록을 열고 '응급실 접수대'를 확인 창을 거쳐 해제한다", async () => {
+    const a = hospital(1, 'A병원', { accountActive: true, pcCount: 2, license: LICENSE });
+    const server = fakeServer({
+      'GET /admin/hospitals': [list(a), list({ ...a, pcCount: 1 })],
+      'GET /admin/hospitals/1/pcs': [
+        { status: 200, body: [PC(7, '응급실 접수대', true), PC(8, '야간 PC')] },
+        { status: 200, body: [PC(8, '야간 PC')] },
+      ],
+      'DELETE /admin/pcs/7': { status: 204 },
+    });
+    renderAdmin(<HospitalAdmin />);
+    fireEvent.click(await screen.findByRole('button', { name: 'A병원 등록 PC 보기' }));
+
+    const section = await screen.findByRole('region', { name: 'A병원 등록 PC' });
+    const desk = (await within(section).findByText('응급실 접수대')).closest('tr')!;
+    expect(desk.textContent).toContain('접속 중');
+    expect(within(section).getByText('야간 PC').closest('tr')!.textContent).not.toContain(
+      '접속 중',
+    );
+    fireEvent.click(within(desk).getByRole('button', { name: '해제' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('응급실 접수대 해제');
+    expect(dialog.textContent).toContain('병원 웹이 바로 막혀요');
+    fireEvent.click(within(dialog).getByRole('button', { name: '해제' }));
+
+    await waitFor(() => expect(server.callsTo('DELETE /admin/pcs/7')).toHaveLength(1));
+    await waitFor(() => expect(within(section).queryByText('응급실 접수대')).toBeNull());
+    expect(within(section).getByText('야간 PC')).toBeTruthy();
+  });
+
+  it('등록 PC 가 없는 병원은 PC 보기 버튼이 없다', async () => {
+    fakeServer({
+      'GET /admin/hospitals': list(hospital(1, 'A병원', { accountActive: true, license: LICENSE })),
+    });
+    renderAdmin(<HospitalAdmin />);
+    await screen.findByText('A병원');
+    expect(screen.queryByRole('button', { name: 'A병원 등록 PC 보기' })).toBeNull();
+  });
+});
+
+describe('관리자 알림 목록 (SFR-100)', () => {
+  const note = (id: number, text: string, extra: object = {}) => ({
+    id,
+    kind: 'pc_change',
+    text,
+    occurrences: 1,
+    lastAt: '2026-11-04T05:09:00Z',
+    read: false,
+    ...extra,
+  });
+
+  it('알림을 최근 순으로 보여 주고, 열면 읽음으로 바꾼다', async () => {
+    const server = fakeServer({
+      'GET /admin/notifications?limit=30': [
+        {
+          status: 200,
+          body: {
+            items: [
+              note(2, 'A병원 PC 등록 · 응급실 접수대'),
+              note(1, '병상 수집 3회 연속 실패', { kind: 'collect_fail', occurrences: 2 }),
+            ],
+            nextCursor: null,
+            unread: 2,
+          },
+        },
+        {
+          status: 200,
+          body: {
+            items: [
+              note(2, 'A병원 PC 등록 · 응급실 접수대', { read: true }),
+              note(1, '병상 수집 3회 연속 실패', { kind: 'collect_fail', occurrences: 2 }),
+            ],
+            nextCursor: null,
+            unread: 1,
+          },
+        },
+      ],
+      'POST /admin/notifications/2/read': { status: 204 },
+    });
+    renderAdmin(<Notifications />);
+    const pc = await screen.findByRole('button', {
+      name: 'A병원 PC 등록 · 응급실 접수대 (안 읽음)',
+    });
+    expect(screen.getByRole('button', { name: /병상 수집 3회 연속 실패/ }).textContent).toContain(
+      '2회',
+    );
+
+    fireEvent.click(pc);
+    await waitFor(() => expect(server.callsTo('POST /admin/notifications/2/read')).toHaveLength(1));
+    expect(
+      await screen.findByRole('button', { name: 'A병원 PC 등록 · 응급실 접수대' }),
+    ).toBeTruthy();
+    // 이미 읽은 알림은 다시 눌러도 보내지 않는다
+    fireEvent.click(screen.getByRole('button', { name: 'A병원 PC 등록 · 응급실 접수대' }));
+    expect(server.callsTo('POST /admin/notifications/2/read')).toHaveLength(1);
+  });
+
+  it('더 보기는 커서를 그대로(인코딩해서) 보낸다', async () => {
+    const cursor = '2026-11-04T05:09:00.123Z|7';
+    const server = fakeServer({
+      'GET /admin/notifications?limit=30': {
+        status: 200,
+        body: { items: [note(9, '새 가입 신청')], nextCursor: cursor, unread: 1 },
+      },
+      [`GET /admin/notifications?limit=30&cursor=${encodeURIComponent(cursor)}`]: {
+        status: 200,
+        body: { items: [note(7, '이상 PC 등록 감지')], nextCursor: null, unread: 1 },
+      },
+    });
+    renderAdmin(<Notifications />);
+    fireEvent.click(await screen.findByRole('button', { name: '알림 더 보기' }));
+    expect(await screen.findByText('이상 PC 등록 감지')).toBeTruthy();
+    expect(
+      server.callsTo(`GET /admin/notifications?limit=30&cursor=${encodeURIComponent(cursor)}`),
+    ).toHaveLength(1);
   });
 });
 

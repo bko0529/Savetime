@@ -14,6 +14,7 @@ import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
 import { useAdminApi } from '../useAdminApi';
+import { HospitalPcs } from './HospitalPcs';
 
 type HospitalList =
   ApiPaths['/admin/hospitals']['get']['responses'][200]['content']['application/json'];
@@ -64,6 +65,8 @@ export function HospitalAdmin() {
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<Pending>(null);
+  // 등록 PC 목록을 펼친 병원 (SFR-147)
+  const [pcsOf, setPcsOf] = useState<AdminHospital | null>(null);
   // 발급 직후 한 번만 보여 줄 키. 창을 닫으면 지워서 다시 볼 수 없다
   const [issued, setIssued] = useState<{ name: string; key: string } | null>(null);
 
@@ -154,6 +157,16 @@ export function HospitalAdmin() {
                 <td className="p-3">{accountText(h)}</td>
                 <td className="p-3 tabular-nums">
                   {h.pcCount}/{h.pcLimit}
+                  {(h.pcCount ?? 0) > 0 && (
+                    <Button
+                      variant="link"
+                      className="ml-2 text-lg"
+                      aria-label={`${h.name} 등록 PC 보기`}
+                      onClick={() => setPcsOf(h)}
+                    >
+                      PC 보기
+                    </Button>
+                  )}
                 </td>
                 {/* 발급 뒤에는 앞 4자리만 보여 준다 (SFR-123) */}
                 <td className="p-3 font-mono">
@@ -198,6 +211,8 @@ export function HospitalAdmin() {
           </tbody>
         </table>
       )}
+
+      {pcsOf && <HospitalPcs key={pcsOf.id} hospital={pcsOf} onClose={() => setPcsOf(null)} />}
 
       <ConfirmDialog
         pending={pending}

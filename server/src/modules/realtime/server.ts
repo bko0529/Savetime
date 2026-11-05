@@ -55,6 +55,10 @@ export interface Realtime {
   alarmOff(pc: { pcId: string; hospitalId: string }, reason: 'shift_ended'): Promise<void>;
   // 병원 계정 정지 등: 그 병원 PC 탭에 pc.revoked 를 보내고 연결을 끊는다 (SFR-123). 다시 붙으면 인증에서 막힌다
   revokeHospital(hospitalId: string, reason: 'account_suspended' | 'key_revoked'): Promise<void>;
+  // 관리자 PC 해제: 그 PC 의 탭에만 pc.revoked 를 보내고 끊는다 (SFR-147)
+  revokePc(pc: { pcId: string; hospitalId: string }, reason: 'pc_released'): Promise<void>;
+  // 지금 실시간으로 붙어 있는 그 병원 PC id 목록 (관리자 PC 목록의 '접속 중', SFR-147)
+  onlinePcIds(hospitalId: string): Promise<string[]>;
   attach(httpServer: HttpServer): void;
   close(): Promise<void>;
 }
@@ -586,6 +590,19 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       hospital.to(room).emit('pc.revoked', directEnvelope(room, { reason }));
       // close=false: 같은 연결로 방금 보낸 pc.revoked 가 먼저 가고 그다음 끊김이 간다
       hospital.in(room).disconnectSockets(false);
+    },
+    async revokePc(pc, reason) {
+      const room = `hospital:${pc.hospitalId}`;
+      const sockets = await hospital.in(room).fetchSockets();
+      for (const socket of sockets) {
+        if ((socket.data as HospitalSocketData).pcId !== pc.pcId) continue;
+        socket.emit('pc.revoked', directEnvelope(room, { reason }));
+        socket.disconnect(false);
+      }
+    },
+    async onlinePcIds(hospitalId) {
+      const sockets = await hospital.in(`hospital:${hospitalId}`).fetchSockets();
+      return [...new Set(sockets.map((s) => (s.data as HospitalSocketData).pcId))];
     },
     async alarmOff(pc, reason) {
       const room = onRoom(pc.hospitalId);
