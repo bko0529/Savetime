@@ -310,7 +310,9 @@ test('키를 폐기하면 등록 PC 2대 모두 막히고, 새 키는 만들어�
       assert.equal(s.body.error.code, 'PC_NOT_REGISTERED');
     }
     // 폐기한 키로는 다시 등록할 수 없다
-    const reg = await h.hw('post', '/hw/pc/register').send({ licenseKey: a.licenseKey, pcName: '원무과' });
+    const reg = await h
+      .hw('post', '/hw/pc/register')
+      .send({ licenseKey: a.licenseKey, pcName: '원무과' });
     assert.equal(reg.body.error.code, 'INVALID_LICENSE');
 
     const { rows: keys } = await h.pool.query(
@@ -364,7 +366,9 @@ test('키를 재발급하면 PC 3대 모두 막히고, 새 키가 한 번만 나
       assert.equal(s.body.error.code, 'PC_NOT_REGISTERED');
     }
     // 옛 키는 못 쓰고 새 키로는 다시 등록된다
-    const old = await h.hw('post', '/hw/pc/register').send({ licenseKey: a.licenseKey, pcName: '접수대' });
+    const old = await h
+      .hw('post', '/hw/pc/register')
+      .send({ licenseKey: a.licenseKey, pcName: '접수대' });
     assert.equal(old.body.error.code, 'INVALID_LICENSE');
     const fresh = await h
       .hw('post', '/hw/pc/register')
@@ -416,7 +420,9 @@ test('폐기·재발급: 사유가 없으면 422, 60자 넘으면 400, 없는 �
       .send({ reason: '가'.repeat(61) });
     assert.equal(tooLong.status, 400);
 
-    const missingKey = await h.admin('post', '/admin/license-keys/99999/revoke').send({ reason: 'x' });
+    const missingKey = await h
+      .admin('post', '/admin/license-keys/99999/revoke')
+      .send({ reason: 'x' });
     assert.equal(missingKey.status, 404);
     const missingHospital = await h
       .admin('post', '/admin/hospitals/99999/license-keys')

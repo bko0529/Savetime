@@ -226,9 +226,7 @@ describe('라이선스 키 폐기·재발급 (SFR-146)', () => {
 
   it('취소하면 쓰던 사유를 지운다', async () => {
     fakeServer({
-      'GET /admin/hospitals': list(
-        hospital(1, 'A병원', { accountActive: true, license: LICENSE }),
-      ),
+      'GET /admin/hospitals': list(hospital(1, 'A병원', { accountActive: true, license: LICENSE })),
     });
     renderAdmin(<HospitalAdmin />);
     fireEvent.click(await screen.findByRole('button', { name: '키 폐기' }));
@@ -238,9 +236,9 @@ describe('라이선스 키 폐기·재발급 (SFR-146)', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: '키 폐기' }));
-    expect(
-      ((await screen.findByRole('textbox', { name: /사유/ })) as HTMLInputElement).value,
-    ).toBe('');
+    expect(((await screen.findByRole('textbox', { name: /사유/ })) as HTMLInputElement).value).toBe(
+      '',
+    );
   });
 });
 
