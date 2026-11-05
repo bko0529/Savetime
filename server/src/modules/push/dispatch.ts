@@ -55,7 +55,14 @@ async function isVisible(redis: Redis, paramedicId: string): Promise<boolean> {
   }
 }
 
-// S3 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료
+// 받침이 있으면 '이', 없으면 '가' (예: 'B대학교병원이', '세브란스가'). 한글이 아니면 '이(가)'
+function subjectParticle(word: string): string {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '이(가)';
+  return code % 28 === 0 ? '가' : '이';
+}
+
+// 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료 (S3) · 승인 취소 (S4, SFR-128)
 export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<PushMessage | null> {
   const p = event.payload;
   const data = (extra: Record<string, string> = {}) => ({
@@ -73,6 +80,16 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
     if (!rows[0]) return null;
     const eta = rows[0].eta_min === null ? '' : ` · ${rows[0].eta_min}분`;
     return { title: TITLE, body: `${rows[0].name} 승인${eta}`, data: data() };
+  }
+  // 병원 승인 취소. 확정(이동 중) 병원이면 '다시 요청'을 눌러야 하니 꼭 알린다 (SFR-128·130).
+  // 문구는 실시간 설계 5장 그대로, 병원 이름만 (환자 정보 없음)
+  if (event.name === 'request.cancelled' && typeof p.hospitalName === 'string') {
+    const name = p.hospitalName;
+    return {
+      title: TITLE,
+      body: `${name}${subjectParticle(name)} 승인을 취소했어요`,
+      data: data(),
+    };
   }
   if (event.name === 'request.expired') {
     return {

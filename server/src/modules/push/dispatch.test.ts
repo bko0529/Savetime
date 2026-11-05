@@ -138,6 +138,25 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     );
     assert.equal(rejected?.body, '모든 병원이 거절했어요 · 가까운 병원에 전화로 확인하세요');
 
+    // 승인 취소 (SFR-128): 병원 이름 + 받침에 맞는 조사
+    const cancelled = await messageFor(
+      ctx.pool,
+      event('request.cancelled', team, {
+        transportId: s.transportId,
+        hospitalRequestId: s.req['B병원'],
+        hospitalName: 'B병원',
+        reason: 'er_bed',
+        wasConfirmed: true,
+      }),
+    );
+    assert.equal(cancelled?.body, 'B병원이 승인을 취소했어요');
+    assert.deepEqual(cancelled?.data, { event: 'request.cancelled', transportId: s.transportId });
+    const noFinal = await messageFor(
+      ctx.pool,
+      event('request.cancelled', team, { transportId: s.transportId, hospitalName: '세브란스' }),
+    );
+    assert.equal(noFinal?.body, '세브란스가 승인을 취소했어요');
+
     // 다른 이유의 예비 전환·다른 이벤트는 S3 푸시 대상이 아니다
     for (const other of [
       event('transport.status', team, { status: 'fallback', reason: 'none_delivered' }),
@@ -146,7 +165,7 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     ]) {
       assert.equal(await messageFor(ctx.pool, other), null);
     }
-    for (const m of [first, expiredNone, expiredSome, rejected]) {
+    for (const m of [first, expiredNone, expiredSome, rejected, cancelled]) {
       assert.ok(!JSON.stringify(m).includes('두통'));
     }
   });
