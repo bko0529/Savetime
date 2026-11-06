@@ -1,4 +1,4 @@
-# 로컬 개발용: PostgreSQL 16 + Redis 7 (기술정의서 v0.8 · 7. 환경)
+# 로컬 개발용: PostgreSQL 16 + Redis 7 + S3 호환 저장소 S3Mock (기술정의서 v0.8 · 7. 환경)
 # 실행: docker compose up -d && npm run migrate   /  초기화: docker compose down -v 후 같은 순서로
 services:
   db:
@@ -21,6 +21,13 @@ services:
     ports: ["6379:6379"]
     volumes:
       - redis-data:/data
+  # 공무원증 사진 저장소 개발용 (SFR-017, SER-015). 운영은 Lightsail 객체 저장소(S3 호환)이고 주소만 다르다.
+  # MinIO 공식 이미지 배포가 끝나서 S3Mock 을 쓴다. 개발 전용이라 데이터는 컨테이너를 지우면 사라진다
+  s3:
+    image: adobe/s3mock:5.2.3
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: savetime-photos
+    ports: ["9090:9090"]
 volumes:
   db-data:
   redis-data:

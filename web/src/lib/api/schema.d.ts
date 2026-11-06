@@ -57,11 +57,11 @@ export interface paths {
         put?: never;
         /**
          * 가입 신청 (공무원증 사진)
-         * @description 관리자 알림 '신규 가입 신청'이 생긴다.
+         * @description 관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상, 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).
          *
          *     **요구사항**: SFR-017, SER-015, DAR-012
          *     **화면**: S-02 가입 신청
-         *     **오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED
+         *     **오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED, TOO_MANY_REQUESTS, PHOTO_STORAGE_UNAVAILABLE
          */
         post: operations["post_auth_signup"];
         delete?: never;
@@ -5583,6 +5583,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         count?: number;
+                        /** @description 그 등급을 고르면 요청이 갈 병원 수 (그 등급 이상 누적). 예 {1: 2, 2: 5, 3: 9} = 대학병원급 2곳·종합병원급 이상 5곳·전체 9곳. '등급 바꾸기' 안내용. count는 지금 grade 기준(없으면 byGrade.3과 같음) */
                         byGrade?: {
                             1?: number;
                             2?: number;

@@ -72,6 +72,17 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
     ...extra,
   });
 
+  // 가입 승인·반려 결과 (SFR-022·083). 대원 개인 방으로 온다. 앱을 닫고 기다리는 경우가 많다
+  if (event.name === 'account.signup_result') {
+    return {
+      title: TITLE,
+      body:
+        p.result === 'approved'
+          ? '가입이 승인됐어요 · 로그인해서 근무를 시작하세요'
+          : '가입이 반려됐어요 · 사유를 확인하고 다시 신청해 주세요',
+      data: { event: event.name, result: String(p.result ?? '') },
+    };
+  }
   if (event.name === 'request.approved' && p.firstApproval === true) {
     const { rows } = await pool.query<{ name: string; eta_min: number | null }>(
       `SELECT h.name, hr.eta_min FROM hospital_request hr JOIN hospital h ON h.id = hr.hospital_id
@@ -146,15 +157,21 @@ export function createPushDispatcher(deps: {
   const { pool, redis, sender, logger } = deps;
 
   async function one(event: LoggedEvent): Promise<void> {
-    if (!event.room.startsWith('team:')) return;
+    // 팀 방(팀원 모두) 또는 대원 개인 방(가입 결과 등)만 푸시한다
+    const team = event.room.startsWith('team:');
+    if (!team && !event.room.startsWith('paramedic:')) return;
     const message = await messageFor(pool, event);
     if (!message) return;
 
-    const teamId = event.room.slice('team:'.length);
-    const { rows: members } = await pool.query<{ paramedic_id: string }>(
-      'SELECT paramedic_id FROM team_member WHERE team_id = $1 AND left_at IS NULL',
-      [teamId],
-    );
+    let members: { paramedic_id: string }[];
+    if (team) {
+      ({ rows: members } = await pool.query<{ paramedic_id: string }>(
+        'SELECT paramedic_id FROM team_member WHERE team_id = $1 AND left_at IS NULL',
+        [event.room.slice('team:'.length)],
+      ));
+    } else {
+      members = [{ paramedic_id: event.room.slice('paramedic:'.length) }];
+    }
     const away: string[] = [];
     for (const m of members) {
       if (!(await isVisible(redis, m.paramedic_id))) away.push(m.paramedic_id);
