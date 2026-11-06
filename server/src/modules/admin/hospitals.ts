@@ -1,4 +1,4 @@
-// 관리자 병원 관리 (SFR-123, A-03): 공공 데이터 병원 검색 → 병원 계정·라이선스 키 발급 → 정지.
+// 관리자 병원 관리 (SFR-123, SFR-146, A-03): 공공 데이터 병원 검색 → 병원 계정·라이선스 키 발급 → 정지 · 키 폐기·재발급.
 // 키 전체는 발급 응답에서 한 번만 보여 주고 DB 에는 해시·앞 4자리만 둔다 (COR-013)
 import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
@@ -21,6 +21,41 @@ const searchSchema = z.object({
   cursor: z.string().regex(/^\d+$/).optional(),
 });
 const idParams = z.object({ id: z.coerce.number().int().positive() });
+// 폐기·재발급 사유 (SFR-146). 비어 있으면 422 REASON_REQUIRED, 60자 넘으면 400
+const reasonSchema = z.object({ reason: z.string().trim().max(60).optional() });
+
+function requireReason(body: unknown): string {
+  const { reason } = parseBody(reasonSchema, body ?? {});
+  if (!reason) throw new AppError(422, 'REASON_REQUIRED', '사유를 입력해 주세요');
+  return reason;
+}
+
+// 병원의 살아 있는 키를 모두 폐기하고, 그 병원 PC 등록을 모두 해제한다 (SFR-146).
+// 병원마다 쓰는 키는 하나라서 '그 키로 등록한 PC' = '그 병원의 등록 PC' 다.
+// 해제된 PC 는 다음 요청에서 PC_NOT_REGISTERED 로 막히고, 병원 웹은 키 입력 화면으로 돌아간다
+async function invalidateHospitalKeys(
+  client: pg.PoolClient,
+  hospitalId: string,
+  reason: string,
+  onlyKeyId?: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE license_key SET revoked_at = now(), revoke_reason = $2
+      WHERE hospital_id = $1 AND revoked_at IS NULL AND ($3::bigint IS NULL OR id = $3)`,
+    [hospitalId, reason, onlyKeyId ?? null],
+  );
+  await client.query(
+    'UPDATE hospital_pc SET released_at = now() WHERE hospital_id = $1 AND released_at IS NULL',
+    [hospitalId],
+  );
+  // 알림 켠 근무도 꺼서 이 병원이 새 요청 대상에서 바로 빠지게 한다 (정지와 같은 처리)
+  await client.query(
+    `UPDATE hospital_shift SET alarm_on_at = NULL
+      WHERE ended_at IS NULL
+        AND pc_id IN (SELECT id FROM hospital_pc WHERE hospital_id = $1)`,
+    [hospitalId],
+  );
+}
 
 interface HospitalRow {
   id: string;
@@ -168,6 +203,88 @@ export function adminHospitalRouter(
     });
     // 이미 열려 있는 병원 웹 탭도 커밋 뒤 바로 막는다 (SFR-123 인수 기준 '두 PC 모두 막힘')
     if (suspended) await realtime?.revokeHospital(String(id), 'account_suspended');
+    res.status(204).end();
+  });
+
+  // 키 재발급 (SFR-146): 이전 키 폐기 + PC 등록 전부 해제 + 새 키 발급을 한 트랜잭션으로.
+  // 중간에 실패하면 전부 되돌아가서 '옛 키는 죽었는데 새 키는 없는' 상태가 생기지 않는다
+  router.post('/admin/hospitals/:id/license-keys', adminOnly, async (req, res) => {
+    const { id } = parseBody(idParams, req.params);
+    const reason = requireReason(req.body);
+    const key = newLicenseKey();
+    const issued = await withTransaction(pool, async (client) => {
+      // 병원 행을 잠가서 재발급·폐기·계정 발급이 같은 병원에 동시에 일어나지 않게 한다
+      const { rows } = await client.query<{ id: string; name: string }>(
+        'SELECT id, name FROM hospital WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      const hospital = rows[0];
+      if (!hospital) throw notFound();
+      // 계정 발급 전 병원은 재발급이 아니라 계정 발급(SFR-123)을 써야 한다
+      const { rows: keysBefore } = await client.query(
+        'SELECT 1 FROM license_key WHERE hospital_id = $1 LIMIT 1',
+        [id],
+      );
+      if (keysBefore.length === 0) {
+        throw new AppError(404, 'NOT_FOUND', '발급한 키가 없어요. 먼저 병원 계정을 발급해 주세요');
+      }
+
+      await invalidateHospitalKeys(client, hospital.id, reason);
+      const { rows: keys } = await client.query<{ expires_at: Date }>(
+        `INSERT INTO license_key (hospital_id, key_hash, key_prefix, issued_by, expires_at)
+         VALUES ($1, $2, $3, $4, now() + $5::interval) RETURNING expires_at`,
+        [id, hashLicenseKey(key), licenseKeyPrefix(key), adminId(res), KEY_VALID_INTERVAL],
+      );
+      await recordAudit(client, {
+        adminId: adminId(res),
+        action: 'reissue_key',
+        targetType: 'hospital',
+        targetId: hospital.id,
+        targetName: hospital.name,
+        reason,
+      });
+      return { expiresAt: keys[0].expires_at };
+    });
+
+    // 열려 있는 병원 웹 탭은 커밋 뒤 바로 끊는다 (인수 기준 '3대 모두 막힘')
+    await realtime?.revokeHospital(String(id), 'key_revoked');
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ licenseKey: key, expiresAt: issued.expiresAt.toISOString() });
+  });
+
+  // 키 폐기 (SFR-146): 키와 그 병원 PC 등록을 즉시 무효로. 새 키는 만들지 않는다
+  router.post('/admin/license-keys/:id/revoke', adminOnly, async (req, res) => {
+    const { id } = parseBody(idParams, req.params);
+    const reason = requireReason(req.body);
+    const revoked = await withTransaction(pool, async (client) => {
+      // 키의 병원 행을 잠근다 (재발급과 같은 잠금 순서라 서로 엇갈려 멈추지 않는다)
+      const { rows } = await client.query<{ id: string; name: string }>(
+        `SELECT h.id, h.name FROM hospital h JOIN license_key lk ON lk.hospital_id = h.id
+          WHERE lk.id = $1 FOR UPDATE OF h`,
+        [id],
+      );
+      const hospital = rows[0];
+      if (!hospital) throw new AppError(404, 'NOT_FOUND', '키를 찾을 수 없어요');
+      // 폐기됐는지는 잠금을 얻은 다음 문장에서 본다 (먼저 끝난 관리자의 폐기를 보기 위해)
+      const { rows: keys } = await client.query<{ revoked: boolean }>(
+        'SELECT revoked_at IS NOT NULL AS revoked FROM license_key WHERE id = $1',
+        [id],
+      );
+      // 이미 폐기된 키면 아무것도 바꾸지 않고 이력도 두 번 남기지 않는다
+      if (keys[0].revoked) return null;
+
+      await invalidateHospitalKeys(client, hospital.id, reason, String(id));
+      await recordAudit(client, {
+        adminId: adminId(res),
+        action: 'revoke_key',
+        targetType: 'hospital',
+        targetId: hospital.id,
+        targetName: hospital.name,
+        reason,
+      });
+      return hospital.id;
+    });
+    if (revoked) await realtime?.revokeHospital(revoked, 'key_revoked');
     res.status(204).end();
   });
 

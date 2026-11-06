@@ -59,7 +59,7 @@ export interface Realtime {
   // 근무 종료 등: 이 PC 의 탭들을 :on 방에서 빼고 hospital.alarm_off 를 보낸다
   alarmOff(pc: { pcId: string; hospitalId: string }, reason: 'shift_ended'): Promise<void>;
   // 병원 계정 정지 등: 그 병원 PC 탭에 pc.revoked 를 보내고 연결을 끊는다 (SFR-123). 다시 붙으면 인증에서 막힌다
-  revokeHospital(hospitalId: string, reason: 'account_suspended'): Promise<void>;
+  revokeHospital(hospitalId: string, reason: 'account_suspended' | 'key_revoked'): Promise<void>;
   attach(httpServer: HttpServer): void;
   close(): Promise<void>;
 }

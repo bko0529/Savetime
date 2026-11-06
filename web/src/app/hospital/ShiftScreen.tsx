@@ -14,6 +14,7 @@ import { RequestList } from '@/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
 import { useIncoming } from './useIncoming';
 import { useNewRequests } from './useNewRequests';
+import { usePcRevoked } from './usePcRevoked';
 
 type ShiftBody = ApiPaths['/hw/shifts']['post']['requestBody']['content']['application/json'];
 type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
@@ -86,6 +87,7 @@ export function ShiftScreen({
   createSocket?: () => HospitalSocket;
 }) {
   const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
+  usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
   const arriving = useIncoming(shift ? socket : null);
