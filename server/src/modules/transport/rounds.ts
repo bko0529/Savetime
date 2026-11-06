@@ -36,7 +36,10 @@ const previewSchema = z.object({
   lat: z.coerce.number(),
   lng: z.coerce.number(),
   radiusKm: z.coerce.number().pipe(radius),
-  grade: z.coerce.number().pipe(z.union([z.literal(1), z.literal(2), z.literal(3)])).optional(),
+  grade: z.coerce
+    .number()
+    .pipe(z.union([z.literal(1), z.literal(2), z.literal(3)]))
+    .optional(),
   // 직전 건 제외 병원 이어받기(SFR-157, S6)는 이송 생성에도 아직 없다. 미리보기도 같게 받기만 한다
   prevTransportId: z.uuid().optional(),
 });
@@ -113,15 +116,19 @@ export async function startRound(client: pg.PoolClient, input: RoundInput): Prom
   });
 
   // 표 → 상태 조건(한 단계·40km·대상 0곳 / 확정 병원 승인 취소) → 버전 순서로 판정
-  const { to, history } = transitionTransport(transport.status, expand ? 'EXPAND_ROUND' : 'RE_REQUEST', {
-    now,
-    version: transport.version,
-    clientVersion: input.clientVersion,
-    currentRadiusKm: t.request_radius_km,
-    nextRadiusKm: input.radiusKm,
-    newTargetCount: targets.length,
-    confirmedReqClosedReason: t.confirmed_closed_reason,
-  });
+  const { to, history } = transitionTransport(
+    transport.status,
+    expand ? 'EXPAND_ROUND' : 'RE_REQUEST',
+    {
+      now,
+      version: transport.version,
+      clientVersion: input.clientVersion,
+      currentRadiusKm: t.request_radius_km,
+      nextRadiusKm: input.radiusKm,
+      newTargetCount: targets.length,
+      confirmedReqClosedReason: t.confirmed_closed_reason,
+    },
+  );
 
   // 다시 요청 중에도 경로 안내·출발 시각은 그대로다 (SFR-128). 목적지 변경 횟수에도 세지 않는다
   const { rows: updated } = await client.query<{ version: number }>(
@@ -153,7 +160,13 @@ export async function startRound(client: pg.PoolClient, input: RoundInput): Prom
       entityType: 'transport',
       entityId: transportId,
       entityVersion: version,
-      payload: { transportId, status: to, event: history.event, reason: history.reason, byName: null },
+      payload: {
+        transportId,
+        status: to,
+        event: history.event,
+        reason: history.reason,
+        byName: null,
+      },
     },
     { ...round.event, room },
   ];

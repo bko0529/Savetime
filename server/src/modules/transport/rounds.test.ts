@@ -140,7 +140,12 @@ test('반경 넓히기는 고른 병원 등급을 그대로 쓴다 (SFR-162)', a
 
     const res = await rounds(ctx, s, { kind: 'expand', radiusKm: 30, version: 1 });
     assert.equal(res.status, 201);
-    assert.deepEqual((await roundTargets(ctx.pool, s.transportId))[1], [2, 'expand', 30, ['G병원']]);
+    assert.deepEqual((await roundTargets(ctx.pool, s.transportId))[1], [
+      2,
+      'expand',
+      30,
+      ['G병원'],
+    ]);
   });
 });
 
@@ -191,7 +196,11 @@ test('확정 병원이 승인을 취소하면 다시 요청: 그 병원만 빼�
     const res = await rounds(
       ctx,
       s,
-      { kind: 're_request', version: moving.body.version, location: { lat: ORIGIN.lat + 0.01, lng: ORIGIN.lng } },
+      {
+        kind: 're_request',
+        version: moving.body.version,
+        location: { lat: ORIGIN.lat + 0.01, lng: ORIGIN.lng },
+      },
       s.lee,
     );
     assert.equal(res.status, 201);
@@ -234,7 +243,12 @@ test('다시 요청해 간 병원도 승인을 취소하면 또 다시 요청할
 
     const second = await rounds(ctx, s, { kind: 're_request', version });
     assert.equal(second.status, 201);
-    assert.deepEqual((await roundTargets(ctx.pool, s.transportId))[2], [3, 're_request', 20, ['D병원']]);
+    assert.deepEqual((await roundTargets(ctx.pool, s.transportId))[2], [
+      3,
+      're_request',
+      20,
+      ['D병원'],
+    ]);
   });
 });
 
