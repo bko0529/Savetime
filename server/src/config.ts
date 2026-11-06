@@ -29,6 +29,11 @@ const schema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  // Firebase 서비스 계정 JSON을 base64 한 줄로. 없으면 푸시만 꺼진다 (SFR-130)
+  FIREBASE_SERVICE_ACCOUNT_BASE64: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(1).optional(),
+  ),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

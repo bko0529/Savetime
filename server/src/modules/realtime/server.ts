@@ -20,7 +20,18 @@ import { authenticateParamedic } from '../auth/guards.js';
 import type { AuthContext } from '../auth/session.js';
 // 쿠키 해시는 PC 등록 API와 같은 함수를 쓴다. 저장할 때와 찾을 때 방식이 달라지지 않게 (COR-012)
 import { hashPcToken } from '../hospital-web/pcAuth.js';
+import {
+  createPushDispatcher,
+  forgetConnection,
+  setVisible,
+  type PushSender,
+} from '../push/dispatch.js';
 import { currentTeamId } from '../team/routes.js';
+import {
+  endApprovalWindow,
+  EXPIRING_LEAD_MS,
+  warnApprovalExpiring,
+} from '../transport/approvalWindow.js';
 import { expireRound } from '../transport/expire.js';
 import { applyReverseCascade, roundCounts } from '../transport/hreqCascade.js';
 import {
@@ -42,13 +53,19 @@ export interface Realtime {
   joinTeam(paramedicId: string, teamId: string): Promise<void>;
   // 근무 종료·로그아웃·탈퇴: 그 대원의 연결을 모두 끊는다 (SER-016)
   disconnectParamedic(paramedicId: string): Promise<void>;
+  // 관리자 정지: account.force_logout 을 보낸 뒤 연결을 끊는다. 앱은 바로 로그인 화면으로 간다 (SFR-151, SER-016)
+  forceLogoutParamedic(paramedicId: string, reason: 'suspended'): Promise<void>;
   // 병원 웹 '알림 켜기'(REST): 이 PC 의 그 탭만 hospital:{id}:on 방에 넣는다 (SFR-117).
   // 다른 PC 의 연결 id 면 넣지 않고 false. 다른 서버에 붙은 탭도 Redis 어댑터로 찾는다
   alarmOn(pc: { pcId: string; hospitalId: string }, socketId: string): Promise<boolean>;
   // 근무 종료 등: 이 PC 의 탭들을 :on 방에서 빼고 hospital.alarm_off 를 보낸다
   alarmOff(pc: { pcId: string; hospitalId: string }, reason: 'shift_ended'): Promise<void>;
   // 병원 계정 정지 등: 그 병원 PC 탭에 pc.revoked 를 보내고 연결을 끊는다 (SFR-123). 다시 붙으면 인증에서 막힌다
-  revokeHospital(hospitalId: string, reason: 'account_suspended'): Promise<void>;
+  revokeHospital(hospitalId: string, reason: 'account_suspended' | 'key_revoked'): Promise<void>;
+  // 관리자 PC 해제: 그 PC 의 탭에만 pc.revoked 를 보내고 끊는다 (SFR-147)
+  revokePc(pc: { pcId: string; hospitalId: string }, reason: 'pc_released'): Promise<void>;
+  // 지금 실시간으로 붙어 있는 그 병원 PC id 목록 (관리자 PC 목록의 '접속 중', SFR-147)
+  onlinePcIds(hospitalId: string): Promise<string[]>;
   attach(httpServer: HttpServer): void;
   close(): Promise<void>;
 }
@@ -61,6 +78,8 @@ export interface RealtimeOptions {
   deliveryTimeoutMs?: number;
   // 테스트 파일끼리 Redis 채널·큐가 섞이지 않게 이름 앞에 붙인다
   prefix?: string;
+  // FCM 발송 함수. 없으면(키 없음·테스트) 푸시 없이 웹소켓만 보낸다 (SFR-130)
+  push?: PushSender;
 }
 
 interface AppSocketData {
@@ -75,6 +94,7 @@ interface HospitalSocketData {
 
 const DELIVERY_QUEUE = 'delivery-check';
 const EXPIRY_QUEUE = 'respond-timeout';
+const APPROVAL_QUEUE = 'approval-window';
 const REPLAY_LIMIT = 500;
 // 병원 웹은 다시 받기를 하지 않고 재연결 때 목록을 새로 받으므로(설계 3장) 직접 보내는 이벤트에는 seq를 쓰지 않는다
 const NO_SEQ = 0;
@@ -104,6 +124,9 @@ function readCookie(header: string | undefined, name: string): string | undefine
 export function createRealtime(options: RealtimeOptions): Realtime {
   const { auth, logger } = options;
   const { pool } = auth;
+  const pushDispatcher = options.push
+    ? createPushDispatcher({ pool, redis: auth.redis, sender: options.push, logger })
+    : undefined;
   const timeoutMs = options.deliveryTimeoutMs ?? 5000;
   const prefix = options.prefix ?? 'savetime';
 
@@ -140,6 +163,14 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     if (teamId) void socket.join(`team:${teamId}`);
 
     // 연결·재연결 직후 앱이 1번 부른다. 놓친 이벤트를 순서대로 보내고 ack (설계 3장)
+    // 앱이 화면에 보이는지 (포그라운드·백그라운드 바뀔 때마다). 보이면 푸시 대신 앱이 직접 울린다 (실시간 설계 5장)
+    socket.on('app.visibility', (req: { visible?: unknown }) => {
+      setVisible(auth.redis, paramedicId, socket.id, req?.visible === true).catch(() => {});
+    });
+    socket.on('disconnect', () => {
+      forgetConnection(auth.redis, paramedicId, socket.id).catch(() => {});
+    });
+
     socket.on('sync', async (req: { lastSeq?: unknown }, ack: unknown) => {
       if (typeof ack !== 'function') return;
       try {
@@ -279,6 +310,8 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       const ns = event.room.startsWith('hospital:') ? hospital : app;
       ns.to(event.room).emit(event.name, toEnvelope(event));
     }
+    // 화면에 앱이 안 보이는 팀원에게는 FCM 푸시도 (첫 승인·전부 거절·2분 만료). 기다리지 않는다
+    void pushDispatcher?.handle(events);
   }
 
   // ---------- 요청 전달 확인 (SFR-161) ----------
@@ -359,6 +392,74 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     )
     .then(({ rows }) => Promise.all(rows.map((row) => scheduleExpiry(row.id))))
     .catch((err: Error) => logger.error({ message: err.message }, '2분 타이머 다시 걸기 실패'));
+
+  // ---------- 승인 유효시간 5분 (SFR-127): 4분 해제 경보 + 5분 승인 해제 ----------
+  const approvalQueue = new Queue(APPROVAL_QUEUE, { connection, prefix });
+  const approvalWorker = new Worker(
+    APPROVAL_QUEUE,
+    async (job) => {
+      const roundId = String(job.data.roundId);
+      const result =
+        job.name === 'warn'
+          ? await warnApprovalExpiring(pool, roundId)
+          : await endApprovalWindow(pool, roundId);
+      // 일찍 깨어났으면 실패로 돌려 조금 뒤 다시 한다 (판정은 DB 시각)
+      if (result === 'not_due') throw new Error('아직 승인 유효시간이 안 됐어요');
+      if (result) publish(result);
+    },
+    { connection, prefix, concurrency: 10, autorun: false },
+  );
+  approvalQueue.on('error', (err) => logger.error({ message: err.message }, '5분 타이머 큐 오류'));
+  approvalWorker.on('error', (err) =>
+    logger.error({ message: err.message }, '5분 타이머 워커 오류'),
+  );
+  approvalWorker.on('failed', (_job, err) =>
+    logger.error({ message: err.message }, '5분 타이머 실행 실패'),
+  );
+  void approvalWorker
+    .run()
+    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+
+  // 4분·5분 작업 두 개를 건다. 남은 시간은 DB 시각으로 재고, 이미 지났으면 바로 실행
+  async function scheduleApprovalWindow(roundId: string): Promise<void> {
+    const { rows } = await pool.query<{ warn: number; end: number }>(
+      `SELECT GREATEST(0, ceil(extract(epoch FROM approval_valid_until - now()) * 1000) - $2)::int AS warn,
+              GREATEST(0, ceil(extract(epoch FROM approval_valid_until - now()) * 1000))::int AS end
+         FROM request_round WHERE id = $1`,
+      [roundId, EXPIRING_LEAD_MS],
+    );
+    if (!rows[0]) return;
+    const options = {
+      attempts: 5,
+      backoff: { type: 'fixed' as const, delay: 500 },
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    };
+    await Promise.all([
+      approvalQueue.add(
+        'warn',
+        { roundId },
+        { ...options, jobId: `approval-warn-${roundId}`, delay: rows[0].warn },
+      ),
+      approvalQueue.add(
+        'end',
+        { roundId },
+        { ...options, jobId: `approval-end-${roundId}`, delay: rows[0].end },
+      ),
+    ]);
+  }
+
+  // 재시작 때: 아직 요청 중·전화 확인 중인 이송 건의 지금 회차 중 승인 해제가 안 끝난 것을 다시 건다
+  // (같은 jobId면 다시 만들지 않는다. 이미 지난 경보는 늦게 보내도 의미가 없어 5분 작업만 바로 실행된다)
+  void pool
+    .query<{ id: string }>(
+      `SELECT r.id FROM request_round r JOIN transport t ON t.id = r.transport_id
+        WHERE t.status IN ('requesting','phone_check')
+          AND r.round_no = (SELECT max(round_no) FROM request_round WHERE transport_id = r.transport_id)
+          AND r.approval_valid_until > now() - interval '1 hour'`,
+    )
+    .then(({ rows }) => Promise.all(rows.map((row) => scheduleApprovalWindow(row.id))))
+    .catch((err: Error) => logger.error({ message: err.message }, '5분 타이머 다시 걸기 실패'));
 
   // 1대라도 ack하면 그 병원에 '전달'. ack 안 한 PC는 :on에서 빼고 알림을 끈다 (설계 4-2 전달 판정)
   async function sendToPc(
@@ -544,6 +645,9 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       scheduleExpiry(roundId).catch((err: Error) =>
         logger.error({ message: err.message, roundId }, '2분 타이머 걸기 실패'),
       );
+      scheduleApprovalWindow(roundId).catch((err: Error) =>
+        logger.error({ message: err.message, roundId }, '5분 타이머 걸기 실패'),
+      );
       deliver(roundId).catch((err: Error) =>
         logger.error({ message: err.message, roundId }, '요청 전달 실패'),
       );
@@ -553,6 +657,12 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     },
     async disconnectParamedic(paramedicId) {
       app.in(`paramedic:${paramedicId}`).disconnectSockets(true);
+    },
+    async forceLogoutParamedic(paramedicId, reason) {
+      const room = `paramedic:${paramedicId}`;
+      app.to(room).emit('account.force_logout', directEnvelope(room, { reason }));
+      // close=false: 방금 보낸 account.force_logout 이 먼저 가고 그다음 끊김이 간다
+      app.in(room).disconnectSockets(false);
     },
     async alarmOn(pc, socketId) {
       const [socket] = await hospital.in(socketId).fetchSockets();
@@ -565,6 +675,19 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       hospital.to(room).emit('pc.revoked', directEnvelope(room, { reason }));
       // close=false: 같은 연결로 방금 보낸 pc.revoked 가 먼저 가고 그다음 끊김이 간다
       hospital.in(room).disconnectSockets(false);
+    },
+    async revokePc(pc, reason) {
+      const room = `hospital:${pc.hospitalId}`;
+      const sockets = await hospital.in(room).fetchSockets();
+      for (const socket of sockets) {
+        if ((socket.data as HospitalSocketData).pcId !== pc.pcId) continue;
+        socket.emit('pc.revoked', directEnvelope(room, { reason }));
+        socket.disconnect(false);
+      }
+    },
+    async onlinePcIds(hospitalId) {
+      const sockets = await hospital.in(`hospital:${hospitalId}`).fetchSockets();
+      return [...new Set(sockets.map((s) => (s.data as HospitalSocketData).pcId))];
     },
     async alarmOff(pc, reason) {
       const room = onRoom(pc.hospitalId);
@@ -582,8 +705,8 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     // HTTP 서버는 부르는 쪽이 닫는다. 연결이 남아 있으면 HTTP 서버가 닫히지 않으므로 이걸 먼저 부른다
     async close() {
       io.local.disconnectSockets(true);
-      await Promise.all([worker.close(), expiryWorker.close()]);
-      await Promise.all([queue.close(), expiryQueue.close()]);
+      await Promise.all([worker.close(), expiryWorker.close(), approvalWorker.close()]);
+      await Promise.all([queue.close(), expiryQueue.close(), approvalQueue.close()]);
       pub.disconnect();
       sub.disconnect();
     },
