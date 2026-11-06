@@ -6,7 +6,7 @@ import { isInKorea, RADIUS_KM } from '../../domain/geo.js';
 import { AppError } from '../../http/errors.js';
 import { paramedicAuth } from '../auth/guards.js';
 import type { EtaLookup } from './eta.js';
-import { rankHospitals, type BedPair, type Candidate } from './rank.js';
+import { rankHospitals, type BedPair, type Candidate, type Ranked } from './rank.js';
 
 interface CandidateRow {
   id: string;
@@ -57,8 +57,11 @@ const CANDIDATES_SQL = `
 
 type Row = Candidate & { row: CandidateRow };
 
+// 풀이든 트랜잭션 안의 client든 받는다 (전화 거절의 다음 후보는 같은 트랜잭션에서 계산, SFR-074)
+type Queryable = Pick<pg.Pool, 'query'> | Pick<pg.PoolClient, 'query'>;
+
 async function findCandidates(
-  pool: pg.Pool,
+  pool: Queryable,
   origin: { lat: number; lng: number },
   radiusKm: number,
   excludedIds: Set<string> = new Set(),
@@ -140,6 +143,59 @@ function parseOrigin(query: unknown): { lat: number; lng: number; radiusKm: numb
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export interface TransportRanking {
+  radiusKm: number;
+  origin: { lat: number; lng: number };
+  candidates: Row[];
+  ranked: Ranked<Row>;
+}
+
+// 이송 건 하나의 추천 산출 (SFR-098). 추천 API와 전화 거절 뒤 다음 후보(SFR-074)가 같이 써서
+// 앱에 보이는 순서와 서버가 고르는 다음 병원이 늘 같다 (SFR-112). 내 팀 이송 건이 아니면 null (SER-010)
+export async function rankForTransport(
+  db: Queryable,
+  transportId: string,
+  paramedicId: string,
+): Promise<TransportRanking | null> {
+  const { rows } = await db.query<{
+    origin_lat: number | null;
+    origin_lng: number | null;
+    fallback_radius_km: number;
+    requested_grade: number | null;
+  }>(
+    `SELECT t.origin_lat::float8 AS origin_lat, t.origin_lng::float8 AS origin_lng,
+            t.fallback_radius_km, t.requested_grade
+       FROM transport t
+       JOIN team_member tm ON tm.team_id = t.team_id AND tm.left_at IS NULL
+      WHERE t.id = $1 AND tm.paramedic_id = $2`,
+    [transportId, paramedicId],
+  );
+  const transport = rows[0];
+  if (!transport) return null;
+  if (transport.origin_lat === null || transport.origin_lng === null) {
+    // 주소만 있는 이송 건은 주소→좌표 변환(SFR-009)이 생기면 좌표가 채워진다
+    throw new AppError(409, 'LOCATION_REQUIRED', '출발 위치를 알 수 없어요');
+  }
+
+  const { rows: excluded } = await db.query<{ hospital_id: string }>(
+    'SELECT hospital_id FROM excluded_hospital WHERE transport_id = $1',
+    [transportId],
+  );
+  const radiusKm = transport.fallback_radius_km;
+  const origin = { lat: transport.origin_lat, lng: transport.origin_lng };
+  const candidates = await findCandidates(
+    db,
+    origin,
+    radiusKm,
+    new Set(excluded.map((row) => row.hospital_id)),
+  );
+  const ranked = rankHospitals(candidates, {
+    requestedGrade: transport.requested_grade,
+    radiusKm,
+  });
+  return { radiusKm, origin, candidates, ranked };
+}
+
 // eta가 없으면(카카오 키 없음) 예상 이동시간만 빠지고 추천은 그대로 나간다
 export function recommendRouter(pool: pg.Pool, guards: RequestHandler[], eta?: EtaLookup): Router {
   const router = Router();
@@ -156,43 +212,9 @@ export function recommendRouter(pool: pg.Pool, guards: RequestHandler[], eta?: E
     const notFound = new AppError(404, 'NOT_FOUND', '이송 건을 찾을 수 없어요');
     if (!UUID.test(transportId)) throw notFound;
 
-    // 내 팀의 이송 건만 본다. 남의 것은 있는지조차 알리지 않는다 (SER-010)
-    const { rows } = await pool.query<{
-      origin_lat: number | null;
-      origin_lng: number | null;
-      fallback_radius_km: number;
-      requested_grade: number | null;
-    }>(
-      `SELECT t.origin_lat::float8 AS origin_lat, t.origin_lng::float8 AS origin_lng,
-              t.fallback_radius_km, t.requested_grade
-         FROM transport t
-         JOIN team_member tm ON tm.team_id = t.team_id AND tm.left_at IS NULL
-        WHERE t.id = $1 AND tm.paramedic_id = $2`,
-      [transportId, paramedicAuth(res).paramedicId],
-    );
-    const transport = rows[0];
-    if (!transport) throw notFound;
-    if (transport.origin_lat === null || transport.origin_lng === null) {
-      // 주소만 있는 이송 건은 주소→좌표 변환(SFR-009)이 생기면 좌표가 채워진다
-      throw new AppError(409, 'LOCATION_REQUIRED', '출발 위치를 알 수 없어요');
-    }
-
-    const { rows: excluded } = await pool.query<{ hospital_id: string }>(
-      'SELECT hospital_id FROM excluded_hospital WHERE transport_id = $1',
-      [transportId],
-    );
-    const radiusKm = transport.fallback_radius_km;
-    const origin = { lat: transport.origin_lat, lng: transport.origin_lng };
-    const candidates = await findCandidates(
-      pool,
-      origin,
-      radiusKm,
-      new Set(excluded.map((row) => row.hospital_id)),
-    );
-    const ranked = rankHospitals(candidates, {
-      requestedGrade: transport.requested_grade,
-      radiusKm,
-    });
+    const result = await rankForTransport(pool, transportId, paramedicAuth(res).paramedicId);
+    if (!result) throw notFound;
+    const { radiusKm, origin, candidates, ranked } = result;
     const rankOf = new Map(ranked.items.map((item) => [item.id, item.rank]));
     const etas = eta
       ? await eta(
