@@ -297,7 +297,9 @@ test('거절하면 제외 병원에 넣고 다음 순위 병원으로 전화 확
     assert.equal(last.status, 201);
     assert.equal(last.body.status, 'fallback');
     assert.equal(last.body.phoneTarget, null);
-    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [s.transportId]);
+    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [
+      s.transportId,
+    ]);
     assert.equal(t.rows[0].fallback_reason, 'phone_rejected_last');
 
     // 추천 목록에서도 B·C가 빠지고 반경 넓히기 안내가 나온다 (SFR-029)
@@ -313,7 +315,10 @@ test('거절하면 제외 병원에 넣고 다음 순위 병원으로 전화 확
       'SELECT result FROM phone_check WHERE transport_id = $1 ORDER BY id',
       [s.transportId],
     );
-    assert.deepEqual(rows.map((r) => r.result), ['rejected', 'rejected']);
+    assert.deepEqual(
+      rows.map((r) => r.result),
+      ['rejected', 'rejected'],
+    );
   });
 });
 
@@ -328,7 +333,9 @@ test('요청이 열린 채로 마지막 후보를 거절하면 요청 중으로 
     assert.equal(res.status, 201);
     assert.equal(res.body.status, 'requesting');
     assert.deepEqual(await requestStates(ctx.pool), before);
-    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [s.transportId]);
+    const t = await ctx.pool.query('SELECT fallback_reason FROM transport WHERE id = $1', [
+      s.transportId,
+    ]);
     assert.equal(t.rows[0].fallback_reason, null);
   });
 });

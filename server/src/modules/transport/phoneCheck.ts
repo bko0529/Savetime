@@ -347,7 +347,13 @@ async function backToList(
       entityType: 'transport',
       entityId: transportId,
       entityVersion: version,
-      payload: { transportId, status: to, event: history.event, reason: history.reason, byName: null },
+      payload: {
+        transportId,
+        status: to,
+        event: history.event,
+        reason: history.reason,
+        byName: null,
+      },
     },
   ];
   // 팀원 화면도 다음 병원 전화 확인으로 (A16)
