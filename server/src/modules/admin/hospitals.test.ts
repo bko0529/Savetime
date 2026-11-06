@@ -274,6 +274,193 @@ test('관리자 토큰이 없거나 대원 토큰이면 막는다 (SER-010)', as
   });
 });
 
+// 병원 계정을 발급하고 PC 를 여러 대 등록해 둔다 (SFR-146 테스트 준비)
+async function hospitalWithPcs(h: Harness, name: string, pcNames: string[]) {
+  const id = await h.addHospital(name, `${name}-id`);
+  const { licenseKey } = (await h.admin('post', `/admin/hospitals/${id}/account`)).body;
+  const cookies: string[] = [];
+  for (const pcName of pcNames) {
+    const reg = await h.hw('post', '/hw/pc/register').send({ licenseKey, pcName });
+    assert.equal(reg.status, 201);
+    cookies.push(pcCookie(reg));
+  }
+  const { rows } = await h.pool.query<{ id: string }>(
+    'SELECT id FROM license_key WHERE hospital_id = $1',
+    [id],
+  );
+  return { id, licenseKey: licenseKey as string, keyId: rows[0].id, cookies };
+}
+
+test('키를 폐기하면 등록 PC 2대 모두 막히고, 새 키는 만들어지지 않는다 (SFR-146 인수 기준)', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await hospitalWithPcs(h, 'A병원', ['접수대', '처치실']);
+    await h.pool.query(
+      "INSERT INTO hospital_shift (pc_id, staff_name, alarm_on_at) SELECT id, '박서연', now() FROM hospital_pc",
+    );
+
+    const res = await h
+      .admin('post', `/admin/license-keys/${a.keyId}/revoke`)
+      .send({ reason: '병원 탈퇴' });
+    assert.equal(res.status, 204);
+
+    // 두 PC 모두 등록이 풀려 키 입력 화면으로 돌아간다
+    for (const cookie of a.cookies) {
+      const s = await h.hw('get', '/hw/session', cookie);
+      assert.equal(s.status, 401);
+      assert.equal(s.body.error.code, 'PC_NOT_REGISTERED');
+    }
+    // 폐기한 키로는 다시 등록할 수 없다
+    const reg = await h
+      .hw('post', '/hw/pc/register')
+      .send({ licenseKey: a.licenseKey, pcName: '원무과' });
+    assert.equal(reg.body.error.code, 'INVALID_LICENSE');
+
+    const { rows: keys } = await h.pool.query(
+      'SELECT revoked_at IS NOT NULL AS revoked, revoke_reason FROM license_key',
+    );
+    assert.deepEqual(keys, [{ revoked: true, revoke_reason: '병원 탈퇴' }]);
+    const { rows: shifts } = await h.pool.query(
+      'SELECT count(*)::int AS n FROM hospital_shift WHERE alarm_on_at IS NOT NULL',
+    );
+    assert.equal(shifts[0].n, 0, '알림 켠 근무가 꺼져 요청 대상에서 빠진다');
+
+    // 관리자 목록에는 쓰는 키가 없다고 나온다
+    const list = await h.admin('get', '/admin/hospitals');
+    assert.equal(list.body.items[0].license, null);
+    assert.equal(list.body.items[0].pcCount, 0);
+
+    // 작업 이력에 사유와 함께, 실시간으로 탭도 끊는다
+    const audit = await auditRows(h.pool);
+    assert.deepEqual(audit.at(-1), {
+      action: 'revoke_key',
+      target_type: 'hospital',
+      target_id: a.id,
+      detail: { targetName: 'A병원', reason: '병원 탈퇴' },
+    });
+    assert.deepEqual(h.revoked, [String(a.id)]);
+
+    // 이미 폐기된 키를 또 폐기해도 이력·실시간 호출은 한 번만
+    const again = await h
+      .admin('post', `/admin/license-keys/${a.keyId}/revoke`)
+      .send({ reason: '병원 탈퇴' });
+    assert.equal(again.status, 204);
+    assert.equal((await auditRows(h.pool)).length, audit.length);
+    assert.deepEqual(h.revoked, [String(a.id)]);
+  });
+});
+
+test('키를 재발급하면 PC 3대 모두 막히고, 새 키가 한 번만 나오며 작업 이력에 사유가 남는다 (SFR-146 인수 기준)', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await hospitalWithPcs(h, 'A병원', ['접수대', '처치실', '원무과']);
+
+    const res = await h
+      .admin('post', `/admin/hospitals/${a.id}/license-keys`)
+      .send({ reason: '키 유출 의심' });
+    assert.equal(res.status, 201);
+    assert.equal(res.headers['cache-control'], 'no-store');
+    assert.match(res.body.licenseKey, /^([A-Z2-9]{4}-){4}[A-Z2-9]{4}$/);
+    assert.notEqual(res.body.licenseKey, a.licenseKey);
+
+    for (const cookie of a.cookies) {
+      const s = await h.hw('get', '/hw/session', cookie);
+      assert.equal(s.body.error.code, 'PC_NOT_REGISTERED');
+    }
+    // 옛 키는 못 쓰고 새 키로는 다시 등록된다
+    const old = await h
+      .hw('post', '/hw/pc/register')
+      .send({ licenseKey: a.licenseKey, pcName: '접수대' });
+    assert.equal(old.body.error.code, 'INVALID_LICENSE');
+    const fresh = await h
+      .hw('post', '/hw/pc/register')
+      .send({ licenseKey: res.body.licenseKey, pcName: '접수대' });
+    assert.equal(fresh.status, 201);
+
+    // DB 에는 새 키의 해시만, 키 전체는 어디에도 없다
+    const { rows: keys } = await h.pool.query(
+      'SELECT key_hash, revoked_at IS NOT NULL AS revoked, revoke_reason FROM license_key ORDER BY id',
+    );
+    assert.deepEqual(
+      keys.map((k) => [k.revoked, k.revoke_reason]),
+      [
+        [true, '키 유출 의심'],
+        [false, null],
+      ],
+    );
+    assert.equal(keys[1].key_hash, hashLicenseKey(res.body.licenseKey));
+    const list = await h.admin('get', '/admin/hospitals');
+    assert.equal(list.body.items[0].license.prefix, res.body.licenseKey.slice(0, 4));
+    assert.doesNotMatch(JSON.stringify(list.body), new RegExp(res.body.licenseKey));
+
+    const audit = await auditRows(h.pool);
+    assert.deepEqual(audit.at(-1), {
+      action: 'reissue_key',
+      target_type: 'hospital',
+      target_id: a.id,
+      detail: { targetName: 'A병원', reason: '키 유출 의심' },
+    });
+    assert.doesNotMatch(JSON.stringify(audit), new RegExp(res.body.licenseKey));
+    assert.deepEqual(h.revoked, [String(a.id)]);
+  });
+});
+
+test('폐기·재발급: 사유가 없으면 422, 60자 넘으면 400, 없는 키·병원·발급 전 병원은 404', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await hospitalWithPcs(h, 'A병원', ['접수대']);
+    const notIssued = await h.addHospital('B병원', 'B1');
+
+    for (const body of [{}, { reason: '   ' }]) {
+      const r1 = await h.admin('post', `/admin/license-keys/${a.keyId}/revoke`).send(body);
+      assert.equal(r1.status, 422);
+      assert.equal(r1.body.error.code, 'REASON_REQUIRED');
+      const r2 = await h.admin('post', `/admin/hospitals/${a.id}/license-keys`).send(body);
+      assert.equal(r2.body.error.code, 'REASON_REQUIRED');
+    }
+    const tooLong = await h
+      .admin('post', `/admin/license-keys/${a.keyId}/revoke`)
+      .send({ reason: '가'.repeat(61) });
+    assert.equal(tooLong.status, 400);
+
+    const missingKey = await h
+      .admin('post', '/admin/license-keys/99999/revoke')
+      .send({ reason: 'x' });
+    assert.equal(missingKey.status, 404);
+    const missingHospital = await h
+      .admin('post', '/admin/hospitals/99999/license-keys')
+      .send({ reason: 'x' });
+    assert.equal(missingHospital.status, 404);
+    const beforeAccount = await h
+      .admin('post', `/admin/hospitals/${notIssued}/license-keys`)
+      .send({ reason: 'x' });
+    assert.equal(beforeAccount.status, 404);
+
+    // 실패한 요청은 아무것도 바꾸지 않았다
+    assert.equal((await h.hw('get', '/hw/session', a.cookies[0])).status, 200);
+    assert.equal((await auditRows(h.pool)).length, 1);
+
+    // 관리자가 아니면 막는다 (SER-010)
+    const paramedic = await signAccessToken(h.jwtKey, { paramedicId: '1', sessionVersion: 1 });
+    const noAuth = await h
+      .admin('post', `/admin/license-keys/${a.keyId}/revoke`, paramedic)
+      .send({ reason: 'x' });
+    assert.equal(noAuth.status, 401);
+  });
+});
+
+test('두 관리자가 동시에 재발급해도 살아 있는 키는 하나만 남는다 (SFR-146)', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await hospitalWithPcs(h, 'A병원', ['접수대']);
+    const [r1, r2] = await Promise.all([
+      h.admin('post', `/admin/hospitals/${a.id}/license-keys`).send({ reason: '분실' }),
+      h.admin('post', `/admin/hospitals/${a.id}/license-keys`).send({ reason: '분실' }),
+    ]);
+    assert.deepEqual([r1.status, r2.status], [201, 201]);
+    const { rows } = await h.pool.query(
+      'SELECT count(*)::int AS n FROM license_key WHERE revoked_at IS NULL',
+    );
+    assert.equal(rows[0].n, 1);
+  });
+});
+
 test('정지하면 커밋 뒤 실시간 서버에 그 병원 탭을 끊게 하고, 이미 정지된 병원은 다시 부르지 않는다', async () => {
   await withAdminHospitals(async (h) => {
     const id = await h.addHospital('A병원', 'A1');

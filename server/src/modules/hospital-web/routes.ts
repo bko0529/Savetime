@@ -17,9 +17,10 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
-import { approveSchema, rejectSchema, respondToRequest } from './respond.js';
+import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
 
 export const MAX_PCS = 3;
 
@@ -323,6 +324,28 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     );
     ctx.realtime?.publish(outcome.events);
     res.json(outcome.body);
+  });
+
+  // 승인 취소: 승인·확정한 요청을 사유와 함께 닫는다 (SFR-128). 확정 병원이면 대원 앱에 경보
+  router.post('/hw/requests/:requestId/cancel-approval', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(cancelApprovalSchema, req.body);
+    const outcome = await withTransaction(ctx.pool, (client) =>
+      respondToRequest(client, hospitalPc(res), requestId, { event: 'CANCEL_APPROVAL', input }),
+    );
+    ctx.realtime?.publish(outcome.events);
+    res.status(204).end();
+  });
+
+  // 추가 메모: 확정된 요청에 한 번만 (SFR-140). 대원 앱에 경보
+  router.post('/hw/requests/:requestId/extra-memo', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(extraMemoSchema, req.body);
+    const events = await withTransaction(ctx.pool, (client) =>
+      sendExtraMemo(client, hospitalPc(res), requestId, input),
+    );
+    ctx.realtime?.publish(events);
+    res.status(204).end();
   });
 
   return router;

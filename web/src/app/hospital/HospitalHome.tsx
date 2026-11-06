@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { LicenseBanner } from '@/components/hospital/LicenseBanner';
 import { ShiftScreen } from './ShiftScreen';
 
 type Session = ApiPaths['/hw/session']['get']['responses'][200]['content']['application/json'];
@@ -39,9 +40,11 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
     );
   }
 
-  const { hospital, pc, shift } = session.data;
+  const { hospital, pc, shift, licenseDaysLeft } = session.data;
   return (
     <div className="flex flex-col gap-6">
+      {/* 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168) */}
+      {shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
       <p className="text-xl">
         <span className="font-bold">{hospital?.name}</span> · {pc?.name}
       </p>

@@ -66,7 +66,7 @@ export interface AppServerEvents {
   'transport.phone_target':(e: Envelope<{ transportId: string; hospitalId: number; hospitalName: string }>) => void;     // 전화 확인 대상 병원 (부록 A13·A16)
   'transport.eta':         (e: Envelope<{ transportId: string; etaMin: number }>) => void;                     // 이동 중 1분마다
   'assessment.sent':       (e: Envelope<{ transportId: string; assessmentSeq: number; changedFields: string[]; byName: string }>) => void;
-  'hospital.extra_memo':   (e: Envelope<{ transportId: string; hospitalName: string; memo: string }>) => void;   // 푸시 (SFR-140)
+  'hospital.extra_memo':   (e: Envelope<{ transportId: string; hospitalRequestId: number; hospitalName: string }>) => void;   // 푸시 (SFR-140). 메모 글은 규칙 5 때문에 빼고, 앱이 GET /transports/current 의 extraMemo 로 받는다
   'transport.arrive_requested': (e: Envelope<{ transportId: string; hospitalName: string }>) => void;          // 위치 없는 건에 병원 '도착 확인' · 푸시 (SFR-144)
   'transport.arrived':     (e: Envelope<{ transportId: string; method: 'button' | 'menu' | 'hospital' | 'finish_previous'; durationSec: number }>) => void;
   'transport.unacceptable':(e: Envelope<{ transportId: string; hospitalName: string; reason: string }>) => void;  // 푸시 (SFR-158)

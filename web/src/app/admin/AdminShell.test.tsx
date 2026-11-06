@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { fakeServer } from '@/testing/render';
 import { useEffect, useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminAuthProvider, useAdminAuth } from './AdminAuth';
@@ -25,14 +27,40 @@ function SignedIn({ children }: { children: ReactNode }) {
 }
 
 function renderAdmin(ui: ReactNode, { signedIn = true } = {}) {
-  return render(<AdminAuthProvider>{signedIn ? <SignedIn>{ui}</SignedIn> : ui}</AdminAuthProvider>);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <AdminAuthProvider>{signedIn ? <SignedIn>{ui}</SignedIn> : ui}</AdminAuthProvider>
+    </QueryClientProvider>,
+  );
 }
 
+let server: ReturnType<typeof fakeServer>;
 beforeEach(() => {
   replace.mockClear();
   pathname = '/admin';
+  // 상단 바가 읽지 않은 알림 개수를 묻는다 (SFR-100)
+  server = fakeServer({
+    'GET /admin/notifications?limit=1': {
+      status: 200,
+      body: { items: [], nextCursor: null, unread: 3 },
+    },
+  });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe('상단 알림 개수 (SFR-100)', () => {
+  it('읽지 않은 알림 개수를 보여 주고, 누르면 모니터링 알림 목록으로 간다', async () => {
+    renderAdmin(<AdminHome />);
+    const badge = await screen.findByRole('link', { name: '읽지 않은 알림 3개' });
+    expect(badge.textContent).toBe('알림 3');
+    expect(badge.getAttribute('href')).toBe('/admin/monitoring#notifications');
+    expect(server.callsTo('GET /admin/notifications?limit=1')).toHaveLength(1);
+  });
+});
 
 describe('관리자 메뉴 (SFR-082)', () => {
   it('로그인하면 계정·모니터링·병원 관리 메뉴 3개가 보인다', async () => {
