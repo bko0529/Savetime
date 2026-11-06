@@ -5,10 +5,11 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { MEMO_MAX } from './ExtraMemoDialog';
 import { RejectReasonDialog, type RejectBody } from './RejectReasonDialog';
 
 type Answer =
-  | { kind: 'approve'; overApprovalConfirmed?: boolean }
+  | { kind: 'approve'; memo?: string; overApprovalConfirmed?: boolean }
   | ({ kind: 'reject' | 'cancel-approval' } & Omit<RejectBody, 'version'>);
 
 const RESPONDED_TEXT: Record<string, string> = { approved: '승인', rejected: '거절' };
@@ -70,6 +71,14 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
   const queryClient = useQueryClient();
   // 열려 있는 사유 창: 거절 / 승인 취소
   const [reasonFor, setReasonFor] = useState<'reject' | 'cancelApproval' | null>(null);
+  // 승인 메모 (SFR-140). 승인할 때 같이 보내면 대원 앱 승인 카드에 보인다
+  const [approveMemo, setApproveMemo] = useState('');
+  // 비어 있으면 아예 보내지 않는다
+  const approve = (extra: { overApprovalConfirmed?: boolean } = {}): Answer => ({
+    kind: 'approve',
+    ...(approveMemo.trim() ? { memo: approveMemo.trim() } : {}),
+    ...extra,
+  });
   // 빠르게 두 번 누르면 화면이 '보내는 중'으로 바뀌기 전에 두 번째 클릭이 들어온다. 그래서 바로 막는 표시를 따로 둔다
   const sending = useRef(false);
 
@@ -119,10 +128,22 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           size="lg"
           className="h-14 w-fit text-xl"
           disabled={answer.isPending}
-          onClick={() => send({ kind: 'approve', overApprovalConfirmed: true })}
+          onClick={() => send(approve({ overApprovalConfirmed: true }))}
         >
           그래도 승인
         </Button>
+      )}
+      {canAnswer && (
+        <label className="flex max-w-xl flex-col gap-1 text-lg">
+          승인 메모 (선택, {MEMO_MAX}자까지)
+          <input
+            value={approveMemo}
+            onChange={(e) => setApproveMemo(e.target.value.slice(0, MEMO_MAX))}
+            maxLength={MEMO_MAX}
+            placeholder="예: 3번 출입구로 오세요"
+            className="h-12 rounded-lg border-2 border-input px-3 text-xl"
+          />
+        </label>
       )}
       {canAnswer && (
         <div className="flex gap-4">
@@ -130,7 +151,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
             size="lg"
             className="h-16 min-w-40 text-2xl"
             disabled={answer.isPending}
-            onClick={() => send({ kind: 'approve' })}
+            onClick={() => send(approve())}
           >
             {answer.isPending && answer.variables?.kind === 'approve' ? '승인 중…' : '승인'}
           </Button>
@@ -167,7 +188,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         kind={reasonFor ?? 'reject'}
         open={reasonFor !== null}
         pending={answer.isPending}
-        error={answer.isError ? answerErrorText(answer.error) : null}
+        error={reasonFor && answer.isError ? answerErrorText(answer.error) : null}
         onSubmit={(body) =>
           send({ kind: reasonFor === 'cancelApproval' ? 'cancel-approval' : 'reject', ...body })
         }

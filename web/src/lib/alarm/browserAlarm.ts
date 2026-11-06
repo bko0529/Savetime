@@ -66,3 +66,11 @@ export async function askNotificationPermission(): Promise<NotificationPermissio
     return 'denied';
   }
 }
+
+export type PermissionState = NotificationPermission | 'unsupported';
+
+// 지금 브라우저 알림 권한 (묻지 않고 읽기만). 직원이 브라우저 설정에서 바꾸고 돌아올 수 있어서 수시로 다시 읽는다 (SFR-136)
+export function notificationPermission(): PermissionState {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission;
+}

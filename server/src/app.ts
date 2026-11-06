@@ -10,6 +10,9 @@ import type { AuthContext } from './modules/auth/session.js';
 import { auditRouter } from './modules/admin/audit.js';
 import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
 import { adminHospitalRouter } from './modules/admin/hospitals.js';
+import { adminNotificationRouter } from './modules/admin/notifications.js';
+import { adminParamedicRouter } from './modules/admin/paramedics.js';
+import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
@@ -19,6 +22,7 @@ import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 import type { EtaLookup } from './modules/transport/eta.js';
 import { recommendRouter } from './modules/transport/recommend.js';
 import { confirmRouter } from './modules/transport/confirm.js';
+import { phoneCheckRouter } from './modules/transport/phoneCheck.js';
 import { roundsRouter } from './modules/transport/rounds.js';
 import { finishRouter } from './modules/transport/finish.js';
 import { transportRouter } from './modules/transport/create.js';
@@ -75,6 +79,7 @@ export function createApp({
     app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime, eta));
     app.use('/api/v1', confirmRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
+    app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', roundsRouter(auth.pool, approvedParamedic, realtime, eta));
   }
   if (hospitalWeb) {
@@ -87,6 +92,9 @@ export function createApp({
     const adminOnly = requireAdmin(admin);
     app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', auditRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminPcRouter(admin.pool, adminOnly, realtime));
+    app.use('/api/v1', adminNotificationRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminParamedicRouter(admin.pool, admin.redis, adminOnly, realtime));
   }
 
   app.use(notFoundHandler);

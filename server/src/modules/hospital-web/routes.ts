@@ -17,7 +17,9 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
+import { pauseSchema, setPaused } from './pause.js';
 import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
 
 export const MAX_PCS = 3;
@@ -281,6 +283,17 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
   });
 
   // 요청 목록: 새 요청 알림을 받으면, 그리고 다시 연결될 때마다 이걸로 전체를 새로 받는다 (실시간 설계 3장)
+  // 잠시 요청 중지 / 다시 받기 (SFR-139). 병원 전체에 적용. 중지하면 대기 요청은 '거절(요청 중지)'로 한꺼번에
+  router.put('/hw/pause', pcOnly, async (req, res) => {
+    const { paused } = parseBody(pauseSchema, req.body);
+    const outcome = await withTransaction(ctx.pool, (client) =>
+      setPaused(client, hospitalPc(res), paused),
+    );
+    // 실시간 알림은 커밋된 뒤에만
+    ctx.realtime?.publish(outcome.events);
+    res.status(204).end();
+  });
+
   router.get('/hw/requests', pcOnly, async (req, res) => {
     const pc = hospitalPc(res);
     res.json(await listRequests(ctx.pool, pc.hospitalId, parseBody(listQuerySchema, req.query)));
@@ -321,6 +334,17 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       respondToRequest(client, hospitalPc(res), requestId, { event: 'CANCEL_APPROVAL', input }),
     );
     ctx.realtime?.publish(outcome.events);
+    res.status(204).end();
+  });
+
+  // 추가 메모: 확정된 요청에 한 번만 (SFR-140). 대원 앱에 경보
+  router.post('/hw/requests/:requestId/extra-memo', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(extraMemoSchema, req.body);
+    const events = await withTransaction(ctx.pool, (client) =>
+      sendExtraMemo(client, hospitalPc(res), requestId, input),
+    );
+    ctx.realtime?.publish(events);
     res.status(204).end();
   });
 

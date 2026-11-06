@@ -7,12 +7,15 @@ import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
+import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
+import { PauseControl } from '@/components/hospital/PauseControl';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
 import { useIncoming } from './useIncoming';
 import { useNewRequests } from './useNewRequests';
+import { usePcRevoked } from './usePcRevoked';
 
 type ShiftBody = ApiPaths['/hw/shifts']['post']['requestBody']['content']['application/json'];
 type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
@@ -79,12 +82,16 @@ function offMessage(alarm: AlarmState, startedHere: boolean): string {
 
 export function ShiftScreen({
   shift,
+  pause = { paused: false, pausedAt: null },
   createSocket,
 }: {
   shift: Shift | null;
+  // 병원 전체의 잠시 요청 중지 상태 (GET /hw/session, SFR-139)
+  pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
 }) {
-  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
+  const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
+  usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
   const arriving = useIncoming(shift ? socket : null);
@@ -104,6 +111,10 @@ export function ShiftScreen({
         >
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
+      )}
+      {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
+      {shift !== null && notificationBlocked && (
+        <NotificationPermissionGuide reason={notificationBlocked} />
       )}
       {incoming.waiting.length > 0 && (
         <p className="text-3xl font-extrabold text-destructive">
@@ -147,6 +158,15 @@ export function ShiftScreen({
 
       {shift !== null && (
         <>
+          <PauseControl
+            paused={pause.paused}
+            pausedAt={pause.pausedAt}
+            // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
+            waitingCount={
+              incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
+            }
+            socket={socket}
+          />
           <h2 className="text-2xl font-bold">요청 목록</h2>
           <RequestList
             items={incoming.items}

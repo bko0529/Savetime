@@ -1096,10 +1096,11 @@ export interface paths {
         get?: never;
         /**
          * 잠시 요청 중지 / 다시 받기
-         * @description 중지하면 대기 중인 요청은 '요청 중지'로 자동 거절(통계 제외, 제외 병원 아님). 병원 전체 PC에 hospital.pause_changed. 2시간째 pause_reminder.
+         * @description 병원 전체에 적용(병원 행 FOR UPDATE). 중지하면 응답 마감(2분) 전인 대기 요청은 '요청 중지'로 자동 거절(reason paused, 통계 제외, 제외 병원 아님) — 대원 앱에 request.rejected{reason: paused}, 회차에 남은 요청이 없으면 역방향 연쇄로 예비 추천. 이미 승인한 요청은 그대로. 병원 전체 PC에 hospital.pause_changed{paused, byPcName, byName, pausedAt}. 이미 같은 상태면 아무것도 바꾸지 않고 204. 중지 2시간째(paused_at 기준, DB now()) 1분 주기 작업이 hospital.pause_reminder를 같은 중지에 한 번만. 근무 전 PC는 SHIFT_REQUIRED.
          *
          *     **요구사항**: SFR-139
          *     **화면**: H-02 탭
+         *     **오류 코드**: SHIFT_REQUIRED, VALIDATION_FAILED
          *     **상태 전이 사건**: PAUSE_AUTO_REJECT
          */
         put: operations["put_hw_pause"];
@@ -1264,11 +1265,11 @@ export interface paths {
         put?: never;
         /**
          * 추가 메모 (1번)
-         * @description 확정 요청에만. 대원 앱에 경보 hospital.extra_memo.
+         * @description 확정 요청에만, 1번만 (상태는 바뀌지 않고 version만 +1). 대원 앱에 경보 hospital.extra_memo {transportId, hospitalRequestId, hospitalName} — 메모 글은 이벤트에 넣지 않고(절대 규칙 5) 앱이 GET /transports/current 의 extraMemo로 받는다. 같은 병원 PC에 request.changed·incoming.updated. 확정 전(대기·승인) 요청은 INVALID_TRANSITION, 끝난 요청은 REQUEST_CLOSED.
          *
          *     **요구사항**: SFR-140
-         *     **화면**: H-03 도착 예정
-         *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT
+         *     **화면**: H-03 도착 예정, H-02 요청 상세
+         *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT, VERSION_REQUIRED, INVALID_TRANSITION, SHIFT_REQUIRED
          */
         post: operations["post_hw_requests__requestId__extra_memo"];
         delete?: never;
@@ -1500,11 +1501,11 @@ export interface paths {
         put?: never;
         /**
          * 대원 계정 정지 (즉시 로그아웃)
-         * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended).
+         * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended). 승인된 계정만 정지(승인 대기·반려는 409 INVALID_TRANSITION), 이미 정지된 계정은 204로 아무것도 바꾸지 않음.
          *
          *     **요구사항**: SFR-151, SER-016
          *     **화면**: A-01 대원 계정
-         *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+         *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED, INVALID_TRANSITION
          *     **상태 전이 사건**: CANCEL
          */
         post: operations["post_admin_paramedics__id__suspend"];
@@ -2354,7 +2355,10 @@ export interface components {
             /** @description 우리 병원의 지금 유효한 승인 수 (과승인 경고용) */
             validApprovals?: number;
             respondedBy?: string | null;
+            /** @description 승인 메모 (승인할 때 함께 보낸 것) */
             memo?: string | null;
+            /** @description 확정 뒤 보낸 추가 메모 (SFR-140). 값이 있으면 '추가 메모' 버튼을 숨긴다 */
+            extraMemo?: string | null;
         };
         HwIncoming: {
             id?: number;
@@ -4993,6 +4997,8 @@ export interface operations {
                             name?: string;
                             agencyName?: string;
                             safetyCenter?: string;
+                            /** @description 사번 (동명이인 구분) */
+                            employeeNo?: string;
                             status?: string;
                             hasActiveTransport?: boolean;
                         }[];

@@ -13,9 +13,12 @@ import { COLLECT_HOSPITALS_EVERY_MS, runHospitalCollect } from './modules/collec
 import { createFetchBeds, createFetchItems } from './modules/collector/publicApi.js';
 import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
+import { notifyExpiringKeys } from './modules/admin/notifications.js';
+import { HOUSEKEEPING_EVERY_MS, releaseUnusedPcs } from './modules/admin/pcs.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
+import { PAUSE_REMIND_EVERY_MS, remindLongPauses } from './modules/hospital-web/pause.js';
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
@@ -163,6 +166,28 @@ scheduledJobs.push({
   run: async () => {
     const events = await endInactiveTransports(pool, logger);
     realtime?.publish(events);
+  },
+});
+
+// 병원 요청 중지 2시간째 알림 (SFR-139)
+scheduledJobs.push({
+  name: 'hospital-pause-reminder',
+  everyMs: PAUSE_REMIND_EVERY_MS,
+  run: async () => {
+    const events = await remindLongPauses(pool, redis, logger);
+    realtime?.publish(events);
+  },
+});
+
+// 병원 PC·키 정리: 90일 안 쓴 PC 등록 자동 해제(SFR-147) + 키 만료 30·7·1일 전 관리자 알림(SFR-100).
+// 하루 단위 기준이라 1시간마다 돌아도 충분하다
+scheduledJobs.push({
+  name: 'hospital-pc-housekeeping',
+  everyMs: HOUSEKEEPING_EVERY_MS,
+  run: async () => {
+    const released = await releaseUnusedPcs(pool);
+    const expiring = await notifyExpiringKeys(pool);
+    if (released || expiring) logger.info({ released, expiring }, '병원 PC·키 정리');
   },
 });
 

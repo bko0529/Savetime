@@ -66,7 +66,7 @@ export interface AppServerEvents {
   'transport.phone_target':(e: Envelope<{ transportId: string; hospitalId: number; hospitalName: string }>) => void;     // 전화 확인 대상 병원 (부록 A13·A16)
   'transport.eta':         (e: Envelope<{ transportId: string; etaMin: number }>) => void;                     // 이동 중 1분마다
   'assessment.sent':       (e: Envelope<{ transportId: string; assessmentSeq: number; changedFields: string[]; byName: string }>) => void;
-  'hospital.extra_memo':   (e: Envelope<{ transportId: string; hospitalName: string; memo: string }>) => void;   // 푸시 (SFR-140)
+  'hospital.extra_memo':   (e: Envelope<{ transportId: string; hospitalRequestId: number; hospitalName: string }>) => void;   // 푸시 (SFR-140). 메모 글은 규칙 5 때문에 빼고, 앱이 GET /transports/current 의 extraMemo 로 받는다
   'transport.arrive_requested': (e: Envelope<{ transportId: string; hospitalName: string }>) => void;          // 위치 없는 건에 병원 '도착 확인' · 푸시 (SFR-144)
   'transport.arrived':     (e: Envelope<{ transportId: string; method: 'button' | 'menu' | 'hospital' | 'finish_previous'; durationSec: number }>) => void;
   'transport.unacceptable':(e: Envelope<{ transportId: string; hospitalName: string; reason: string }>) => void;  // 푸시 (SFR-158)
@@ -88,7 +88,7 @@ export interface HospitalServerEvents {
   'incoming.near':        (e: Envelope<{ requestId: number }>) => void;                                      // 200m 안 → '도착 확인' 활성
   'incoming.arrived':     (e: Envelope<{ requestId: number; arrivedAt: string; method: string }>) => void;
   'incoming.removed':     (e: Envelope<{ requestId: number; reason: 'cancelled' | 'dest_changed' | 'approval_cancelled' }>) => void;
-  'hospital.pause_changed':(e: Envelope<{ paused: boolean; byPcName: string; pausedAt: string | null }>) => void; // 병원 전체 PC (SFR-139)
+  'hospital.pause_changed':(e: Envelope<{ paused: boolean; byPcName: string; byName: string; pausedAt: string | null }>) => void; // 병원 전체 PC (SFR-139). byName = 누른 담당자
   'hospital.pause_reminder':(e: Envelope<{ pausedAt: string }>) => void;                                     // 중지 2시간째
   'hospital.alarm_off':   (e: Envelope<{ reason: 'no_ack' | 'shift_ended' }>) => void;                       // 이 PC는 요청 대상에서 빠짐
   'pc.revoked':           (e: Envelope<{ reason: 'key_revoked' | 'key_expired' | 'pc_released' | 'account_suspended' }>) => void;

@@ -600,3 +600,132 @@ test('승인하지 않은 요청·닫힌 요청·다른 병원 요청은 승인 
     assert.deepEqual(await eventsOf(h.pool), []);
   });
 });
+
+test('추가 메모: 확정 요청에 1번만. 팀에 hospital.extra_memo(메모 글 없음), 같은 병원 다른 PC 에 request.changed (SFR-140)', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const desk = await h.pcOnShift(a.key, '접수대', '박서연');
+    const other = await h.pcOnShift(a.key, '처치실', '김도윤');
+    const otherTab = await h.openTab(other);
+    const {
+      transportId,
+      teamId,
+      requestIds: [id],
+    } = await sendRound(h.pool, [a.id], { status: 'confirmed' });
+    await h.pool.query(
+      "UPDATE transport SET status = 'moving', confirmed_hospital_id = $2 WHERE id = $1",
+      [transportId, a.id],
+    );
+
+    // 빈 메모·50자 넘는 메모·version 빠짐은 막는다
+    const empty = await h.post(`/hw/requests/${id}/extra-memo`, desk, { memo: '  ', version: 1 });
+    assert.equal(empty.status, 400);
+    const long = await h.post(`/hw/requests/${id}/extra-memo`, desk, {
+      memo: '가'.repeat(51),
+      version: 1,
+    });
+    assert.equal(long.status, 400);
+    const noVersion = await h.post(`/hw/requests/${id}/extra-memo`, desk, { memo: 'CT 고장' });
+    assert.equal(noVersion.status, 400);
+    assert.equal(noVersion.body.error.code, 'VERSION_REQUIRED');
+    const stale = await h.post(`/hw/requests/${id}/extra-memo`, desk, {
+      memo: 'CT 고장',
+      version: 0,
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.error.code, 'VERSION_CONFLICT');
+
+    const changed = nextEvent<Changed>(otherTab, 'request.changed');
+    const res = await h.post(`/hw/requests/${id}/extra-memo`, desk, {
+      memo: ' CT 고장, 2번 입구로 오세요 ',
+      version: 1,
+    });
+    assert.equal(res.status, 204);
+
+    const { rows } = await h.pool.query(
+      'SELECT extra_memo, extra_memo_at IS NOT NULL AS at, status, version FROM hospital_request WHERE id = $1',
+      [id],
+    );
+    assert.deepEqual(rows[0], {
+      extra_memo: 'CT 고장, 2번 입구로 오세요',
+      at: true,
+      status: 'confirmed',
+      version: 2,
+    });
+    assert.deepEqual((await changed).data, {
+      requestId: id,
+      status: 'confirmed',
+      closeReason: null,
+      byName: '박서연',
+      pcName: '접수대',
+    });
+
+    const logged = await eventsOf(h.pool);
+    assert.deepEqual(
+      logged.map((e) => [e.room, e.name]),
+      [
+        [`team:${teamId}`, 'hospital.extra_memo'],
+        [`hospital:${a.id}`, 'request.changed'],
+        [`hospital:${a.id}`, 'incoming.updated'],
+      ],
+    );
+    assert.deepEqual(logged[0].payload, {
+      transportId,
+      hospitalRequestId: id,
+      hospitalName: 'H1병원',
+    });
+    // 메모 글은 이벤트에 없다 (규칙 5). 앱은 이송 건 조회로 받는다
+    assert.doesNotMatch(JSON.stringify(logged), /CT 고장/);
+
+    // 두 번째는 다른 PC 가 최신 version 으로 보내도 EXTRA_MEMO_USED
+    const again = await h.post(`/hw/requests/${id}/extra-memo`, other, {
+      memo: '다시',
+      version: 2,
+    });
+    assert.equal(again.status, 409);
+    assert.equal(again.body.error.code, 'EXTRA_MEMO_USED');
+    // 상태는 바뀌지 않는다: 이송 건은 이동 중 그대로
+    const { rows: t } = await h.pool.query('SELECT status, version FROM transport WHERE id = $1', [
+      transportId,
+    ]);
+    assert.deepEqual(t[0], { status: 'moving', version: 1 });
+  });
+});
+
+test('추가 메모는 확정된 우리 병원 요청에만 (대기·승인·닫힘·다른 병원·근무 전)', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const b = await h.hospital('H2');
+    const desk = await h.pcOnShift(a.key, '접수대', '박서연');
+    const noShift = await h.register(a.key, '처치실');
+    const {
+      requestIds: [waiting, theirs],
+    } = await sendRound(h.pool, [a.id, b.id]);
+    const {
+      requestIds: [approved],
+    } = await sendRound(h.pool, [a.id], { status: 'approved' });
+    const {
+      requestIds: [closed],
+    } = await sendRound(h.pool, [a.id], { status: 'closed' });
+    const {
+      requestIds: [confirmed],
+    } = await sendRound(h.pool, [a.id], { status: 'confirmed' });
+
+    const cases: [number, string, number, string][] = [
+      [waiting, desk, 409, 'INVALID_TRANSITION'],
+      [approved, desk, 409, 'INVALID_TRANSITION'],
+      [closed, desk, 409, 'REQUEST_CLOSED'],
+      [theirs, desk, 404, 'NOT_FOUND'],
+      [confirmed, noShift, 409, 'SHIFT_REQUIRED'],
+    ];
+    for (const [id, cookie, status, code] of cases) {
+      const res = await h.post(`/hw/requests/${id}/extra-memo`, cookie, {
+        memo: 'CT 고장',
+        version: 1,
+      });
+      assert.equal(res.status, status, code);
+      assert.equal(res.body.error.code, code);
+    }
+    assert.deepEqual(await eventsOf(h.pool), []);
+  });
+});
