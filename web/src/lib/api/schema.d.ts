@@ -1500,11 +1500,11 @@ export interface paths {
         put?: never;
         /**
          * 대원 계정 정지 (즉시 로그아웃)
-         * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended).
+         * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended). 승인된 계정만 정지(승인 대기·반려는 409 INVALID_TRANSITION), 이미 정지된 계정은 204로 아무것도 바꾸지 않음.
          *
          *     **요구사항**: SFR-151, SER-016
          *     **화면**: A-01 대원 계정
-         *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+         *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED, INVALID_TRANSITION
          *     **상태 전이 사건**: CANCEL
          */
         post: operations["post_admin_paramedics__id__suspend"];
@@ -4993,6 +4993,8 @@ export interface operations {
                             name?: string;
                             agencyName?: string;
                             safetyCenter?: string;
+                            /** @description 사번 (동명이인 구분) */
+                            employeeNo?: string;
                             status?: string;
                             hasActiveTransport?: boolean;
                         }[];

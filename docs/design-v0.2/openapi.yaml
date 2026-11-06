@@ -3078,6 +3078,9 @@ paths:
                           type: string
                         safetyCenter:
                           type: string
+                        employeeNo:
+                          type: string
+                          description: 사번 (동명이인 구분)
                         status:
                           type: string
                         hasActiveTransport:
@@ -3101,8 +3104,9 @@ paths:
       - 6. 관리자 웹
       summary: 대원 계정 정지 (즉시 로그아웃)
       description: "모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면\
-        \ 이송 취소(suspended).\n\n**요구사항**: SFR-151, SER-016  \n**화면**: A-01 대원 계정  \n\
-        **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED  \n**상태 전이 사건**: CANCEL"
+        \ 이송 취소(suspended). 승인된 계정만 정지(승인 대기·반려는 409 INVALID_TRANSITION), 이미 정지된 계정은 204로 아무것도\
+        \ 바꾸지 않음.\n\n**요구사항**: SFR-151, SER-016  \n**화면**: A-01 대원 계정  \n\
+        **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED, INVALID_TRANSITION  \n**상태 전이 사건**: CANCEL"
       operationId: post_admin_paramedics__id__suspend
       security: *id017
       x-state-events:
@@ -3110,6 +3114,7 @@ paths:
       x-error-codes:
       - NOT_FOUND
       - ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+      - INVALID_TRANSITION
       parameters:
       - name: id
         in: path

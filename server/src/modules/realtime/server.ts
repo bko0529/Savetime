@@ -53,6 +53,8 @@ export interface Realtime {
   joinTeam(paramedicId: string, teamId: string): Promise<void>;
   // 근무 종료·로그아웃·탈퇴: 그 대원의 연결을 모두 끊는다 (SER-016)
   disconnectParamedic(paramedicId: string): Promise<void>;
+  // 관리자 정지: account.force_logout 을 보낸 뒤 연결을 끊는다. 앱은 바로 로그인 화면으로 간다 (SFR-151, SER-016)
+  forceLogoutParamedic(paramedicId: string, reason: 'suspended'): Promise<void>;
   // 병원 웹 '알림 켜기'(REST): 이 PC 의 그 탭만 hospital:{id}:on 방에 넣는다 (SFR-117).
   // 다른 PC 의 연결 id 면 넣지 않고 false. 다른 서버에 붙은 탭도 Redis 어댑터로 찾는다
   alarmOn(pc: { pcId: string; hospitalId: string }, socketId: string): Promise<boolean>;
@@ -655,6 +657,12 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     },
     async disconnectParamedic(paramedicId) {
       app.in(`paramedic:${paramedicId}`).disconnectSockets(true);
+    },
+    async forceLogoutParamedic(paramedicId, reason) {
+      const room = `paramedic:${paramedicId}`;
+      app.to(room).emit('account.force_logout', directEnvelope(room, { reason }));
+      // close=false: 방금 보낸 account.force_logout 이 먼저 가고 그다음 끊김이 간다
+      app.in(room).disconnectSockets(false);
     },
     async alarmOn(pc, socketId) {
       const [socket] = await hospital.in(socketId).fetchSockets();
