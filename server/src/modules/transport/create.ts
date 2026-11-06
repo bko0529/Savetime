@@ -21,12 +21,10 @@ import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/ev
 import type { Realtime } from '../realtime/server.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
+import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
-
-// 요청용 도착 예상 시간 초안: 직선거리 ÷ 평균 40km/h (SFR-129). 길찾기 갱신은 뒤에 붙인다.
-const STRAIGHT_KMH = 40;
 
 const nullableInt = z.number().int().nullable().optional();
 
@@ -77,34 +75,6 @@ const createSchema = z.object({
     .optional(),
 });
 type CreateInput = z.infer<typeof createSchema>;
-
-interface Target {
-  id: string;
-  km: number;
-}
-
-// 요청 대상 = 반경 안 · 병원 계정 활성 · 잠시 요청 중지 아님 · 알림 켠 PC가 있음 · 고른 등급 이상 (SFR-109·117·139·162)
-// 반경은 위도·경도 네모로 먼저 거르고 하버사인 직선거리로 자른다 (추천 목록과 같은 방식)
-const TARGETS_SQL = `
-  SELECT h.id, d.km
-    FROM hospital h
-    CROSS JOIN LATERAL (
-      SELECT 2 * 6371 * asin(sqrt(
-               power(sin(radians(h.lat::float8 - $1) / 2), 2)
-               + cos(radians($1)) * cos(radians(h.lat::float8))
-                 * power(sin(radians(h.lng::float8 - $2) / 2), 2))) AS km
-    ) d
-   WHERE h.lat BETWEEN $1 - $3 / 111.0 AND $1 + $3 / 111.0
-     AND h.lng BETWEEN $2 - $3 / (111.0 * cos(radians($1))) AND $2 + $3 / (111.0 * cos(radians($1)))
-     AND d.km <= $3
-     AND h.account_active AND NOT h.requests_paused
-     AND ($4::int IS NULL OR h.grade <= $4)
-     AND EXISTS (
-       SELECT 1 FROM hospital_shift s JOIN hospital_pc p ON p.id = s.pc_id
-        WHERE p.hospital_id = h.id AND p.released_at IS NULL
-          AND s.alarm_on_at IS NOT NULL AND s.ended_at IS NULL
-     )
-   ORDER BY d.km, h.id`;
 
 // '이동 중'인 이전 건을 도착(finish_previous)으로 끝낸다 (부록 A23). 새 건을 만드는 같은 트랜잭션에서 부른다
 async function finishPrevious(
@@ -234,12 +204,12 @@ export async function createTransport(
     });
   }
 
-  const { rows: targets } = await client.query<Target>(TARGETS_SQL, [
+  const targets = await findRequestTargets(client, {
     lat,
     lng,
-    input.radiusKm,
-    input.requestedGrade ?? null,
-  ]);
+    radiusKm: input.radiusKm,
+    grade: input.requestedGrade ?? null,
+  });
   const event = targets.length > 0 ? 'CREATE_WITH_TARGETS' : 'CREATE_NO_TARGET';
   // 위에서 진행 중 건을 끝냈으니 다른 진행 중 건은 없다. 그래도 전이 함수가 한 번 더 확인한다
   const { to, history } = transitionTransport(null, event, {
@@ -324,46 +294,16 @@ export async function createTransport(
   let roundId: string | null = null;
   if (to === 'requesting') {
     // 회차 1: 2분 응답 제한·5분 승인 유효는 DB 시각 기준으로 고정한다 (절대 규칙 6)
-    const { rows: round } = await client.query<{
-      id: string;
-      respond_until: Date;
-      approval_valid_until: Date;
-    }>(
-      `INSERT INTO request_round (transport_id, round_no, kind, radius_km, sent_at, respond_until, approval_valid_until)
-       VALUES ($1, 1, 'first', $2, now(), now() + interval '2 minutes', now() + interval '5 minutes')
-       RETURNING id, respond_until, approval_valid_until`,
-      [input.id, input.radiusKm],
-    );
-    roundId = round[0].id;
-    for (const target of targets) {
-      const { to: hreqStatus } = transitionHreq(null, 'SEND', { now, version: 1 });
-      await client.query(
-        `INSERT INTO hospital_request (round_id, hospital_id, status, eta_min, eta_source)
-         VALUES ($1, $2, $3, $4, 'straight')`,
-        [
-          round[0].id,
-          target.id,
-          hreqStatus,
-          Math.max(1, Math.ceil((target.km / STRAIGHT_KMH) * 60)),
-        ],
-      );
-    }
-    events.push({
-      room: '',
-      name: 'round.started',
-      entityType: 'transport',
-      entityId: input.id,
+    const round = await insertRound(client, {
+      transportId: input.id,
+      kind: 'first',
+      radiusKm: input.radiusKm,
+      targets,
+      now,
       entityVersion: 1,
-      payload: {
-        transportId: input.id,
-        roundNo: 1,
-        kind: 'first',
-        radiusKm: input.radiusKm,
-        targetCount: targets.length,
-        respondUntil: round[0].respond_until.toISOString(),
-        approvalValidUntil: round[0].approval_valid_until.toISOString(),
-      },
     });
+    roundId = round.roundId;
+    events.push(round.event);
   }
 
   const logged = await appendEvents(
