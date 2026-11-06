@@ -9,6 +9,11 @@ const TRANSITION_STATUS: Partial<Record<ErrorCode, number>> = {
   NO_REQUEST_TARGET: 422,
 };
 
+// 상태 전이 오류 코드 → HTTP 상태 (오류 코드표). 표에 없는 코드는 409 (상태가 맞지 않음)
+export function transitionHttpStatus(code: ErrorCode): number {
+  return TRANSITION_STATUS[code] ?? 409;
+}
+
 export class AppError extends Error {
   constructor(
     readonly status: number,

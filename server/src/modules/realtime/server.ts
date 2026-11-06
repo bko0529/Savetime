@@ -27,6 +27,11 @@ import {
   type PushSender,
 } from '../push/dispatch.js';
 import { currentTeamId } from '../team/routes.js';
+import {
+  endApprovalWindow,
+  EXPIRING_LEAD_MS,
+  warnApprovalExpiring,
+} from '../transport/approvalWindow.js';
 import { expireRound } from '../transport/expire.js';
 import { applyReverseCascade, roundCounts } from '../transport/hreqCascade.js';
 import {
@@ -87,6 +92,7 @@ interface HospitalSocketData {
 
 const DELIVERY_QUEUE = 'delivery-check';
 const EXPIRY_QUEUE = 'respond-timeout';
+const APPROVAL_QUEUE = 'approval-window';
 const REPLAY_LIMIT = 500;
 // 병원 웹은 다시 받기를 하지 않고 재연결 때 목록을 새로 받으므로(설계 3장) 직접 보내는 이벤트에는 seq를 쓰지 않는다
 const NO_SEQ = 0;
@@ -385,6 +391,74 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     .then(({ rows }) => Promise.all(rows.map((row) => scheduleExpiry(row.id))))
     .catch((err: Error) => logger.error({ message: err.message }, '2분 타이머 다시 걸기 실패'));
 
+  // ---------- 승인 유효시간 5분 (SFR-127): 4분 해제 경보 + 5분 승인 해제 ----------
+  const approvalQueue = new Queue(APPROVAL_QUEUE, { connection, prefix });
+  const approvalWorker = new Worker(
+    APPROVAL_QUEUE,
+    async (job) => {
+      const roundId = String(job.data.roundId);
+      const result =
+        job.name === 'warn'
+          ? await warnApprovalExpiring(pool, roundId)
+          : await endApprovalWindow(pool, roundId);
+      // 일찍 깨어났으면 실패로 돌려 조금 뒤 다시 한다 (판정은 DB 시각)
+      if (result === 'not_due') throw new Error('아직 승인 유효시간이 안 됐어요');
+      if (result) publish(result);
+    },
+    { connection, prefix, concurrency: 10, autorun: false },
+  );
+  approvalQueue.on('error', (err) => logger.error({ message: err.message }, '5분 타이머 큐 오류'));
+  approvalWorker.on('error', (err) =>
+    logger.error({ message: err.message }, '5분 타이머 워커 오류'),
+  );
+  approvalWorker.on('failed', (_job, err) =>
+    logger.error({ message: err.message }, '5분 타이머 실행 실패'),
+  );
+  void approvalWorker
+    .run()
+    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+
+  // 4분·5분 작업 두 개를 건다. 남은 시간은 DB 시각으로 재고, 이미 지났으면 바로 실행
+  async function scheduleApprovalWindow(roundId: string): Promise<void> {
+    const { rows } = await pool.query<{ warn: number; end: number }>(
+      `SELECT GREATEST(0, ceil(extract(epoch FROM approval_valid_until - now()) * 1000) - $2)::int AS warn,
+              GREATEST(0, ceil(extract(epoch FROM approval_valid_until - now()) * 1000))::int AS end
+         FROM request_round WHERE id = $1`,
+      [roundId, EXPIRING_LEAD_MS],
+    );
+    if (!rows[0]) return;
+    const options = {
+      attempts: 5,
+      backoff: { type: 'fixed' as const, delay: 500 },
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    };
+    await Promise.all([
+      approvalQueue.add(
+        'warn',
+        { roundId },
+        { ...options, jobId: `approval-warn-${roundId}`, delay: rows[0].warn },
+      ),
+      approvalQueue.add(
+        'end',
+        { roundId },
+        { ...options, jobId: `approval-end-${roundId}`, delay: rows[0].end },
+      ),
+    ]);
+  }
+
+  // 재시작 때: 아직 요청 중·전화 확인 중인 이송 건의 지금 회차 중 승인 해제가 안 끝난 것을 다시 건다
+  // (같은 jobId면 다시 만들지 않는다. 이미 지난 경보는 늦게 보내도 의미가 없어 5분 작업만 바로 실행된다)
+  void pool
+    .query<{ id: string }>(
+      `SELECT r.id FROM request_round r JOIN transport t ON t.id = r.transport_id
+        WHERE t.status IN ('requesting','phone_check')
+          AND r.round_no = (SELECT max(round_no) FROM request_round WHERE transport_id = r.transport_id)
+          AND r.approval_valid_until > now() - interval '1 hour'`,
+    )
+    .then(({ rows }) => Promise.all(rows.map((row) => scheduleApprovalWindow(row.id))))
+    .catch((err: Error) => logger.error({ message: err.message }, '5분 타이머 다시 걸기 실패'));
+
   // 1대라도 ack하면 그 병원에 '전달'. ack 안 한 PC는 :on에서 빼고 알림을 끈다 (설계 4-2 전달 판정)
   async function sendToPc(
     socket: RemoteSocket<DefaultEventsMap, HospitalSocketData>,
@@ -569,6 +643,9 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       scheduleExpiry(roundId).catch((err: Error) =>
         logger.error({ message: err.message, roundId }, '2분 타이머 걸기 실패'),
       );
+      scheduleApprovalWindow(roundId).catch((err: Error) =>
+        logger.error({ message: err.message, roundId }, '5분 타이머 걸기 실패'),
+      );
       deliver(roundId).catch((err: Error) =>
         logger.error({ message: err.message, roundId }, '요청 전달 실패'),
       );
@@ -620,8 +697,8 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     // HTTP 서버는 부르는 쪽이 닫는다. 연결이 남아 있으면 HTTP 서버가 닫히지 않으므로 이걸 먼저 부른다
     async close() {
       io.local.disconnectSockets(true);
-      await Promise.all([worker.close(), expiryWorker.close()]);
-      await Promise.all([queue.close(), expiryQueue.close()]);
+      await Promise.all([worker.close(), expiryWorker.close(), approvalWorker.close()]);
+      await Promise.all([queue.close(), expiryQueue.close(), approvalQueue.close()]);
       pub.disconnect();
       sub.disconnect();
     },
