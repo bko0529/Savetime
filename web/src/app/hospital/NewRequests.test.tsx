@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@/lib/alarm/browserAlarm', () => ({
   unlockSound: vi.fn(async () => true),
   askNotificationPermission: vi.fn(async () => 'granted'),
+  notificationPermission: vi.fn(() => 'granted'),
   startAlarmLoop: vi.fn(),
   stopAlarmLoop: vi.fn(),
   showRequestNotification: vi.fn(),

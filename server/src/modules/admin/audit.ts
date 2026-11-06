@@ -9,13 +9,18 @@ import { parseBody } from '../../http/validate.js';
 export const AUDIT_ACTIONS = {
   issue_account: '병원 계정 발급',
   suspend_hospital: '병원 계정 정지',
+  revoke_key: '라이선스 키 폐기',
+  reissue_key: '라이선스 키 재발급',
+  release_pc: '병원 PC 해제',
+  suspend_paramedic: '대원 계정 정지',
+  unsuspend_paramedic: '대원 계정 정지 해제',
 } as const;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 
 export interface AuditEntry {
   adminId: string;
   action: AuditAction;
-  targetType: 'hospital';
+  targetType: 'hospital' | 'hospital_pc' | 'paramedic';
   targetId: string;
   // 대상 이름(나중에 이름이 바뀌어도 그때 이름이 남게)·사유. 키 같은 비밀 값은 넣지 않는다
   targetName: string;

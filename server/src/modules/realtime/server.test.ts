@@ -465,6 +465,66 @@ test('병원 계정을 정지하면 그 병원 탭에만 pc.revoked를 보내고
   });
 });
 
+test('관리자 정지는 그 대원 앱에만 account.force_logout을 보내고 연결을 끊는다 (SFR-151)', async () => {
+  await withRealtime(async (h) => {
+    const kim = await h.connect('/app', { auth: { token: await login(h, 'kim01') } });
+    const lee = await h.connect('/app', { auth: { token: await login(h, 'lee01') } });
+    const { rows } = await h.ctx.pool.query<{ id: string }>(
+      "SELECT id FROM paramedic WHERE login_id = 'kim01'",
+    );
+
+    const forced = nextEvent(kim, 'account.force_logout');
+    const closed = new Promise((resolve) => kim.once('disconnect', resolve));
+    let leeForced = false;
+    lee.on('account.force_logout', () => (leeForced = true));
+
+    await h.realtime.forceLogoutParamedic(rows[0].id, 'suspended');
+    assert.deepEqual((await forced).data, { reason: 'suspended' });
+    await closed;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(leeForced, false);
+    assert.ok(lee.connected);
+  });
+});
+
+test('PC 해제는 그 PC 탭에만 pc.revoked를 보내고, 접속 중 PC 목록에서 빠진다 (SFR-147)', async () => {
+  await withRealtime(async (h) => {
+    const a = await addHospitalPc(h.ctx.pool, 'A병원');
+    // 같은 병원의 두 번째 PC
+    const token2 = randomBytes(24).toString('base64url');
+    const { rows } = await h.ctx.pool.query<{ id: string }>(
+      `INSERT INTO hospital_pc (hospital_id, name, token_hash) VALUES ($1, '처치실', $2) RETURNING id`,
+      [a.hospitalId, hashPcToken(token2)],
+    );
+    const pc2 = rows[0].id;
+    const { rows: pc1Rows } = await h.ctx.pool.query<{ id: string }>(
+      "SELECT id FROM hospital_pc WHERE hospital_id = $1 AND name = '접수대'",
+      [a.hospitalId],
+    );
+    const pc1 = pc1Rows[0].id;
+    const tab1 = await h.connect('/hospital', asCookie(a.token));
+    const tab2 = await h.connect('/hospital', asCookie(token2));
+
+    assert.deepEqual(
+      (await h.realtime.onlinePcIds(String(a.hospitalId))).sort(),
+      [pc1, pc2].sort(),
+    );
+
+    const revoked = nextEvent(tab2, 'pc.revoked');
+    const closed = new Promise((resolve) => tab2.once('disconnect', resolve));
+    let tab1Revoked = false;
+    tab1.on('pc.revoked', () => (tab1Revoked = true));
+
+    await h.realtime.revokePc({ pcId: pc2, hospitalId: String(a.hospitalId) }, 'pc_released');
+    assert.deepEqual((await revoked).data, { reason: 'pc_released' });
+    await closed;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(tab1Revoked, false);
+    assert.ok(tab1.connected);
+    assert.deepEqual(await h.realtime.onlinePcIds(String(a.hospitalId)), [pc1]);
+  });
+});
+
 // 회차를 직접 만든다 (마감을 짧게 잡으려고). 병원 요청은 이미 받았음 처리돼 있다
 async function addRound(h: Harness, token: string, hospitalId: number, respondIn: string) {
   const team = await request(h.app)
