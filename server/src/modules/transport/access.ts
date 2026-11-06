@@ -3,7 +3,7 @@
 // - 상태 전이표가 막으면 이유와 함께 최신 상태(details.current)를 돌려줘 앱이 바로 화면을 바꾸게 한다 (SFR-160, 오류 코드표)
 import type pg from 'pg';
 import { TransitionError, type TransportStatus } from '../../domain/stateMachine.js';
-import { AppError } from '../../http/errors.js';
+import { AppError, transitionHttpStatus } from '../../http/errors.js';
 import { loadTransport } from './view.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,7 +54,7 @@ export async function withCurrentOnBlock<T>(
   } catch (err) {
     if (err instanceof TransitionError) {
       const current = await loadTransport(pool, transportId, paramedicId);
-      throw new AppError(err.code === 'VERSION_REQUIRED' ? 400 : 409, err.code, err.message, {
+      throw new AppError(transitionHttpStatus(err.code), err.code, err.message, {
         current,
       });
     }
