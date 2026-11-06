@@ -7,6 +7,7 @@ import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
+import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
@@ -85,7 +86,7 @@ export function ShiftScreen({
   shift: Shift | null;
   createSocket?: () => HospitalSocket;
 }) {
-  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
+  const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
   usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
@@ -106,6 +107,10 @@ export function ShiftScreen({
         >
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
+      )}
+      {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
+      {shift !== null && notificationBlocked && (
+        <NotificationPermissionGuide reason={notificationBlocked} />
       )}
       {incoming.waiting.length > 0 && (
         <p className="text-3xl font-extrabold text-destructive">

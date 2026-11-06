@@ -1218,11 +1218,11 @@ export interface paths {
         put?: never;
         /**
          * 승인 취소 (사유 필수)
-         * @description approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음.
+         * @description approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음. 그 병원은 excluded_hospital(approval_cancelled)에 들어가 '다시 요청'에서도 빠진다. 선택 전이면 회차에 대기·유효 승인이 남았는지 보고 이송 건은 그대로 또는 예비 추천(approvals_cancelled). 같은 병원 PC에 request.changed{closed, approval_cancelled, byName}, 확정 병원이면 incoming.removed{approval_cancelled}. 승인한 담당자·메모는 그대로 남긴다. 근무 전 PC는 SHIFT_REQUIRED, version이 다르면 ALREADY_RESPONDED.
          *
          *     **요구사항**: SFR-128, SFR-130
          *     **화면**: H-02 · H-03
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED, REQUEST_NOT_APPROVED
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REASON_REQUIRED, REQUEST_NOT_APPROVED, REQUEST_CLOSED
          *     **상태 전이 사건**: CANCEL_APPROVAL
          */
         post: operations["post_hw_requests__requestId__cancel_approval"];
