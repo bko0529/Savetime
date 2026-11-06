@@ -12,6 +12,7 @@ import {
   type Assessment,
 } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
+import { ExtraMemoButton } from './ExtraMemoButton';
 import { RequestActions } from './RequestActions';
 
 type Detail =
@@ -81,6 +82,14 @@ export function RequestDetail({
             !detail.isError &&
             (detail.data.status === 'approved' || detail.data.status === 'confirmed')
           }
+        />
+      )}
+      {/* 추가 메모: 우리 병원으로 확정된 요청에 한 번만 (SFR-140) */}
+      {detail.data && !detail.isError && detail.data.status === 'confirmed' && (
+        <ExtraMemoButton
+          requestId={requestId}
+          version={detail.data.version ?? 1}
+          used={!!detail.data.extraMemo}
         />
       )}
     </section>
@@ -154,11 +163,13 @@ function DetailBody({ detail, nowMs }: { detail: Detail; nowMs: number }) {
         {beds?.or ?? '정보 없음'} · 중환자실 {beds?.icu ?? '정보 없음'}
       </p>
 
-      {detail.status === 'approved' && (
+      {(detail.status === 'approved' || detail.status === 'confirmed') && (
         <p className="text-xl">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
+      {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
+      {detail.extraMemo && <p className="text-xl font-bold">추가 메모: {detail.extraMemo}</p>}
     </>
   );
 }
