@@ -434,3 +434,169 @@ test('병원 응답은 활동이라 2시간 자동 종료 시계를 다시 시�
     assert.deepEqual(rows[0], { fresh: true, version: 1 });
   });
 });
+
+test('승인 취소(선택 전): 사유 필수, 제외 병원에 추가, 팀에 request.cancelled. 남은 승인이 없으면 예비 추천 (SFR-128)', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const b = await h.hospital('H2');
+    const deskA = await h.pcOnShift(a.key, '접수대', '박서연');
+    const deskB = await h.pcOnShift(b.key, '접수대', '이하준');
+    const otherA = await h.pcOnShift(a.key, '처치실', '김도윤');
+    const otherTab = await h.openTab(otherA);
+    const {
+      transportId,
+      teamId,
+      requestIds: [idA, idB],
+    } = await sendRound(h.pool, [a.id, b.id]);
+    await h.post(`/hw/requests/${idA}/approve`, deskA, { version: 1, memo: '3번 출입구' });
+    await h.post(`/hw/requests/${idB}/approve`, deskB, { version: 1 });
+
+    // 사유 없이·'기타'인데 글 없이 누르면 취소되지 않는다
+    for (const body of [{ version: 2 }, { version: 2, reason: 'etc', etcText: ' ' }]) {
+      const res = await h.post(`/hw/requests/${idA}/cancel-approval`, deskA, body);
+      assert.equal(res.status, 422);
+      assert.equal(res.body.error.code, 'REASON_REQUIRED');
+    }
+
+    const changed = nextEvent<Changed & { data: { closeReason: string } }>(
+      otherTab,
+      'request.changed',
+    );
+    const res = await h.post(`/hw/requests/${idA}/cancel-approval`, deskA, {
+      version: 2,
+      reason: 'er_bed',
+    });
+    assert.equal(res.status, 204);
+    const { rows } = await h.pool.query(
+      `SELECT status, closed_reason, reason, responder_name, memo, version
+         FROM hospital_request WHERE id = $1`,
+      [idA],
+    );
+    // 누가 승인했는지·승인 메모는 그대로 남는다
+    assert.deepEqual(rows[0], {
+      status: 'closed',
+      closed_reason: 'approval_cancelled',
+      reason: 'er_bed',
+      responder_name: '박서연',
+      memo: '3번 출입구',
+      version: 3,
+    });
+    assert.deepEqual((await changed).data, {
+      requestId: idA,
+      status: 'closed',
+      closeReason: 'approval_cancelled',
+      byName: '박서연',
+      pcName: '접수대',
+    });
+    const { rows: excluded } = await h.pool.query(
+      'SELECT hospital_id::text AS id, reason FROM excluded_hospital WHERE transport_id = $1',
+      [transportId],
+    );
+    assert.deepEqual(excluded, [{ id: a.id, reason: 'approval_cancelled' }]);
+    // B병원 승인이 남아 있어서 이송 건은 '요청 중' 그대로
+    let { rows: t } = await h.pool.query('SELECT status FROM transport WHERE id = $1', [
+      transportId,
+    ]);
+    assert.equal(t[0].status, 'requesting');
+
+    assert.equal(
+      (await h.post(`/hw/requests/${idB}/cancel-approval`, deskB, { version: 2, reason: 'icu' }))
+        .status,
+      204,
+    );
+    ({ rows: t } = await h.pool.query(
+      'SELECT status, fallback_reason FROM transport WHERE id = $1',
+      [transportId],
+    ));
+    assert.deepEqual(t[0], { status: 'fallback', fallback_reason: 'approvals_cancelled' });
+
+    const teamEvents = (await eventsOf(h.pool)).filter((e) => e.room === `team:${teamId}`);
+    const cancelled = teamEvents.filter((e) => e.name === 'request.cancelled');
+    assert.deepEqual(cancelled[0].payload, {
+      transportId,
+      hospitalRequestId: idA,
+      hospitalName: 'H1병원',
+      reason: 'er_bed',
+      wasConfirmed: false,
+    });
+    assert.equal(teamEvents.at(-1)!.name, 'transport.status');
+    assert.doesNotMatch(JSON.stringify(teamEvents), /흉통/);
+  });
+});
+
+test('확정 병원이 승인 취소하면 경보(wasConfirmed)와 도착 예정에서 빠짐, 이송 건은 이동 중 그대로', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const desk = await h.pcOnShift(a.key, '접수대', '박서연');
+    const {
+      transportId,
+      teamId,
+      requestIds: [id],
+    } = await sendRound(h.pool, [a.id], { status: 'confirmed' });
+    await h.pool.query(
+      "UPDATE transport SET status = 'moving', confirmed_hospital_id = $2 WHERE id = $1",
+      [transportId, a.id],
+    );
+
+    const res = await h.post(`/hw/requests/${id}/cancel-approval`, desk, {
+      version: 1,
+      reason: 'equipment',
+    });
+    assert.equal(res.status, 204);
+
+    const logged = await eventsOf(h.pool);
+    assert.deepEqual(
+      logged.map((e) => [e.room, e.name]),
+      [
+        [`team:${teamId}`, 'request.cancelled'],
+        [`hospital:${a.id}`, 'request.changed'],
+        [`hospital:${a.id}`, 'incoming.removed'],
+      ],
+    );
+    assert.equal(logged[0].payload.wasConfirmed, true);
+    assert.deepEqual(logged[2].payload, { requestId: id, reason: 'approval_cancelled' });
+    // 자동으로 다시 요청하지 않는다. 대원이 '다시 요청'을 누를 때까지 이동 중 (부록 A20)
+    const { rows } = await h.pool.query('SELECT status, version FROM transport WHERE id = $1', [
+      transportId,
+    ]);
+    assert.deepEqual(rows[0], { status: 'moving', version: 1 });
+    const { rows: rounds } = await h.pool.query(
+      'SELECT count(*)::int AS n FROM request_round WHERE transport_id = $1',
+      [transportId],
+    );
+    assert.equal(rounds[0].n, 1);
+  });
+});
+
+test('승인하지 않은 요청·닫힌 요청·다른 병원 요청은 승인 취소할 수 없다', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const b = await h.hospital('H2');
+    const desk = await h.pcOnShift(a.key, '접수대', '박서연');
+    const {
+      requestIds: [waiting, theirs],
+    } = await sendRound(h.pool, [a.id, b.id]);
+    const {
+      requestIds: [rejected],
+    } = await sendRound(h.pool, [a.id], { status: 'rejected' });
+    const {
+      requestIds: [closed],
+    } = await sendRound(h.pool, [a.id], { status: 'closed' });
+
+    const cases: [number, number, string][] = [
+      [waiting, 409, 'REQUEST_NOT_APPROVED'],
+      [rejected, 409, 'REQUEST_NOT_APPROVED'],
+      [closed, 409, 'REQUEST_CLOSED'],
+      [theirs, 404, 'NOT_FOUND'],
+    ];
+    for (const [id, status, code] of cases) {
+      const res = await h.post(`/hw/requests/${id}/cancel-approval`, desk, {
+        version: 1,
+        reason: 'er_bed',
+      });
+      assert.equal(res.status, status, code);
+      assert.equal(res.body.error.code, code);
+    }
+    assert.deepEqual(await eventsOf(h.pool), []);
+  });
+});

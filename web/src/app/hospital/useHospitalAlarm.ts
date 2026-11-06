@@ -2,7 +2,12 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { unlockSound, askNotificationPermission } from '@/lib/alarm/browserAlarm';
+import {
+  askNotificationPermission,
+  notificationPermission,
+  unlockSound,
+  type PermissionState,
+} from '@/lib/alarm/browserAlarm';
 import { ApiError, apiFetch, NETWORK_ERROR, type ApiPaths } from '@/lib/api/client';
 import { createHospitalSocket, type HospitalSocket } from '@/lib/realtime/hospitalSocket';
 
@@ -26,6 +31,23 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
   const [alarm, setAlarm] = useState<AlarmState>({ kind: 'off' });
   // 새 요청 받기(useNewRequests)가 같은 연결을 쓰도록 밖으로 내보낸다
   const [socket, setSocket] = useState<HospitalSocket | null>(null);
+  // 브라우저 알림 권한 (SFR-136). 처음엔 모름(null): 화면을 그린 뒤에 읽는다 (서버에서 그릴 때는 window 가 없어서)
+  const [permission, setPermission] = useState<PermissionState | null>(null);
+  // '알림 켜기'를 눌러 권한을 물어봤는지. 지원 안 하는 브라우저 안내는 누른 뒤에만 보여 준다
+  const [asked, setAsked] = useState(false);
+
+  // 처음 열 때, 그리고 다른 창에서 돌아올 때마다 다시 읽는다.
+  // 직원이 브라우저 설정에서 '허용'으로 바꾸고 돌아오면 안내가 저절로 사라진다
+  useEffect(() => {
+    const read = () => setPermission(notificationPermission());
+    read();
+    window.addEventListener('focus', read);
+    document.addEventListener('visibilitychange', read);
+    return () => {
+      window.removeEventListener('focus', read);
+      document.removeEventListener('visibilitychange', read);
+    };
+  }, []);
 
   useEffect(() => {
     const socket = createSocket();
@@ -75,7 +97,10 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
   const turnOn = useMutation({
     mutationFn: async () => {
       // 버튼을 누른 바로 그 순간에 해야 브라우저가 허락한다. 권한 창은 기다리지 않는다
-      void askNotificationPermission();
+      void askNotificationPermission().then((answer) => {
+        setAsked(true);
+        setPermission(answer);
+      });
       await unlockSound();
       const socketId = socketRef.current?.id;
       if (!socketId) throw new ApiError(0, NETWORK_ERROR, '실시간 연결이 아직 안 됐어요');
@@ -91,5 +116,11 @@ export function useHospitalAlarm(createSocket: () => HospitalSocket = createHosp
     },
   });
 
-  return { socket, connection, alarm, turnOn };
+  // 거부됐으면 늘, 지원 안 하는 브라우저면 '알림 켜기'를 누른 뒤에 안내한다
+  const notificationBlocked =
+    permission === 'denied' || (asked && permission === 'unsupported')
+      ? (permission as 'denied' | 'unsupported')
+      : null;
+
+  return { socket, connection, alarm, turnOn, notificationBlocked };
 }

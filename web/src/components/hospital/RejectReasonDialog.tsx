@@ -28,7 +28,25 @@ export const REJECT_REASONS: { value: RejectReason; label: string }[] = [
 ];
 export const ETC_TEXT_MAX = 20;
 
+// 거절(SFR-119)과 승인 취소(SFR-128)는 같은 사유 7가지를 쓴다. 창 글자만 다르다
+const TEXT = {
+  reject: {
+    title: '거절 사유',
+    description: '대원 앱에 병원 이름과 함께 이 사유가 보여요.',
+    missing: '거절 사유를 골라 주세요',
+    submit: '거절 보내기',
+  },
+  cancelApproval: {
+    title: '승인 취소 사유',
+    description:
+      '대원 앱에 경보와 함께 이 사유가 보여요. 이 병원은 이번 이송에서 다시 요청받지 않아요.',
+    missing: '사유를 골라 주세요',
+    submit: '승인 취소 보내기',
+  },
+};
+
 type Props = {
+  kind?: keyof typeof TEXT;
   open: boolean;
   pending: boolean;
   // 보냈는데 서버가 거절한 이유 (창이 열린 채라 창 안에 보여 준다)
@@ -37,8 +55,16 @@ type Props = {
   onCancel: () => void;
 };
 
-// 거절 사유 고르기 창. 사유를 고르지 않으면 보내지 않는다
-export function RejectReasonDialog({ open, pending, error, onSubmit, onCancel }: Props) {
+// 거절·승인 취소 사유 고르기 창. 사유를 고르지 않으면 보내지 않는다
+export function RejectReasonDialog({
+  kind = 'reject',
+  open,
+  pending,
+  error,
+  onSubmit,
+  onCancel,
+}: Props) {
+  const text = TEXT[kind];
   const [reason, setReason] = useState<RejectReason | null>(null);
   const [etcText, setEtcText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -46,7 +72,7 @@ export function RejectReasonDialog({ open, pending, error, onSubmit, onCancel }:
   function submit(e: FormEvent) {
     e.preventDefault();
     if (pending) return;
-    if (!reason) return setProblem('거절 사유를 골라 주세요');
+    if (!reason) return setProblem(text.missing);
     if (reason === 'etc' && etcText.trim() === '') return setProblem('기타 사유를 적어 주세요');
     onSubmit({ reason, etcText: reason === 'etc' ? etcText.trim() : null });
   }
@@ -59,13 +85,11 @@ export function RejectReasonDialog({ open, pending, error, onSubmit, onCancel }:
       }}
     >
       <DialogContent showCloseButton={false} className="gap-6 p-6 sm:max-w-lg">
-        <DialogTitle className="text-2xl font-bold">거절 사유</DialogTitle>
-        <DialogDescription className="text-lg">
-          대원 앱에 병원 이름과 함께 이 사유가 보여요.
-        </DialogDescription>
+        <DialogTitle className="text-2xl font-bold">{text.title}</DialogTitle>
+        <DialogDescription className="text-lg">{text.description}</DialogDescription>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <fieldset className="flex flex-col gap-2">
-            <legend className="sr-only">거절 사유</legend>
+            <legend className="sr-only">{text.title}</legend>
             {REJECT_REASONS.map((r) => (
               <label key={r.value} className="flex min-h-11 items-center gap-3 text-xl">
                 <input
@@ -110,7 +134,7 @@ export function RejectReasonDialog({ open, pending, error, onSubmit, onCancel }:
               취소
             </Button>
             <Button type="submit" variant="destructive" size="lg" disabled={pending}>
-              {pending ? '보내는 중…' : '거절 보내기'}
+              {pending ? '보내는 중…' : text.submit}
             </Button>
           </DialogFooter>
         </form>
