@@ -12,6 +12,7 @@ import {
   type TransportStatus,
 } from '../../domain/stateMachine.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
+import { closeRoute } from './route.js';
 
 export interface CancelResult {
   transportId: string;
@@ -64,6 +65,9 @@ export async function cancelTransport(
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [transportId, history.from, history.to, history.event, history.reason, history.at],
   );
+
+  // 위치 기록이 있으면 익명 경로(취소 표시)로 옮기고 원본을 지운다 (SER-002, SFR-041)
+  await closeRoute(client, transportId, { cancelled: true });
 
   // 연쇄: 열린 병원 요청과 확정 요청을 닫는다 (부록 A-2 41·45). 닫힌 요청은 병원 웹에서 환자 정보를 못 본다 (SER-014)
   // 앞 회차에 남은 요청도 함께 닫는다. 취소된 이송의 요청이 병원 웹에 열려 있으면 안 된다.

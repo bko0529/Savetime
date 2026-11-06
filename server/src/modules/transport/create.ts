@@ -22,6 +22,7 @@ import type { Realtime } from '../realtime/server.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
+import { closeRoute } from './route.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
@@ -99,6 +100,8 @@ async function finishPrevious(
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [previous.id, history.from, history.to, history.event, history.reason, history.at],
   );
+  // 이전 이송의 위치 기록 → 익명 경로, 원본 삭제 (SFR-039·041)
+  await closeRoute(client, previous.id, { cancelled: false });
   // 연쇄: 확정 병원 요청 → 도착 (부록 A-2 46)
   for (const { target, event } of CASCADE.FINISH_PREVIOUS ?? []) {
     const { rows: requests } = await client.query<{

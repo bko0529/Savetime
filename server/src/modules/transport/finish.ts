@@ -1,6 +1,6 @@
 // 이송 끝내기: 대원의 이송 취소 (SFR-076, 부록 A24) · 수동 도착 (SFR-080, 부록 A19, A-2 46).
 // 상태 변경은 stateMachine.ts 전이 함수만 거치고 (절대 규칙 4), 커밋된 뒤에만 실시간으로 알린다.
-// 위치 기록·이동 거리·익명 소요시간 저장(SFR-036~039·041)은 S5에서 붙인다. 그때까지 이동 거리는 null.
+// 도착·취소하면 위치 기록을 익명 경로로 옮기고 원본을 지운다 (route.ts, SFR-039·041). 위치 기록이 없으면 이동 거리는 null.
 import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/ev
 import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import { cancelTransport } from './cancel.js';
+import { closeRoute } from './route.js';
 import { loadTransport } from './view.js';
 
 // version이 빠지면 상태 전이 함수가 VERSION_REQUIRED로 거절한다 (SFR-160)
@@ -129,6 +130,9 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
     }
   }
 
+  // 위치 기록 → 익명 경로, 원본 삭제, 이송 건에는 이동 거리만 (SFR-039·041)
+  const route = await closeRoute(client, transportId, { cancelled: false });
+
   const { arrived_at: arrivedAt, departed_at: departedAt } = moved[0];
   const durationSec =
     departedAt === null ? null : Math.round((arrivedAt.getTime() - departedAt.getTime()) / 1000);
@@ -142,7 +146,12 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
   });
 
   return {
-    body: { arrivedAt, departedAt, distanceKm: null, durationSec },
+    body: {
+      arrivedAt,
+      departedAt,
+      distanceKm: route ? Math.round(route.distanceM / 100) / 10 : null,
+      durationSec,
+    },
     events: await appendEvents(client, events),
   };
 }
