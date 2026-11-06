@@ -62,7 +62,8 @@ function subjectParticle(word: string): string {
   return code % 28 === 0 ? '가' : '이';
 }
 
-// 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료 (S3) · 승인 취소 (S4, SFR-128)
+// 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료 (S3)
+// · 승인 취소 (SFR-128) · 승인 해제 1분 전·해제 (SFR-127) · 확정 병원 추가 메모 (SFR-140) (S4)
 export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<PushMessage | null> {
   const p = event.payload;
   const data = (extra: Record<string, string> = {}) => ({
@@ -97,6 +98,27 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
       body: p.anyApproved
         ? '응답 시간 2분이 지났어요 · 승인한 병원을 골라 주세요'
         : '응답 시간 2분이 지났어요 · 가까운 병원에 전화로 확인하세요',
+      data: data(),
+    };
+  }
+  // 승인 유효 5분 (SFR-127). 4분 경보는 실시간 설계 5장 문구 그대로
+  if (event.name === 'approval.expiring') {
+    return { title: TITLE, body: '1분 뒤 승인이 해제돼요 · 병원을 골라 주세요', data: data() };
+  }
+  if (event.name === 'approval.expired') {
+    return {
+      title: TITLE,
+      body: '승인 시간 5분이 지나 해제됐어요 · 추천 병원을 확인하세요',
+      data: data(),
+    };
+  }
+  // 확정 병원 추가 메모 (SFR-140). 메모 글은 넣지 않는다: 병원이 환자 정보를 적을 수도 있고
+  // 푸시는 잠금 화면에 보인다 (절대 규칙 5). 내용은 앱을 열어 GET /transports/current 로 본다
+  if (event.name === 'hospital.extra_memo' && typeof p.hospitalName === 'string') {
+    const name = p.hospitalName;
+    return {
+      title: TITLE,
+      body: `${name}${subjectParticle(name)} 추가 메모를 보냈어요`,
       data: data(),
     };
   }

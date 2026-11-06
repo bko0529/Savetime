@@ -157,6 +157,34 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     );
     assert.equal(noFinal?.body, '세브란스가 승인을 취소했어요');
 
+    // 승인 유효 5분 (SFR-127): 4분 경보와 5분 해제
+    const expiring = await messageFor(
+      ctx.pool,
+      event('approval.expiring', team, {
+        transportId: s.transportId,
+        releaseAt: new Date().toISOString(),
+      }),
+    );
+    assert.equal(expiring?.body, '1분 뒤 승인이 해제돼요 · 병원을 골라 주세요');
+    assert.deepEqual(expiring?.data, { event: 'approval.expiring', transportId: s.transportId });
+    const released = await messageFor(
+      ctx.pool,
+      event('approval.expired', team, { transportId: s.transportId }),
+    );
+    assert.equal(released?.body, '승인 시간 5분이 지나 해제됐어요 · 추천 병원을 확인하세요');
+
+    // 추가 메모 (SFR-140): 병원 이름만, 메모 글은 없다
+    const memo = await messageFor(
+      ctx.pool,
+      event('hospital.extra_memo', team, {
+        transportId: s.transportId,
+        hospitalRequestId: s.req['B병원'],
+        hospitalName: 'B병원',
+      }),
+    );
+    assert.equal(memo?.body, 'B병원이 추가 메모를 보냈어요');
+    assert.deepEqual(memo?.data, { event: 'hospital.extra_memo', transportId: s.transportId });
+
     // 다른 이유의 예비 전환·다른 이벤트는 S3 푸시 대상이 아니다
     for (const other of [
       event('transport.status', team, { status: 'fallback', reason: 'none_delivered' }),
@@ -165,7 +193,16 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     ]) {
       assert.equal(await messageFor(ctx.pool, other), null);
     }
-    for (const m of [first, expiredNone, expiredSome, rejected, cancelled]) {
+    for (const m of [
+      first,
+      expiredNone,
+      expiredSome,
+      rejected,
+      cancelled,
+      expiring,
+      released,
+      memo,
+    ]) {
       assert.ok(!JSON.stringify(m).includes('두통'));
     }
   });
