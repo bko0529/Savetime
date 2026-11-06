@@ -1715,14 +1715,20 @@ paths:
       tags:
       - 4. 이송 (대원 앱 · 핵심)
       summary: 위치 올리기 (5초마다, 담당 단말만)
-      description: "위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.\n\
-        \n**요구사항**: SFR-037, SFR-079, SER-002  \n**화면**: S-09 경로 안내  \n**오류 코드**:\
-        \ NOT_FOUND, NOT_NAV_DEVICE"
+      description: "위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속),\
+        \ 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당이 아직 없으면 출발 뒤 처음 보낸 단말이 담당(nav_device_id)이\
+        \ 되고(SFR-132 전까지), 다른 단말이면 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림.\
+        \ 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만.\
+        \ 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).\n\
+        \n**요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002  \n**화면**: S-09 경로 안내  \n**오류 코드**:\
+        \ NOT_FOUND, NOT_NAV_DEVICE, INVALID_TRANSITION, VALIDATION_FAILED"
       operationId: post_transports__transportId__locations
       security: *id009
       x-error-codes:
       - NOT_FOUND
       - NOT_NAV_DEVICE
+      - INVALID_TRANSITION
+      - VALIDATION_FAILED
       parameters:
       - *id011
       requestBody:

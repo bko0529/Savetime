@@ -22,6 +22,7 @@ import { hospitalDetailRouter } from './modules/transport/hospitalDetail.js';
 import type { EtaLookup } from './modules/transport/eta.js';
 import { recommendRouter } from './modules/transport/recommend.js';
 import { confirmRouter } from './modules/transport/confirm.js';
+import { locationRouter } from './modules/transport/route.js';
 import { phoneCheckRouter } from './modules/transport/phoneCheck.js';
 import { finishRouter } from './modules/transport/finish.js';
 import { transportRouter } from './modules/transport/create.js';
@@ -78,6 +79,7 @@ export function createApp({
     app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime, eta));
     app.use('/api/v1', confirmRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
+    app.use('/api/v1', locationRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
   }
   if (hospitalWeb) {
