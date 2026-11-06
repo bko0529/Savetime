@@ -9,6 +9,7 @@ import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
+import { PauseControl } from '@/components/hospital/PauseControl';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
@@ -81,9 +82,12 @@ function offMessage(alarm: AlarmState, startedHere: boolean): string {
 
 export function ShiftScreen({
   shift,
+  pause = { paused: false, pausedAt: null },
   createSocket,
 }: {
   shift: Shift | null;
+  // 병원 전체의 잠시 요청 중지 상태 (GET /hw/session, SFR-139)
+  pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
 }) {
   const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
@@ -154,6 +158,15 @@ export function ShiftScreen({
 
       {shift !== null && (
         <>
+          <PauseControl
+            paused={pause.paused}
+            pausedAt={pause.pausedAt}
+            // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
+            waitingCount={
+              incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
+            }
+            socket={socket}
+          />
           <h2 className="text-2xl font-bold">요청 목록</h2>
           <RequestList
             items={incoming.items}
