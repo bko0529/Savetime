@@ -51,10 +51,9 @@ async function eventsSince(pool: pg.Pool, since: number) {
 
 // 예비 추천 상태로 만든다 (열린 요청 없음)
 async function toFallback(pool: pg.Pool, s: Scene): Promise<void> {
-  await pool.query(
-    `UPDATE hospital_request SET status = 'expired' WHERE id = ANY($1::bigint[])`,
-    [Object.values(s.req)],
-  );
+  await pool.query(`UPDATE hospital_request SET status = 'expired' WHERE id = ANY($1::bigint[])`, [
+    Object.values(s.req),
+  ]);
   await pool.query(
     `UPDATE transport SET status = 'fallback', fallback_reason = 'all_rejected' WHERE id = $1`,
     [s.transportId],
@@ -85,7 +84,11 @@ test('예비 추천에서 전화 확인을 시작하면 phone_check가 되고 �
       events.map((x) => x.name),
       ['transport.status', 'transport.phone_target'],
     );
-    assert.deepEqual(events[1].payload, { transportId: s.transportId, hospitalId: e, hospitalName: 'E병원' });
+    assert.deepEqual(events[1].payload, {
+      transportId: s.transportId,
+      hospitalId: e,
+      hospitalName: 'E병원',
+    });
   });
 });
 
@@ -143,7 +146,13 @@ test('수용 확정하면 이동 중이 되고 열려 있던 요청은 요청 �
 
     const t = await transportRow(ctx.pool, s.transportId);
     assert.deepEqual(
-      [t.status, t.version, t.phone_target_hospital_id, Number(t.confirmed_hospital_id), t.departed],
+      [
+        t.status,
+        t.version,
+        t.phone_target_hospital_id,
+        Number(t.confirmed_hospital_id),
+        t.departed,
+      ],
       ['moving', 3, null, e, true],
     );
     // B·C(승인), D(대기) → 닫힘(fallback)
@@ -158,7 +167,9 @@ test('수용 확정하면 이동 중이 되고 열려 있던 요청은 요청 �
       'SELECT hospital_id, result, reason, created_at IS NOT NULL AS at FROM phone_check WHERE transport_id = $1',
       [s.transportId],
     );
-    assert.deepEqual(checks, [{ hospital_id: String(e), result: 'accepted', reason: null, at: true }]);
+    assert.deepEqual(checks, [
+      { hospital_id: String(e), result: 'accepted', reason: null, at: true },
+    ]);
 
     const events = await eventsSince(ctx.pool, since);
     assert.deepEqual(
