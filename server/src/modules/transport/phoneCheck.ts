@@ -100,7 +100,13 @@ export async function startPhoneCheck(
       entityType: 'transport',
       entityId: transportId,
       entityVersion: version,
-      payload: { transportId, status: to, event: history.event, reason: history.reason, byName: null },
+      payload: {
+        transportId,
+        status: to,
+        event: history.event,
+        reason: history.reason,
+        byName: null,
+      },
     },
     // 팀원 화면도 같은 병원 전화 확인으로 (A13). 병원 이름은 환자 정보가 아니다
     {
@@ -291,7 +297,13 @@ export async function recordPhoneResult(
     entityType: 'transport',
     entityId: transportId,
     entityVersion: moved[0].version,
-    payload: { transportId, status: to, event: history.event, reason: history.reason, byName: null },
+    payload: {
+      transportId,
+      status: to,
+      event: history.event,
+      reason: history.reason,
+      byName: null,
+    },
   });
 
   return {
