@@ -28,6 +28,8 @@ import { roundsRouter } from './modules/transport/rounds.js';
 import { finishRouter } from './modules/transport/finish.js';
 import { transportRouter } from './modules/transport/create.js';
 import type { Realtime } from './modules/realtime/server.js';
+import type { PhotoStore } from './modules/auth/photoStore.js';
+import { signupRouter } from './modules/auth/signup.js';
 
 export interface AppDeps {
   logger: Logger;
@@ -44,6 +46,8 @@ export interface AppDeps {
   hospitalWeb?: HospitalWebContext;
   // 없으면 관리자 API(/admin)를 켜지 않는다
   admin?: AdminContext;
+  // 사진 저장소 설정이 없으면 비워 둔다. 가입 신청만 503 이 된다 (SFR-017)
+  photos?: PhotoStore;
 }
 
 export function createApp({
@@ -55,6 +59,7 @@ export function createApp({
   realtime,
   hospitalWeb,
   admin,
+  photos,
 }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -72,6 +77,7 @@ export function createApp({
     // 로그인한 승인 대원만 쓰는 API에 붙인다. 로그인·재발급·내 정보는 그 전 단계라 따로 둔다.
     const approvedParamedic = [requireParamedic(auth), requireApproved];
     app.use('/api/v1', authRouter(auth, realtime));
+    app.use('/api/v1', signupRouter(auth, photos));
     app.use('/api/v1', teamRouter(auth, approvedParamedic, realtime));
     // /hospitals/nearby가 /hospitals/:hospitalId보다 먼저 와야 'nearby'를 병원 ID로 읽지 않는다
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));

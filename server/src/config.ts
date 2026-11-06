@@ -34,6 +34,13 @@ const schema = z.object({
     (v) => (v === '' ? undefined : v),
     z.string().min(1).optional(),
   ),
+  // 공무원증 사진 저장소 (S3 호환, SFR-017). 하나라도 비면 가입 신청만 503 이 된다. 서버는 켜진다
+  S3_ENDPOINT: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
+  S3_REGION: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('ap-northeast-2')),
+  S3_BUCKET: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_ACCESS_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  PHOTO_ENC_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });

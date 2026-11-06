@@ -22,6 +22,7 @@ import { PAUSE_REMIND_EVERY_MS, remindLongPauses } from './modules/hospital-web/
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
+import { createPhotoStore, createS3Storage, parsePhotoKey } from './modules/auth/photoStore.js';
 
 const config = loadConfig();
 const logger = pino({ level: config.NODE_ENV === 'production' ? 'info' : 'debug' });
@@ -88,8 +89,29 @@ const realtime = auth
   ? createRealtime({ auth, redisUrl: config.REDIS_URL, logger, push })
   : undefined;
 
+// 공무원증 사진 저장소 (SFR-017, SER-015). 값이 다 있어야 켠다. 암호화 키 길이가 틀리면 여기서 멈춘다
+const photos =
+  config.S3_ENDPOINT &&
+  config.S3_BUCKET &&
+  config.S3_ACCESS_KEY &&
+  config.S3_SECRET_KEY &&
+  config.PHOTO_ENC_KEY
+    ? createPhotoStore(
+        createS3Storage({
+          endpoint: config.S3_ENDPOINT,
+          region: config.S3_REGION,
+          bucket: config.S3_BUCKET,
+          accessKeyId: config.S3_ACCESS_KEY,
+          secretAccessKey: config.S3_SECRET_KEY,
+        }),
+        parsePhotoKey(config.PHOTO_ENC_KEY),
+      )
+    : undefined;
+if (!photos) logger.warn('S3_*·PHOTO_ENC_KEY가 없어 가입 신청(사진 저장)이 503이 됩니다');
+
 const app = createApp({
   logger,
+  photos,
   eta,
   geocoder,
   auth,

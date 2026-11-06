@@ -185,6 +185,22 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     assert.equal(memo?.body, 'B병원이 추가 메모를 보냈어요');
     assert.deepEqual(memo?.data, { event: 'hospital.extra_memo', transportId: s.transportId });
 
+    // 가입 결과 (SFR-022·083): 대원 개인 방
+    const signupOk = await messageFor(
+      ctx.pool,
+      event('account.signup_result', 'paramedic:1', { result: 'approved', reason: null }),
+    );
+    assert.equal(signupOk?.body, '가입이 승인됐어요 · 로그인해서 근무를 시작하세요');
+    assert.deepEqual(signupOk?.data, { event: 'account.signup_result', result: 'approved' });
+    const signupNo = await messageFor(
+      ctx.pool,
+      event('account.signup_result', 'paramedic:1', {
+        result: 'rejected',
+        reason: 'photo_unclear',
+      }),
+    );
+    assert.equal(signupNo?.body, '가입이 반려됐어요 · 사유를 확인하고 다시 신청해 주세요');
+
     // 다른 이유의 예비 전환·다른 이벤트는 S3 푸시 대상이 아니다
     for (const other of [
       event('transport.status', team, { status: 'fallback', reason: 'none_delivered' }),
@@ -244,6 +260,28 @@ test('앱이 화면에 보이는 팀원은 빼고, 안 보이는 팀원 기기�
       event('transport.created', team, { transportId: s.transportId }),
     ]);
     assert.equal(sent.length, 2);
+  });
+});
+
+test('대원 개인 방 이벤트(가입 결과)는 그 대원 기기에만 보낸다 (SFR-022)', async () => {
+  await withAuthContext(async (ctx) => {
+    await withDevices(ctx);
+    const kim = await paramedicId(ctx, 'kim01');
+    const { sender, sent } = fakeSender();
+    const dispatcher = createPushDispatcher({ pool: ctx.pool, redis: ctx.redis, sender, logger });
+    await dispatcher.handle([
+      event('account.signup_result', `paramedic:${kim}`, { result: 'approved', reason: null }),
+    ]);
+    assert.deepEqual(
+      sent.map((x) => x.tokens),
+      [['token-kim']],
+    );
+    // 앱을 보고 있으면 화면이 직접 알리므로 푸시하지 않는다
+    await setVisible(ctx.redis, kim, 'sock-1', true);
+    await dispatcher.handle([
+      event('account.signup_result', `paramedic:${kim}`, { result: 'approved', reason: null }),
+    ]);
+    assert.equal(sent.length, 1);
   });
 });
 

@@ -111,9 +111,11 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 가입 신청 (공무원증 사진)
-      description: "관리자 알림 '신규 가입 신청'이 생긴다.\n\n**요구사항**: SFR-017, SER-015, DAR-012\
+      description: "관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로\
+        \ 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상,\
+        \ 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).\n\n**요구사항**: SFR-017, SER-015, DAR-012\
         \  \n**화면**: S-02 가입 신청  \n**오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND,\
-        \ LOGIN_ID_TAKEN, CONSENT_REQUIRED"
+        \ LOGIN_ID_TAKEN, CONSENT_REQUIRED, TOO_MANY_REQUESTS, PHOTO_STORAGE_UNAVAILABLE"
       operationId: post_auth_signup
       security: *id001
       x-error-codes:
@@ -121,6 +123,8 @@ paths:
       - AGENCY_NOT_FOUND
       - LOGIN_ID_TAKEN
       - CONSENT_REQUIRED
+      - TOO_MANY_REQUESTS
+      - PHOTO_STORAGE_UNAVAILABLE
       requestBody:
         required: true
         content:
@@ -195,6 +199,8 @@ paths:
       - SIGNUP_NOT_REJECTED
       - CONSENT_REQUIRED
       - AGENCY_NOT_FOUND
+      - VALIDATION_FAILED
+      - PHOTO_STORAGE_UNAVAILABLE
       requestBody:
         required: true
         content:
