@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RequireAdmin, useAdminAuth } from './AdminAuth';
+import { UnreadBadge } from './monitoring/Notifications';
 
 // 관리자 메뉴 3개 (SFR-082 인수 기준: 계정 A-01 · 모니터링 A-02 · 병원 관리 A-03)
 export const ADMIN_MENUS = [
@@ -60,9 +61,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <Button variant="outline" onClick={signOut}>
-            로그아웃
-          </Button>
+          <div className="flex items-center gap-3">
+            <UnreadBadge />
+            <Button variant="outline" onClick={signOut}>
+              로그아웃
+            </Button>
+          </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-8">{children}</main>
       </div>

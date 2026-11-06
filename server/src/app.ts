@@ -10,6 +10,8 @@ import type { AuthContext } from './modules/auth/session.js';
 import { auditRouter } from './modules/admin/audit.js';
 import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
 import { adminHospitalRouter } from './modules/admin/hospitals.js';
+import { adminNotificationRouter } from './modules/admin/notifications.js';
+import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
@@ -87,6 +89,8 @@ export function createApp({
     const adminOnly = requireAdmin(admin);
     app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', auditRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminPcRouter(admin.pool, adminOnly, realtime));
+    app.use('/api/v1', adminNotificationRouter(admin.pool, adminOnly));
   }
 
   app.use(notFoundHandler);
