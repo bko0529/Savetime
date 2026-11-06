@@ -52,7 +52,12 @@ export async function warnApprovalExpiring(
     if (!round.due) return 'not_due';
     // 확정·새 회차·취소·예비 전환이면 경보를 보내지 않는다 (실시간 설계 6장 '취소되는 경우')
     if (!round.is_current) return [];
-    const { rows } = await client.query<{ status: TransportStatus; team_id: string | null; version: number; n: number }>(
+    const { rows } = await client.query<{
+      status: TransportStatus;
+      team_id: string | null;
+      version: number;
+      n: number;
+    }>(
       `SELECT t.status, t.team_id, t.version,
               (SELECT count(*)::int FROM hospital_request hr
                 WHERE hr.round_id = $2 AND hr.status = 'approved' AND now() < $3) AS n

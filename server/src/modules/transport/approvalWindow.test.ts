@@ -100,7 +100,12 @@ test('승인했지만 5분 동안 고르지 않으면 승인을 닫고 예비 �
       [s.transportId],
     );
     assert.deepEqual(history, [
-      { from_status: 'requesting', to_status: 'fallback', event: 'APPROVAL_WINDOW_ENDED', reason: 'approval_window' },
+      {
+        from_status: 'requesting',
+        to_status: 'fallback',
+        event: 'APPROVAL_WINDOW_ENDED',
+        reason: 'approval_window',
+      },
     ]);
 
     // 병원 웹에는 '요청 종료'(request.changed), 팀에는 approval.expired와 transport.status

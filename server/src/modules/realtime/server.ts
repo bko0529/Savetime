@@ -21,7 +21,11 @@ import type { AuthContext } from '../auth/session.js';
 // 쿠키 해시는 PC 등록 API와 같은 함수를 쓴다. 저장할 때와 찾을 때 방식이 달라지지 않게 (COR-012)
 import { hashPcToken } from '../hospital-web/pcAuth.js';
 import { currentTeamId } from '../team/routes.js';
-import { endApprovalWindow, EXPIRING_LEAD_MS, warnApprovalExpiring } from '../transport/approvalWindow.js';
+import {
+  endApprovalWindow,
+  EXPIRING_LEAD_MS,
+  warnApprovalExpiring,
+} from '../transport/approvalWindow.js';
 import { expireRound } from '../transport/expire.js';
 import { applyReverseCascade, roundCounts } from '../transport/hreqCascade.js';
 import {
@@ -379,7 +383,9 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     { connection, prefix, concurrency: 10, autorun: false },
   );
   approvalQueue.on('error', (err) => logger.error({ message: err.message }, '5분 타이머 큐 오류'));
-  approvalWorker.on('error', (err) => logger.error({ message: err.message }, '5분 타이머 워커 오류'));
+  approvalWorker.on('error', (err) =>
+    logger.error({ message: err.message }, '5분 타이머 워커 오류'),
+  );
   approvalWorker.on('failed', (_job, err) =>
     logger.error({ message: err.message }, '5분 타이머 실행 실패'),
   );
@@ -403,8 +409,16 @@ export function createRealtime(options: RealtimeOptions): Realtime {
       removeOnFail: 100,
     };
     await Promise.all([
-      approvalQueue.add('warn', { roundId }, { ...options, jobId: `approval-warn-${roundId}`, delay: rows[0].warn }),
-      approvalQueue.add('end', { roundId }, { ...options, jobId: `approval-end-${roundId}`, delay: rows[0].end }),
+      approvalQueue.add(
+        'warn',
+        { roundId },
+        { ...options, jobId: `approval-warn-${roundId}`, delay: rows[0].warn },
+      ),
+      approvalQueue.add(
+        'end',
+        { roundId },
+        { ...options, jobId: `approval-end-${roundId}`, delay: rows[0].end },
+      ),
     ]);
   }
 
