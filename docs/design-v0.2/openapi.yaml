@@ -3763,6 +3763,7 @@ paths:
                     type: integer
                   byGrade:
                     type: object
+                    description: "그 등급을 고르면 요청이 갈 병원 수 (그 등급 이상 누적). 예 {1: 2, 2: 5, 3: 9} = 대학병원급 2곳·종합병원급 이상 5곳·전체 9곳. '등급 바꾸기' 안내용. count는 지금 grade 기준(없으면 byGrade.3과 같음)"
                     properties:
                       '1':
                         type: integer
