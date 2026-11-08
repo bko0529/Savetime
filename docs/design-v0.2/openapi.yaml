@@ -1808,7 +1808,10 @@ paths:
         \ 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미\
         \ 바꿨으면 '이송 취소 후 새로 요청' 안내.\n\n**요구사항**: SFR-077, SFR-156  \n**화면**: S-09 경로\
         \ 안내  \n**오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT,\
-        \ DESTINATION_CHANGE_USED, REASON_REQUIRED  \n**상태 전이 사건**: CHANGE_DESTINATION"
+        \ DESTINATION_CHANGE_USED, REASON_REQUIRED, NO_REQUEST_TARGET, LOCATION_REQUIRED, VALIDATION_FAILED\
+        \  \n**상태 전이 사건**: CHANGE_DESTINATION\n\nlocation이 없으면 출발 위치 기준. 확정 병원(confirmed_hospital_id)은\
+        \ 비우고 이전 목적지·사유·시각(dest_changed_*)을 남긴다. 새 대상이 0곳이면 422 NO_REQUEST_TARGET이고 아무것도 바뀌지\
+        \ 않는다."
       operationId: post_transports__transportId__destination
       security: *id009
       x-state-events:
@@ -1820,6 +1823,9 @@ paths:
       - VERSION_CONFLICT
       - DESTINATION_CHANGE_USED
       - REASON_REQUIRED
+      - NO_REQUEST_TARGET
+      - LOCATION_REQUIRED
+      - VALIDATION_FAILED
       parameters:
       - *id011
       requestBody:

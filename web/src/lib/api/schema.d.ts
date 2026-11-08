@@ -891,8 +891,10 @@ export interface paths {
          *
          *     **요구사항**: SFR-077, SFR-156
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED, NO_REQUEST_TARGET, LOCATION_REQUIRED, VALIDATION_FAILED
          *     **상태 전이 사건**: CHANGE_DESTINATION
+         *
+         *     location이 없으면 출발 위치 기준. 확정 병원(confirmed_hospital_id)은 비우고 이전 목적지·사유·시각(dest_changed_*)을 남긴다. 새 대상이 0곳이면 422 NO_REQUEST_TARGET이고 아무것도 바뀌지 않는다.
          */
         post: operations["post_transports__transportId__destination"];
         delete?: never;
