@@ -254,3 +254,46 @@ test('예상 이동시간을 카드에 채우고, 못 구한 곳은 null이다 (
     assert.equal(mapCard.etaMin, 7);
   }, eta);
 });
+
+test('주변 병원은 오프라인 저장용으로 기준 시각·참고용 여부·진료가능 항목까지 준다 (SFR-059·081)', async () => {
+  await withApi(async ({ pool, get }) => {
+    const a = await addHospital(pool, 'A병원', 1, { beds: [3, 10, 1, 2, 0, 1] });
+    await addHospital(pool, 'B병원', 2); // 병상 데이터 없음
+    await pool.query(
+      `UPDATE bed_current SET collected_at = now() - interval '12 minutes' WHERE hospital_id = $1`,
+      [a],
+    );
+    await pool.query(
+      `INSERT INTO hospital_capability (hospital_id, item_code, available, updated_at)
+       VALUES ($1, 'mkioskty1', true, now()), ($1, 'mkioskty2', false, now())`,
+      [a],
+    );
+
+    const res = await get(`/api/v1/hospitals/nearby?lat=${ORIGIN.lat}&lng=${ORIGIN.lng}`);
+    assert.equal(res.status, 200);
+    const [cardA, cardB] = res.body;
+    assert.equal(cardA.name, 'A병원');
+    assert.equal(cardA.stale, true);
+    assert.ok(Date.now() - new Date(cardA.collectedAt).getTime() >= 11 * 60_000);
+    assert.equal(cardA.erPhone, '041-000');
+    assert.equal(cardA.capabilities.length, 2);
+    assert.deepEqual(
+      cardA.capabilities.map((c: { available: boolean }) => c.available),
+      [true, false],
+    );
+    assert.deepEqual(cardA.capabilityCount, { available: 1, total: 2 });
+    assert.deepEqual([cardB.collectedAt, cardB.stale, cardB.capabilities], [null, null, []]);
+  });
+});
+
+test('추천 카드에도 기준 시각과 참고용 여부가 있다 (방금 수집 = 최신)', async () => {
+  await withApi(async ({ pool, paramedicId, get }) => {
+    const transportId = await addTransport(pool, paramedicId);
+    await addHospital(pool, 'A병원', 1, { beds: [3, 10, 1, 2, 0, 1] });
+    const res = await get(`/api/v1/transports/${transportId}/recommendations`);
+    const card = res.body.items[0];
+    assert.equal(card.stale, false);
+    assert.ok(Math.abs(Date.now() - new Date(card.collectedAt).getTime()) < 60_000);
+    assert.equal(card.capabilities, undefined);
+  });
+});

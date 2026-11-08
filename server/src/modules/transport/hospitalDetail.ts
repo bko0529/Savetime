@@ -2,6 +2,7 @@
 import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { AppError } from '../../http/errors.js';
+import { STALE_SQL } from './recommend.js';
 
 interface HospitalDetailRow {
   id: string;
@@ -20,6 +21,8 @@ interface HospitalDetailRow {
   or_avail: number | null;
   or_total: number | null;
   source_time: Date | null;
+  collected_at: Date | null;
+  stale: boolean | null;
   capabilities: { name: string; available: boolean }[];
 }
 
@@ -27,6 +30,7 @@ interface HospitalDetailRow {
 const DETAIL_SQL = `
   SELECT h.id, h.name, h.lat, h.lng, h.address, h.departments, h.er_phone, h.main_phone, h.grade,
          c.er_avail, c.er_total, c.icu_avail, c.icu_total, c.or_avail, c.or_total, c.source_time,
+         c.collected_at, ${STALE_SQL} AS stale,
          coalesce((
            SELECT jsonb_agg(jsonb_build_object('name', i.name, 'available', hc.available)
                             ORDER BY length(i.code), i.code)
@@ -71,6 +75,9 @@ export function hospitalDetailRouter(pool: pg.Pool, guards: RequestHandler[]): R
         or: { avail: row.or_avail, total: row.or_total },
       },
       bedsSourceTime: row.source_time,
+      // 화면의 '기준 HH:MM'과 '참고용 정보' 판단 (SFR-081)
+      collectedAt: row.collected_at,
+      stale: row.stale,
       capabilities: row.capabilities,
       grade: row.grade,
     });

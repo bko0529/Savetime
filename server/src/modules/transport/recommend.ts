@@ -26,9 +26,17 @@ interface CandidateRow {
   or_avail: number | null;
   or_total: number | null;
   source_time: Date | null;
+  collected_at: Date | null;
+  stale: boolean | null;
   capability_available: number;
   capability_total: number;
 }
+
+// 화면의 '기준 HH:MM'은 서버가 수집한 시각(collected_at)이고, 그때부터 10분이 지나면 '참고용 정보'다 (SFR-081, C-12).
+// 수집이 실패하면 collected_at 이 그대로라 10분 뒤 자연히 참고용이 된다 (SFR-008).
+// 판정은 DB now() 로 한다 (규칙 6). 폰 시계가 틀려도 온라인 화면은 맞다. 병상 데이터가 없으면 null
+export const FRESH_MINUTES = 10;
+export const STALE_SQL = `(c.collected_at < now() - make_interval(mins => ${FRESH_MINUTES}))`;
 
 // 반경 안 병원. 먼저 위도·경도 네모로 빠르게 거르고(1도 ≈ 111km), 하버사인 직선거리로 정확히 자른다.
 // 전국 응급실이 수백 곳이라 PostGIS 없이 충분하다 (기술정의서 추천 정렬).
@@ -37,6 +45,7 @@ const CANDIDATES_SQL = `
          d.km AS distance_km,
          c.hospital_id IS NOT NULL AS has_bed_row, coalesce(c.excluded, false) AS anomaly,
          c.er_avail, c.er_total, c.icu_avail, c.icu_total, c.or_avail, c.or_total, c.source_time,
+         c.collected_at, ${STALE_SQL} AS stale,
          cap.available AS capability_available, cap.total AS capability_total
     FROM hospital h
     LEFT JOIN bed_current c ON c.hospital_id = h.id
@@ -107,6 +116,8 @@ function toCard(candidate: Row, rank: number | null, etas?: Map<string, number>)
     etaMin: etas?.get(candidate.id) ?? null,
     beds: { er: bedText(beds?.er), icu: bedText(beds?.icu), or: bedText(beds?.or) },
     bedsSourceTime: row.source_time,
+    collectedAt: row.collected_at,
+    stale: row.stale,
     capabilityCount: { available: row.capability_available, total: row.capability_total },
     inRegion: beds !== null && [beds.er, beds.icu, beds.or].some((p) => p.avail !== null),
     erPhone: row.er_phone,
@@ -204,7 +215,27 @@ export function recommendRouter(pool: pg.Pool, guards: RequestHandler[], eta?: E
   router.get('/hospitals/nearby', ...guards, async (req, res) => {
     const { lat, lng, radiusKm } = parseOrigin(req.query);
     const candidates = await findCandidates(pool, { lat, lng }, radiusKm);
-    res.json(candidates.map((candidate) => toCard(candidate, null)));
+    // 앱이 오프라인 대비로 저장하는 목록이라 진료가능 항목도 넣는다 (SFR-059). 추천 목록에는 개수만
+    const { rows: caps } = await pool.query<{
+      hospital_id: string;
+      capabilities: { name: string; available: boolean }[];
+    }>(
+      `SELECT hc.hospital_id,
+              jsonb_agg(jsonb_build_object('name', i.name, 'available', hc.available)
+                        ORDER BY length(i.code), i.code) AS capabilities
+         FROM hospital_capability hc
+         JOIN capability_item i ON i.code = hc.item_code
+        WHERE hc.hospital_id = ANY($1::bigint[])
+        GROUP BY hc.hospital_id`,
+      [candidates.map((c) => c.id)],
+    );
+    const capsOf = new Map(caps.map((row) => [row.hospital_id, row.capabilities]));
+    res.json(
+      candidates.map((candidate) => ({
+        ...toCard(candidate, null),
+        capabilities: capsOf.get(candidate.id) ?? [],
+      })),
+    );
   });
 
   router.get('/transports/:transportId/recommendations', ...guards, async (req, res) => {

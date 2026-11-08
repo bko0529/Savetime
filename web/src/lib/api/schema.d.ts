@@ -538,7 +538,7 @@ export interface paths {
         };
         /**
          * 주변 병원 (지도·오프라인 저장용)
-         * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
+         * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고(진료가능 항목 포함), 통신이 끊기면 '참고용 정보 · 기준 HH:MM'(collectedAt)으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
          *
          *     **요구사항**: SFR-001, SFR-027, SFR-059, SFR-061, SFR-064, SFR-087
          *     **화면**: S-06 지도 · S-11 오프라인
@@ -856,11 +856,11 @@ export interface paths {
         put?: never;
         /**
          * 위치 올리기 (5초마다, 담당 단말만)
-         * @description 위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당이 아직 없으면 출발 뒤 처음 보낸 단말이 담당(nav_device_id)이 되고(SFR-132 전까지), 다른 단말이면 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
          *
-         *     **요구사항**: SFR-037, SFR-079, SER-002
+         *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE
+         *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE, INVALID_TRANSITION, VALIDATION_FAILED
          */
         post: operations["post_transports__transportId__locations"];
         delete?: never;
@@ -2230,9 +2230,21 @@ export interface components {
             };
             /**
              * Format: date-time
-             * @description 공공 데이터 기준 시각
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt
              */
             bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
+            /** @description 진료가능 항목 (오프라인 저장용, SFR-059). /hospitals/nearby 에만 있고 추천 목록 카드에는 없다(개수만, capabilityCount) */
+            capabilities?: {
+                name?: string;
+                available?: boolean;
+            }[];
             /** @description 중증질환 진료가능 항목 수 (SFR-002) */
             capabilityCount?: {
                 available?: number;
@@ -2282,9 +2294,16 @@ export interface components {
             };
             /**
              * Format: date-time
-             * @description 공공 데이터 기준 시각. 병상 데이터가 없으면 null
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt. 병상 데이터가 없으면 null
              */
             bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
             /** @description 공공 데이터가 '정보미제공'인 항목은 목록에 없음 */
             capabilities?: {
                 /** @description 공공 데이터 표기 그대로 */
