@@ -934,9 +934,9 @@ export interface paths {
         put?: never;
         /**
          * 이송 취소
-         * @description 진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'.
+         * @description 진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'. 대원이 고른 미이송 사유(선택)는 구급활동일지 초안의 미이송 사유 칸이 된다(SFR-164).
          *
-         *     **요구사항**: SFR-076
+         *     **요구사항**: SFR-076, SFR-164
          *     **화면**: S-05 · S-06 · S-08 · S-09
          *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
          *     **상태 전이 사건**: CANCEL
@@ -2474,6 +2474,7 @@ export interface components {
             transportId?: string;
             agencyName?: string;
             safetyCenter?: string;
+            /** @description 이송이 진행되는 동안 팀에 있었던 대원 (끝난 뒤 들어온 사람은 빼고) */
             crew?: {
                 name?: string;
                 rank?: string;
@@ -2484,34 +2485,48 @@ export interface components {
             departedAt?: string | null;
             /** Format: date-time */
             arrivedAt?: string | null;
+            /** @description 이동 거리. 위치 기록이 없으면(위치 미동의·통신 두절 중 도착) null → 대원이 직접 입력 */
             distanceKm?: number | null;
-            sex?: string | null;
+            /**
+             * @description 확인 불가면 null (대원이 직접 입력)
+             * @enum {string|null}
+             */
+            sex?: "M" | "F" | null;
             ageBand?: string | null;
-            symptoms?: string[];
             chiefComplaint?: string | null;
             onsetAt?: string | null;
-            /** @enum {string|null} */
+            /**
+             * @description 앱 평가의 의식 수준(alert·verbal·pain·unresponsive)을 AVPU로. 확인 불가면 null
+             * @enum {string|null}
+             */
             consciousness?: "A" | "V" | "P" | "U" | null;
+            /** @description 마지막으로 보낸 평가의 활력징후. 없는 값은 null. 혈압은 '150/90'을 나눈 값 */
             vitals?: {
-                sbp?: number;
-                dbp?: number;
-                pulse?: number;
-                resp?: number;
-                temp?: number;
-                spo2?: number;
-                glucose?: number;
+                sbp?: number | null;
+                dbp?: number | null;
+                pulse?: number | null;
+                resp?: number | null;
+                temp?: number | null;
+                spo2?: number | null;
+                glucose?: number | null;
             };
             history?: string | null;
             ktas?: number | null;
+            /** @description 이송 기관 = 도착한 확정 병원. 취소된 건은 null */
             hospitalName?: string | null;
-            /** @description 재이송 사유 (거절 기록에서) */
+            /** @description 재이송 사유. 이 이송 건에서 병원 거절·승인 취소·수용 불가와 전화 확인 거절 (잠시 요청 중지 자동 거절은 뺌) */
             reTransferReasons?: {
                 hospitalName?: string;
                 /** @enum {string} */
                 reason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc";
             }[];
-            /** @description 취소 사유 (미이송) */
-            notTransportedReason?: string | null;
+            /**
+             * @description 미이송 사유. 대원이 취소 때 고른 값, 서버가 끝낸 취소(활동 없음·근무 종료 등)는 system_end, 도착했거나 고르지 않았으면 null
+             * @enum {string|null}
+             */
+            notTransportedReason?: "refused" | "death" | "on_scene" | "other_agency" | "etc" | "system_end" | null;
+            /** @description 미이송 사유 '기타' 글 */
+            notTransportedText?: string | null;
         };
     };
     responses: never;
@@ -4090,6 +4105,13 @@ export interface operations {
                 "application/json": {
                     /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
                     version: number;
+                    /**
+                     * @description 미이송 사유 (선택). refused=이송 거부, death=사망, on_scene=현장 처치, other_agency=타 기관 이송, etc=기타
+                     * @enum {string}
+                     */
+                    notTransportedReason?: "refused" | "death" | "on_scene" | "other_agency" | "etc";
+                    /** @description '기타' 글. notTransportedReason이 etc일 때만 */
+                    notTransportedText?: string;
                 };
             };
         };

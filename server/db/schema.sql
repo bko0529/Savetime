@@ -291,6 +291,8 @@ CREATE TABLE transport (                               -- 이송 건
   arrival_method        varchar(16) CHECK (arrival_method IN ('button','menu','hospital','finish_previous')),
   cancelled_at          timestamptz,
   cancel_reason         varchar(20) CHECK (cancel_reason IN ('user','auto_inactive','duty_end','logout','withdrawal','suspended','offline_superseded')),
+  not_transported_reason varchar(16)    CHECK (not_transported_reason IN ('refused','death','on_scene','other_agency','etc')),  -- 대원이 취소 때 고른 미이송 사유 (구급활동일지, SFR-164)
+  not_transported_text  varchar(30),                    -- '기타' 글
   dest_changed_at       timestamptz,                   -- 목적지 변경은 1번만 (SFR-077)
   dest_changed_from_hospital_id bigint REFERENCES hospital(id),
   dest_change_reason    varchar(16) CHECK (dest_change_reason IN ('patient_change','road','hospital','etc')),
