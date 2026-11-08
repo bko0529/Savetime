@@ -16,6 +16,7 @@ import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
+import { draftRouter } from './modules/team/draft.js';
 import { inviteRouter } from './modules/team/invites.js';
 import { teamRouter } from './modules/team/routes.js';
 import { geocodeRouter, type Geocoder } from './modules/transport/geocode.js';
@@ -82,6 +83,7 @@ export function createApp({
     app.use('/api/v1', signupRouter(auth, photos));
     app.use('/api/v1', teamRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', inviteRouter(auth, approvedParamedic, realtime));
+    app.use('/api/v1', draftRouter(auth, approvedParamedic, realtime));
     // /hospitals/nearby가 /hospitals/:hospitalId보다 먼저 와야 'nearby'를 병원 ID로 읽지 않는다
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));
     app.use('/api/v1', hospitalDetailRouter(auth.pool, approvedParamedic));

@@ -492,15 +492,18 @@ export interface paths {
         post?: never;
         /**
          * 직전 환자 정보 지우기
-         * @description **요구사항**: SFR-157
+         * @description 팀 작성 중 정보를 비우고 팀원에게 draft.updated(version 0). 이미 비어 있으면 그대로 204.
+         *
+         *     **요구사항**: SFR-157, SFR-114
          *     **화면**: S-04 직전 환자 정보
+         *     **오류 코드**: NOT_IN_TEAM
          */
         delete: operations["delete_teams_current_draft"];
         options?: never;
         head?: never;
         /**
          * 팀 작성 중 환자 정보 고치기 (항목 단위 병합)
-         * @description 버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated. 운전 역할이 주행 중(시속 10km 초과)이면 DRIVER_INPUT_LOCKED.
+         * @description 버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated(바뀐 칸 이름만, 값은 GET으로). 운전 역할이 주행 중(시속 10km 이상)이면 DRIVER_INPUT_LOCKED: 단말이 보낸 speedKmh, 없으면 진행 중 이송 건의 최근 15초 위치 기록 속도로 본다.
          *
          *     **요구사항**: SFR-114, SFR-115
          *     **화면**: S-04 환자 정보 입력
@@ -3360,8 +3363,10 @@ export interface operations {
                 "application/json": {
                     /** @description 내가 마지막으로 받은 버전 */
                     baseVersion: number;
-                    /** @description 바뀐 항목만 (Assessment의 일부). null = 지우기 */
+                    /** @description 바뀐 항목만 (Assessment의 일부, 1개 이상). null = 지우기. Assessment에 없는 칸(환자 이름 등)이 있으면 400 */
                     changes: Record<string, never>;
+                    /** @description 단말이 잰 지금 속도 (운전 역할 잠금 확인용, SFR-115). 보내면 이 값으로 판단 */
+                    speedKmh?: number;
                 };
             };
         };

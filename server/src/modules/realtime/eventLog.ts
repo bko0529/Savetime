@@ -5,7 +5,9 @@ import type pg from 'pg';
 // 이벤트를 쓰는 트랜잭션끼리 이 잠금을 잡고 한 줄로 선다 → seq 순서 = 커밋 순서 (빈틈 없이 다시 보내기)
 const EVENT_LOG_LOCK = 7401;
 
-type PayloadValue = string | number | boolean | null | number[];
+// 칸 이름 목록(string[])·덮어쓴 칸 목록({ field, prevByName }[])도 넣을 수 있다. 값(환자 정보)은 넣지 않는다
+type PayloadValue =
+  string | number | boolean | null | number[] | string[] | Record<string, string>[];
 
 export interface EventRecord {
   room: string; // team:12 / hospital:3 / paramedic:7
