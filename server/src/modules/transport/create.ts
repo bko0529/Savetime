@@ -18,6 +18,7 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
+import { assessmentSchema } from './assessment.js';
 import type { Realtime } from '../realtime/server.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
@@ -25,35 +26,6 @@ import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
-
-const nullableInt = z.number().int().nullable().optional();
-
-// 환자 평가 (openapi Assessment). strict: 이름·주민번호·연락처처럼 정해지지 않은 칸이 오면 통째로 거절한다 (SER-012)
-const assessmentSchema = z
-  .object({
-    chiefComplaint: z.string().max(100).optional(),
-    sex: z.enum(['M', 'F', 'U']).optional(),
-    ageBand: z.string().max(10).optional(),
-    consciousness: z.enum(['alert', 'verbal', 'pain', 'unresponsive', 'unknown']).optional(),
-    bp: z.string().max(10).optional(),
-    pulse: nullableInt,
-    resp: nullableInt,
-    spo2: nullableInt,
-    painSite: z.string().max(30).nullable().optional(),
-    painScore: z.number().int().min(0).max(10).nullable().optional(),
-    onset: z.string().max(30).nullable().optional(),
-    trauma: z.enum(['yes', 'no', 'unknown']).optional(),
-    traumaCause: z
-      .enum(['traffic', 'fall_high', 'fall', 'penetrating', 'burn', 'etc'])
-      .nullable()
-      .optional(),
-    history: z.string().max(500).nullable().optional(),
-    temp: z.number().min(20).max(45).nullable().optional(),
-    glucose: nullableInt,
-    ktas: z.number().int().min(1).max(5).nullable().optional(),
-    unknownFields: z.array(z.string().max(30)).max(30).optional(),
-  })
-  .strict();
 
 const createSchema = z.object({
   id: z.uuid(),
