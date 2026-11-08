@@ -20,6 +20,7 @@ import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import { assessmentSchema } from './assessment.js';
 import type { Realtime } from '../realtime/server.js';
+import { inheritedExclusions } from '../team/prevPatient.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
@@ -176,11 +177,15 @@ export async function createTransport(
     });
   }
 
+  // 10분 안에 끝난 같은 팀 직전 건의 수용 불가 병원은 이번에도 요청하지 않는다 (SFR-086·157).
+  // 다른 팀 건·10분 지난 건이면 이어받지 않는다 (오류 아님)
+  const inherited = await inheritedExclusions(client, teamId, input.prevTransportId);
   const targets = await findRequestTargets(client, {
     lat,
     lng,
     radiusKm: input.radiusKm,
     grade: input.requestedGrade ?? null,
+    excludeHospitalIds: inherited?.hospitalIds,
   });
   const event = targets.length > 0 ? 'CREATE_WITH_TARGETS' : 'CREATE_NO_TARGET';
   // 위에서 진행 중 건을 끝냈으니 다른 진행 중 건은 없다. 그래도 전이 함수가 한 번 더 확인한다
@@ -208,6 +213,20 @@ export async function createTransport(
       to === 'fallback' ? history.reason : null,
     ],
   );
+  // 이어받은 직전 건과 제외 병원을 이번 건에도 남긴다: 반경 넓히기·다시 요청·추천도 같은 제외 병원 규칙을 쓴다
+  if (inherited) {
+    await client.query('UPDATE transport SET prev_transport_id = $2 WHERE id = $1', [
+      input.id,
+      inherited.prevId,
+    ]);
+    for (const hospitalId of inherited.hospitalIds) {
+      await client.query(
+        `INSERT INTO excluded_hospital (transport_id, hospital_id, reason) VALUES ($1, $2, 'unacceptable_prev')
+         ON CONFLICT DO NOTHING`,
+        [input.id, hospitalId],
+      );
+    }
+  }
   await client.query(
     `INSERT INTO transport_status_history (transport_id, from_status, to_status, event, reason, at)
      VALUES ($1, $2, $3, $4, $5, $6)`,

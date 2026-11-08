@@ -15,6 +15,7 @@ import type { AuthContext } from '../auth/session.js';
 import { appendEvents } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { assessmentChangesSchema } from '../transport/assessment.js';
+import { clearExpiredPrevPatient, prevPatientState } from './prevPatient.js';
 
 // 이 속도 이상이면 주행 중 (SFR-115)
 export const DRIVING_KMH = 10;
@@ -98,14 +99,16 @@ export function draftRouter(
       'SELECT data, field_meta, version FROM team_draft WHERE team_id = $1',
       [me.team_id],
     );
-    const draft = rows[0];
+    const prev = await prevPatientState(pool, me.team_id);
+    // 10분이 지난 직전 환자 정보는 주기 작업이 1분 안에 비운다. 그 사이에 열어도 빈 입력으로 보인다 (SFR-157)
+    const draft = prev?.expired ? undefined : rows[0];
     res.json({
       version: draft?.version ?? 0,
       assessment: draft?.data ?? {},
       fieldMeta: publicMeta(draft?.field_meta ?? {}),
-      // 직전 환자 정보로 채우기는 SFR-157 에서 붙인다
-      prefilledFromTransportId: null,
-      prefillExpiresAt: null,
+      // 직전 이송이 끝난 뒤 아무도 안 고친 작성 중 정보 = 직전 환자 정보. 앱이 '직전 환자 정보 · 지우기'를 띄운다
+      prefilledFromTransportId: prev && !prev.expired ? prev.transportId : null,
+      prefillExpiresAt: prev && !prev.expired ? prev.expiresAt.toISOString() : null,
     });
   });
 
@@ -119,6 +122,8 @@ export function draftRouter(
         throw new AppError(403, 'DRIVER_INPUT_LOCKED', '주행 중에는 팀원이 입력해요');
       }
 
+      // 10분 지난 직전 환자 정보 위에 새 환자 칸을 합치면 안 된다. 먼저 비운다 (SFR-157)
+      const cleared = await clearExpiredPrevPatient(client, me.team_id);
       // 팀의 작성 중 정보 행을 잠근다: 두 팀원이 동시에 보내도 한 명씩 합쳐서 칸이 사라지지 않는다
       await client.query(
         'INSERT INTO team_draft (team_id, version) VALUES ($1, 0) ON CONFLICT (team_id) DO NOTHING',
@@ -151,6 +156,7 @@ export function draftRouter(
         [me.team_id, data, meta, version, paramedicId],
       );
       const logged = await appendEvents(client, [
+        ...(cleared ? [cleared] : []),
         {
           room: `team:${me.team_id}`,
           name: 'draft.updated',

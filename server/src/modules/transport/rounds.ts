@@ -12,6 +12,8 @@ import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
+import { inheritedExclusions } from '../team/prevPatient.js';
+import { currentTeamId } from '../team/routes.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound, previewRequestTargets } from './requestTargets.js';
@@ -40,7 +42,7 @@ const previewSchema = z.object({
     .number()
     .pipe(z.union([z.literal(1), z.literal(2), z.literal(3)]))
     .optional(),
-  // 직전 건 제외 병원 이어받기(SFR-157, S6)는 이송 생성에도 아직 없다. 미리보기도 같게 받기만 한다
+  // 직전 건(10분 안·같은 팀)의 수용 불가 병원을 빼고 센다. 이송 생성과 같은 규칙 (SFR-157)
   prevTransportId: z.uuid().optional(),
 });
 
@@ -219,9 +221,19 @@ export function roundsRouter(
       const fields = [...new Set(parsed.error.issues.map((issue) => issue.path.join('.')))];
       throw new AppError(400, 'VALIDATION_FAILED', '입력 형식이 맞지 않아요', { fields });
     }
-    const { lat, lng, radiusKm, grade } = parsed.data;
+    const { lat, lng, radiusKm, grade, prevTransportId } = parsed.data;
     checkKorea(lat, lng, 'lat');
-    const result = await previewRequestTargets(pool, { lat, lng, radiusKm, grade: grade ?? null });
+    const teamId = prevTransportId
+      ? await currentTeamId(pool, paramedicAuth(res).paramedicId)
+      : null;
+    const inherited = teamId ? await inheritedExclusions(pool, teamId, prevTransportId) : null;
+    const result = await previewRequestTargets(pool, {
+      lat,
+      lng,
+      radiusKm,
+      grade: grade ?? null,
+      excludeHospitalIds: inherited?.hospitalIds,
+    });
     const { rows } = await pool.query<{ now: Date }>('SELECT now()');
     res.json({ ...result, serverNow: rows[0].now.toISOString() });
   });
