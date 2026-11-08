@@ -225,3 +225,69 @@ test('마지막 1명이 근무를 끝내 이송이 취소되면 병원 웹에도
     assert.equal(await origin(ctx.pool, s.transportId), true);
   });
 });
+
+// SFR-126: 첫 회차 요청 시각부터 첫 승인·출발까지. 이송 건·계정과 연결하지 않는 익명 1줄
+async function stats(pool: pg.Pool) {
+  const { rows } = await pool.query(
+    `SELECT h.name AS hospital, s.request_to_approve_sec AS approve, s.request_to_depart_sec AS depart,
+            s.departed_at IS NOT NULL AS departed, s.arrived_at IS NOT NULL AS arrived, s.duration_sec
+       FROM transport_stat s LEFT JOIN hospital h ON h.id = s.hospital_id ORDER BY s.id`,
+  );
+  return rows;
+}
+
+test('도착하면 소요시간 통계가 1줄: 요청 → 첫 승인 40초, 요청 → 출발 70초 (SFR-126)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await moving(ctx, s);
+    // 시계를 맞춘다: 출발 = 요청 + 70초, B 승인 = 요청 + 40초, C 승인 = 요청 + 55초 (첫 승인은 B)
+    await ctx.pool.query(
+      `UPDATE request_round r SET sent_at = t.departed_at - interval '70 seconds'
+         FROM transport t WHERE t.id = r.transport_id AND t.id = $1`,
+      [s.transportId],
+    );
+    await ctx.pool.query(
+      `UPDATE hospital_request hr
+          SET responded_at = r.sent_at + CASE WHEN hr.id = $1 THEN interval '40 seconds' ELSE interval '55 seconds' END
+         FROM request_round r WHERE r.id = hr.round_id AND hr.id = ANY($2::bigint[])`,
+      [s.req['B병원'], [s.req['B병원'], s.req['C병원']]],
+    );
+    // 이송 건 칸이 없어서 통계로는 어느 이송인지 알 수 없다
+    const { rows: cols } = await ctx.pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'transport_stat'`,
+    );
+    assert.ok(!cols.some((c) => /transport_id|paramedic|team/.test(c.column_name)));
+
+    assert.equal(
+      (await arrive(ctx, s.lee, s.transportId, { method: 'menu', version: 2 })).status,
+      200,
+    );
+    const [row, ...rest] = await stats(ctx.pool);
+    assert.equal(rest.length, 0);
+    assert.equal(row.hospital, 'B병원');
+    assert.equal(row.approve, 40);
+    assert.equal(row.depart, 70);
+    assert.equal(row.departed, true);
+    assert.equal(row.arrived, true);
+    assert.ok(row.duration_sec >= 0);
+  });
+});
+
+test('요청 중에 취소해도 통계 1줄: 출발·도착·병원은 비고, 실패한 취소는 남기지 않는다 (SFR-126)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    // 옛 버전 취소는 롤백 → 통계도 없다
+    assert.equal((await cancel(ctx, s.kim, s.transportId, { version: 9 })).status, 409);
+    assert.equal((await stats(ctx.pool)).length, 0);
+
+    assert.equal((await cancel(ctx, s.kim, s.transportId, { version: 1 })).status, 200);
+    const rows = await stats(ctx.pool);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].hospital, null);
+    assert.equal(rows[0].depart, null);
+    assert.equal(rows[0].arrived, false);
+    // scene 이 B·C 를 승인해 둬서 첫 승인 시간은 남는다
+    assert.equal(typeof rows[0].approve, 'number');
+  });
+});
