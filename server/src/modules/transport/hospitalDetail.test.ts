@@ -133,7 +133,36 @@ test('병상 데이터가 전혀 없는 병원도 상세를 내려준다', async
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.beds.er, { avail: null, total: null });
     assert.equal(res.body.bedsSourceTime, null);
+    assert.equal(res.body.collectedAt, null);
+    assert.equal(res.body.stale, null);
     assert.deepEqual(res.body.capabilities, []);
+  });
+});
+
+test('기준 시각은 서버 수집 시각이고, 10분이 지나면 참고용(stale)이다 (SFR-081, C-12)', async () => {
+  await withApp(async ({ pool, get }) => {
+    const id = await addHospital(pool);
+    // 공공 데이터 시각은 오래됐어도 서버가 방금 수집했으면 최신이다
+    await pool.query(
+      `INSERT INTO bed_current (hospital_id, er_avail, er_total, source_time, collected_at)
+       VALUES ($1, 3, 5, now() - interval '40 minutes', now() - interval '9 minutes')`,
+      [id],
+    );
+    const fresh = await get(`/api/v1/hospitals/${id}`);
+    const { rows } = await pool.query<{ collected_at: Date }>(
+      'SELECT collected_at FROM bed_current WHERE hospital_id = $1',
+      [id],
+    );
+    assert.equal(fresh.body.collectedAt, rows[0].collected_at.toISOString());
+    assert.equal(fresh.body.stale, false);
+
+    // 수집이 실패해 11분 동안 갱신되지 않음 → 참고용 정보
+    await pool.query(
+      `UPDATE bed_current SET collected_at = now() - interval '11 minutes' WHERE hospital_id = $1`,
+      [id],
+    );
+    const old = await get(`/api/v1/hospitals/${id}`);
+    assert.equal(old.body.stale, true);
   });
 });
 

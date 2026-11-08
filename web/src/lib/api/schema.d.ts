@@ -542,7 +542,7 @@ export interface paths {
         };
         /**
          * 주변 병원 (지도·오프라인 저장용)
-         * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고, 통신이 끊기면 '참고용 · 기준 시각'으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
+         * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고(진료가능 항목 포함), 통신이 끊기면 '참고용 정보 · 기준 HH:MM'(collectedAt)으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
          *
          *     **요구사항**: SFR-001, SFR-027, SFR-059, SFR-061, SFR-064, SFR-087
          *     **화면**: S-06 지도 · S-11 오프라인
@@ -2234,9 +2234,21 @@ export interface components {
             };
             /**
              * Format: date-time
-             * @description 공공 데이터 기준 시각
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt
              */
             bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
+            /** @description 진료가능 항목 (오프라인 저장용, SFR-059). /hospitals/nearby 에만 있고 추천 목록 카드에는 없다(개수만, capabilityCount) */
+            capabilities?: {
+                name?: string;
+                available?: boolean;
+            }[];
             /** @description 중증질환 진료가능 항목 수 (SFR-002) */
             capabilityCount?: {
                 available?: number;
@@ -2286,9 +2298,16 @@ export interface components {
             };
             /**
              * Format: date-time
-             * @description 공공 데이터 기준 시각. 병상 데이터가 없으면 null
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt. 병상 데이터가 없으면 null
              */
             bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
             /** @description 공공 데이터가 '정보미제공'인 항목은 목록에 없음 */
             capabilities?: {
                 /** @description 공공 데이터 표기 그대로 */
