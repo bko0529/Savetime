@@ -20,6 +20,7 @@ import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import { cancelTransport } from './cancel.js';
 import { closeRoute } from './route.js';
+import { recordTransportStat } from '../stats/records.js';
 import { loadTransport } from './view.js';
 
 // version이 빠지면 상태 전이 함수가 VERSION_REQUIRED로 거절한다 (SFR-160)
@@ -132,6 +133,8 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
 
   // 위치 기록 → 익명 경로, 원본 삭제, 이송 건에는 이동 거리만 (SFR-039·041)
   const route = await closeRoute(client, transportId, { cancelled: false });
+  // 익명 소요시간 통계 1줄 (SFR-126). 이동 거리는 바로 위 closeRoute 가 채운 값을 쓴다
+  await recordTransportStat(client, transportId);
 
   const { arrived_at: arrivedAt, departed_at: departedAt } = moved[0];
   const durationSec =

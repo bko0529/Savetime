@@ -3832,7 +3832,13 @@ export interface operations {
                      * @enum {string|null}
                      */
                     reason?: "no_answer" | "busy" | "urgent" | "etc" | null;
+                    /** @description no_answer·skipped의 '기타' 글(30자), 또는 rejectReason이 etc일 때 글(20자) */
                     reasonText?: string | null;
+                    /**
+                     * @description 거절 사유 (선택, SFR-044). result가 rejected일 때만, 아니면 400. 거절 원장에 출처 phone_check로 쌓임 (SFR-126)
+                     * @enum {string|null}
+                     */
+                    rejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
                     /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
                     version: number;
                 };

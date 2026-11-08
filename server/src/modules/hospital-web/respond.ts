@@ -13,6 +13,7 @@ import {
 } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
+import { recordRejection } from '../stats/records.js';
 import type { HospitalPc } from './pcAuth.js';
 
 // version 이 빠지면 400 VERSION_REQUIRED 를 주려고 선택 칸으로 두고 상태 기계가 판정하게 한다
@@ -209,6 +210,14 @@ export async function respondToRequest(
        ON CONFLICT DO NOTHING`,
       [target.transport_id, target.hospital_id, cancelling ? 'approval_cancelled' : 'rejected'],
     );
+    // 통계 원장에도 1줄 (SFR-126). 응답한 직원·PC 는 넣지 않는다: 거절 통계는 병원 단위로만 본다
+    await recordRejection(client, {
+      transportId: target.transport_id,
+      hospitalId: target.hospital_id,
+      source: cancelling ? 'approval_cancelled' : 'hospital_web',
+      reason,
+      reasonText: reason === 'etc' ? etcText : null,
+    });
   }
 
   const events: EventRecord[] = [];

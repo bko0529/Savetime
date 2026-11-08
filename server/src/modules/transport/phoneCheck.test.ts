@@ -375,3 +375,62 @@ test('요청이 열린 채로 닫으면 요청 중으로 돌아간다 (A18)', as
     assert.equal(res.body.status, 'requesting');
   });
 });
+
+test('전화 확인 거절 사유: 수술실 부족은 출처 phone_check 로 1건, 병원 웹 거절 수치는 그대로 (SFR-044·126)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const h = await withBeds(ctx.pool);
+    await toFallback(ctx.pool, s);
+    await start(ctx, s, { hospitalId: h['B병원'], version: 1 });
+
+    // 거절이 아닌데 거절 사유를 보내거나, '기타' 글이 20자를 넘으면 400 (기록도 안 남는다)
+    const wrong = await result(ctx, s, {
+      hospitalId: h['B병원'],
+      result: 'no_answer',
+      reason: 'busy',
+      rejectReason: 'or_room',
+      version: 2,
+    });
+    assert.equal(wrong.status, 400);
+    assert.deepEqual(wrong.body.error.details.fields, ['rejectReason']);
+    const long = await result(ctx, s, {
+      hospitalId: h['B병원'],
+      result: 'rejected',
+      rejectReason: 'etc',
+      reasonText: '가'.repeat(21),
+      version: 2,
+    });
+    assert.equal(long.status, 400);
+    const { rows: none } = await ctx.pool.query('SELECT count(*)::int AS n FROM rejection_record');
+    assert.equal(none[0].n, 0);
+
+    const res = await result(ctx, s, {
+      hospitalId: h['B병원'],
+      result: 'rejected',
+      rejectReason: 'or_room',
+      version: 2,
+    });
+    assert.equal(res.status, 201);
+    const { rows: checks } = await ctx.pool.query(
+      'SELECT result, reject_reason, reason_text FROM phone_check WHERE transport_id = $1',
+      [s.transportId],
+    );
+    assert.deepEqual(checks, [{ result: 'rejected', reject_reason: 'or_room', reason_text: null }]);
+
+    // 사유 없이 거절해도 원장에는 1건 (사유 칸만 빈다)
+    await result(ctx, s, { hospitalId: h['C병원'], result: 'rejected', version: 3 });
+
+    const { rows } = await ctx.pool.query(
+      `SELECT h.name, r.source, r.reason FROM rejection_record r JOIN hospital h ON h.id = r.hospital_id
+        ORDER BY r.id`,
+    );
+    assert.deepEqual(rows, [
+      { name: 'B병원', source: 'phone_check', reason: 'or_room' },
+      { name: 'C병원', source: 'phone_check', reason: null },
+    ]);
+    const { rows: web } = await ctx.pool.query(
+      `SELECT count(*)::int AS n FROM rejection_record WHERE source = 'hospital_web'`,
+    );
+    assert.equal(web[0].n, 0);
+  });
+});

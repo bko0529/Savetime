@@ -729,3 +729,93 @@ test('추가 메모는 확정된 우리 병원 요청에만 (대기·승인·닫
     assert.deepEqual(await eventsOf(h.pool), []);
   });
 });
+
+// SFR-126: 거절 원장(rejection_record). 출처·사유·고른 등급만, 응답자·이송 건과 연결하지 않는다
+async function rejections(pool: pg.Pool) {
+  const { rows } = await pool.query(
+    `SELECT h.name AS hospital, r.source, r.reason, r.reason_text, r.requested_grade
+       FROM rejection_record r JOIN hospital h ON h.id = r.hospital_id ORDER BY r.id`,
+  );
+  return rows;
+}
+
+test('요청·응답 기록: B병원 45초 응답, A병원 거절·C병원 승인 취소는 출처별로 쌓이고 계정 정보는 없다 (SFR-126)', async () => {
+  await withRespondApp(async (h) => {
+    const a = await h.hospital('H1');
+    const b = await h.hospital('H2');
+    const c = await h.hospital('H3');
+    const deskA = await h.pcOnShift(a.key, '접수대', '박서연');
+    const deskB = await h.pcOnShift(b.key, '접수대', '이하준');
+    const deskC = await h.pcOnShift(c.key, '접수대', '최민준');
+    const {
+      transportId,
+      requestIds: [idA, idB, idC],
+    } = await sendRound(h.pool, [a.id, b.id, c.id]);
+    await h.pool.query('UPDATE transport SET requested_grade = 2 WHERE id = $1', [transportId]);
+    // 요청을 45초 전에 보낸 것으로 맞춘다 (2분 안이라 응답할 수 있다)
+    await h.pool.query(
+      `UPDATE request_round SET sent_at = now() - interval '45 seconds' WHERE transport_id = $1`,
+      [transportId],
+    );
+
+    assert.equal((await h.post(`/hw/requests/${idB}/approve`, deskB, { version: 1 })).status, 200);
+    const { rows: answered } = await h.pool.query(
+      `SELECT hr.status, hr.responder_name,
+              round(extract(epoch FROM hr.responded_at - r.sent_at))::int AS sec
+         FROM hospital_request hr JOIN request_round r ON r.id = hr.round_id WHERE hr.id = $1`,
+      [idB],
+    );
+    assert.deepEqual(answered[0], { status: 'approved', responder_name: '이하준', sec: 45 });
+
+    // 사유가 빠져 실패한 거절은 기록하지 않는다 (같은 트랜잭션이라 함께 롤백)
+    assert.equal((await h.post(`/hw/requests/${idA}/reject`, deskA, { version: 1 })).status, 422);
+    assert.deepEqual(await rejections(h.pool), []);
+
+    assert.equal(
+      (await h.post(`/hw/requests/${idA}/reject`, deskA, { version: 1, reason: 'er_bed' })).status,
+      200,
+    );
+    assert.equal((await h.post(`/hw/requests/${idC}/approve`, deskC, { version: 1 })).status, 200);
+    assert.equal(
+      (
+        await h.post(`/hw/requests/${idC}/cancel-approval`, deskC, {
+          version: 2,
+          reason: 'etc',
+          etcText: '장비 점검',
+        })
+      ).status,
+      204,
+    );
+
+    assert.deepEqual(await rejections(h.pool), [
+      {
+        hospital: 'H1병원',
+        source: 'hospital_web',
+        reason: 'er_bed',
+        reason_text: null,
+        requested_grade: 2,
+      },
+      {
+        hospital: 'H3병원',
+        source: 'approval_cancelled',
+        reason: 'etc',
+        reason_text: '장비 점검',
+        requested_grade: 2,
+      },
+    ]);
+    // 원장에는 대원·응답자·이송 건 칸 자체가 없다
+    const { rows: cols } = await h.pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'rejection_record'`,
+    );
+    assert.deepEqual(cols.map((col) => col.column_name).sort(), [
+      'created_at',
+      'hospital_id',
+      'id',
+      'reason',
+      'reason_text',
+      'requested_grade',
+      'source',
+    ]);
+  });
+});
