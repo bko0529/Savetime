@@ -1,5 +1,5 @@
 // 새 요청 회차: 반경 넓혀 다시 요청 (SFR-131, 부록 A12) · 승인 취소 뒤 다시 요청 (SFR-128, 부록 A20·A21)
-// + 요청 대상 미리보기 (SFR-163). 상태 변경은 stateMachine.ts 전이 함수만 거친다 (절대 규칙 4).
+// + 목적지 변경 (SFR-077, destination.ts) + 요청 대상 미리보기 (SFR-163). 상태 변경은 stateMachine.ts 전이 함수만 거친다 (절대 규칙 4).
 // 대상 찾기·회차 만들기는 이송 생성과 같은 함수(requestTargets.ts)를 쓴다.
 import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
@@ -13,6 +13,7 @@ import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
+import { changeDestination, destinationSchema } from './destination.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound, previewRequestTargets } from './requestTargets.js';
 import { refineRoundEtas } from './routeEta.js';
@@ -210,6 +211,32 @@ export function roundsRouter(
         .catch(() => {});
     }
     res.status(201).json(outcome.body);
+  });
+
+  // 목적지 변경 (SFR-077). 새 회차를 보내는 일이라 커밋 뒤 처리(타이머·길찾기)가 다시 요청과 같다
+  router.post('/transports/:transportId/destination', ...guards, async (req, res) => {
+    const transportId = transportIdParam(req.params.transportId);
+    const input = parseBody(destinationSchema, req.body);
+    const { paramedicId } = paramedicAuth(res);
+    const outcome = await withCurrentOnBlock(pool, transportId, paramedicId, () =>
+      withTransaction(pool, (client) =>
+        changeDestination(client, {
+          transportId,
+          paramedicId,
+          reason: input.reason,
+          location: input.location,
+          clientVersion: input.version,
+        }),
+      ),
+    );
+    realtime?.publish(outcome.events);
+    realtime?.startRound(outcome.roundId);
+    if (eta) {
+      refineRoundEtas(pool, eta, outcome.roundId)
+        .then((events) => realtime?.publish(events))
+        .catch(() => {});
+    }
+    res.json(outcome.body);
   });
 
   // '병원에 요청'을 누르기 전에 지금 조건으로 요청이 갈 병원 수 (SFR-163)
