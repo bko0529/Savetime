@@ -23,7 +23,19 @@ import { closeRoute } from './route.js';
 import { loadTransport } from './view.js';
 
 // version이 빠지면 상태 전이 함수가 VERSION_REQUIRED로 거절한다 (SFR-160)
-const cancelSchema = z.object({ version: z.number().int().optional() });
+// 미이송 사유는 구급활동일지 칸을 채우려고 받는다 (SFR-164). 고르지 않아도 취소된다
+const cancelSchema = z
+  .object({
+    version: z.number().int().optional(),
+    notTransportedReason: z
+      .enum(['refused', 'death', 'on_scene', 'other_agency', 'etc'])
+      .optional(),
+    notTransportedText: z.string().trim().min(1).max(30).optional(),
+  })
+  // '기타' 글은 기타를 골랐을 때만
+  .refine((v) => v.notTransportedText === undefined || v.notTransportedReason === 'etc', {
+    path: ['notTransportedText'],
+  });
 const arriveSchema = z.object({
   // hospital = 병원 '도착 확인' 요청에 대원이 '도착 처리'를 누름 (SFR-144, S5)
   method: z.enum(['button', 'menu', 'hospital']),
@@ -159,16 +171,23 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
 export function finishRouter(pool: pg.Pool, guards: RequestHandler[], realtime?: Realtime): Router {
   const router = Router();
 
-  // 이송 취소: 진행 중 4상태 모두에서, 사유 user (SFR-076)
+  // 이송 취소: 진행 중 4상태 모두에서, 사유 user (SFR-076) + 대원이 고른 미이송 사유 (SFR-164)
   router.post('/transports/:transportId/cancel', ...guards, async (req, res) => {
     const transportId = transportIdParam(req.params.transportId);
-    const { version } = parseBody(cancelSchema, req.body);
+    const { version, notTransportedReason, notTransportedText } = parseBody(cancelSchema, req.body);
     const { paramedicId } = paramedicAuth(res);
     const outcome = await withCurrentOnBlock(pool, transportId, paramedicId, () =>
       withTransaction(pool, async (client) => {
         await lockMyTransport(client, transportId, paramedicId);
         const name = await paramedicName(client, paramedicId);
         const { events } = await cancelTransport(client, transportId, 'user', version, name);
+        // 같은 트랜잭션에서 사유만 덧붙인다 (상태는 위 전이 함수가 이미 바꿈, 버전은 그대로)
+        if (notTransportedReason) {
+          await client.query(
+            `UPDATE transport SET not_transported_reason = $2, not_transported_text = $3 WHERE id = $1`,
+            [transportId, notTransportedReason, notTransportedText ?? null],
+          );
+        }
         return { body: await loadTransport(client, transportId, paramedicId), events };
       }),
     );
