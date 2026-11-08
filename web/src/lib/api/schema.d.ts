@@ -366,8 +366,11 @@ export interface paths {
         };
         /**
          * 같은 소방서 근무 중 대원 목록·이름 검색
-         * @description **요구사항**: SFR-159, SFR-143
+         * @description 근무 중 = 로그인해 있음(로그인이 곧 근무 시작). q가 없으면 같은 소방서의 근무 중 승인 대원만, q가 있으면 소방서 전체에서 이름 검색. 근무 중 → 이름 순.
+         *
+         *     **요구사항**: SFR-159, SFR-143
          *     **화면**: S-03 팀원 목록 초대
+         *     **오류 코드**: VALIDATION_FAILED
          */
         get: operations["get_paramedics_on_duty"];
         put?: never;
@@ -390,10 +393,11 @@ export interface paths {
         /**
          * 팀 초대 보내기 (5분 만료)
          * @description 받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.
+         *     아직 답이 없는 같은 초대가 있으면 새로 만들지 않고 그 초대를 돌려준다. 다른 소방서·승인 전 대원은 NOT_FOUND.
          *
          *     **요구사항**: SFR-159
          *     **화면**: S-03 팀원 목록 초대
-         *     **오류 코드**: TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND
+         *     **오류 코드**: NOT_IN_TEAM, TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND
          */
         post: operations["post_teams_current_invites"];
         delete?: never;
@@ -856,11 +860,11 @@ export interface paths {
         put?: never;
         /**
          * 위치 올리기 (5초마다, 담당 단말만)
-         * @description 위치 미동의 건은 부르지 않는다. 이송이 끝나면 서버가 즉시 삭제. 입구 200m 안이면 병원 웹에 incoming.near.
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당이 아직 없으면 출발 뒤 처음 보낸 단말이 담당(nav_device_id)이 되고(SFR-132 전까지), 다른 단말이면 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
          *
-         *     **요구사항**: SFR-037, SFR-079, SER-002
+         *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE
+         *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE, INVALID_TRANSITION, VALIDATION_FAILED
          */
         post: operations["post_transports__transportId__locations"];
         delete?: never;
