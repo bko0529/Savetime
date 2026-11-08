@@ -130,6 +130,7 @@ CREATE TABLE team_invite (                             -- 목록 초대 (SFR-159
   expires_at  timestamptz   NOT NULL,
   created_at  timestamptz   NOT NULL DEFAULT now()
 );
+CREATE INDEX team_invite_open ON team_invite (team_id, to_id) WHERE status = 'sent';
 
 CREATE TABLE paramedic_memo (                          -- 나만 보는 한 줄 메모 (SFR-143)
   owner_id   bigint      NOT NULL REFERENCES paramedic(id),

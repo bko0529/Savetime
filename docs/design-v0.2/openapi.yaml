@@ -653,9 +653,13 @@ paths:
       tags:
       - 2. 팀
       summary: 같은 소방서 근무 중 대원 목록·이름 검색
-      description: "**요구사항**: SFR-159, SFR-143  \n**화면**: S-03 팀원 목록 초대"
+      description: "근무 중 = 로그인해 있음(로그인이 곧 근무 시작). q가 없으면 같은 소방서의 근무 중\
+        \ 승인 대원만, q가 있으면 소방서 전체에서 이름 검색. 근무 중 → 이름 순.\n\n**요구사항**: SFR-159,\
+        \ SFR-143  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: VALIDATION_FAILED"
       operationId: get_paramedics_on_duty
       security: *id009
+      x-error-codes:
+      - VALIDATION_FAILED
       parameters:
       - name: q
         in: query
@@ -711,11 +715,13 @@ paths:
       - 2. 팀
       summary: 팀 초대 보내기 (5분 만료)
       description: "받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.\n\
-        \n**요구사항**: SFR-159  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: TEAM_FULL, TARGET_IN_TEAM,\
-        \ NOT_FOUND"
+        아직 답이 없는 같은 초대가 있으면 새로 만들지 않고 그 초대를 돌려준다. 다른 소방서·승인 전 대원은 NOT_FOUND.\n\
+        \n**요구사항**: SFR-159  \n**화면**: S-03 팀원 목록 초대  \n**오류 코드**: NOT_IN_TEAM, TEAM_FULL,\
+        \ TARGET_IN_TEAM, NOT_FOUND"
       operationId: post_teams_current_invites
       security: *id009
       x-error-codes:
+      - NOT_IN_TEAM
       - TEAM_FULL
       - TARGET_IN_TEAM
       - NOT_FOUND

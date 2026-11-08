@@ -83,6 +83,14 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
       data: { event: event.name, result: String(p.result ?? '') },
     };
   }
+  // 팀 초대 (SFR-159). 잠금 화면에 보이니 보낸 사람 이름은 빼고, 누가 보냈는지는 앱의 초대 카드에서 본다
+  if (event.name === 'team.invited') {
+    return {
+      title: TITLE,
+      body: '팀 초대가 왔어요 · 5분 안에 수락해 주세요',
+      data: { event: event.name, inviteId: String(p.inviteId ?? '') },
+    };
+  }
   if (event.name === 'request.approved' && p.firstApproval === true) {
     const { rows } = await pool.query<{ name: string; eta_min: number | null }>(
       `SELECT h.name, hr.eta_min FROM hospital_request hr JOIN hospital h ON h.id = hr.hospital_id

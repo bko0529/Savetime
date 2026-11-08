@@ -1,6 +1,6 @@
 // 팀 맺기 (SFR-113): 팀 만들기·코드/QR 참여·내 팀 보기·역할 바꾸기·근무 종료.
 // 팀 1개 = 구급차 1대. 최대 4명, 운전은 1명, 대원은 동시에 팀 1개 (DB 유니크 인덱스가 마지막으로 한 번 더 막는다).
-// 14시간 자동 근무 종료 타이머와 team.member_joined 같은 실시간 이벤트는 S3 실시간 모듈이 생기면 붙인다.
+// 코드·QR 참여와 목록 초대 수락(invites.ts)은 팀원들에게 team.member_joined 를 보낸다.
 import { randomBytes, randomInt } from 'node:crypto';
 import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
@@ -11,6 +11,7 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { forgetSessionState, type AuthContext } from '../auth/session.js';
+import { appendEvents, type EventRecord } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { endDuty } from './endDuty.js';
 
@@ -56,7 +57,11 @@ async function lockMeOutsideTeam(client: pg.PoolClient, paramedicId: string): Pr
   if (await currentTeamId(client, paramedicId)) throw alreadyInTeam();
 }
 
-async function hasDriver(client: pg.PoolClient, teamId: string, except?: string): Promise<boolean> {
+export async function hasDriver(
+  client: pg.PoolClient,
+  teamId: string,
+  except?: string,
+): Promise<boolean> {
   const { rows } = await client.query(
     `SELECT 1 FROM team_member
       WHERE team_id = $1 AND left_at IS NULL AND role = 'driver' AND paramedic_id IS DISTINCT FROM $2`,
@@ -65,13 +70,34 @@ async function hasDriver(client: pg.PoolClient, teamId: string, except?: string)
   return rows.length > 0;
 }
 
-async function addMember(client: pg.PoolClient, teamId: string, paramedicId: string, role: Role) {
+export async function addMember(
+  client: pg.PoolClient,
+  teamId: string,
+  paramedicId: string,
+  role: Role,
+) {
   // joined_seq: 팀에 들어온 시점까지의 이벤트 번호. 그 전 팀 이벤트(환자 정보 등)는 이 대원에게 다시 보내지 않는다
   await client.query(
     `INSERT INTO team_member (team_id, paramedic_id, role, joined_seq)
      VALUES ($1, $2, $3, (SELECT coalesce(max(seq), 0) FROM event_log))`,
     [teamId, paramedicId, role],
   );
+}
+
+// 팀원들 화면의 팀원 목록을 바로 바꾸게 한다 (SFR-113). 들어온 사람 이름·역할만 (환자 정보 없음)
+export function memberJoinedEvent(
+  teamId: string,
+  paramedicId: string,
+  name: string,
+  role: Role,
+): EventRecord {
+  return {
+    room: `team:${teamId}`,
+    name: 'team.member_joined',
+    entityType: 'team',
+    entityId: teamId,
+    payload: { paramedicId: Number(paramedicId), name, role },
+  };
 }
 
 export async function loadTeam(db: Db, teamId: string, meId: string) {
@@ -167,10 +193,17 @@ export function teamRouter(
       if (input.role === 'driver' && (await hasDriver(client, teamId))) throw driverTaken();
 
       await addMember(client, teamId, paramedicId, input.role);
-      return loadTeam(client, teamId, paramedicId);
+      const loaded = await loadTeam(client, teamId, paramedicId);
+      const me = loaded.members.find((m) => m.isMe);
+      const events = await appendEvents(client, [
+        memberJoinedEvent(teamId, paramedicId, me?.name ?? '', input.role),
+      ]);
+      return { ...loaded, events };
     });
-    await realtime?.joinTeam(paramedicId, String(team.id));
-    res.json(team);
+    const { events, ...body } = team;
+    await realtime?.joinTeam(paramedicId, String(body.id));
+    realtime?.publish(events);
+    res.json(body);
   });
 
   router.get('/teams/current', ...guards, async (_req, res) => {

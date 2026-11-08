@@ -201,6 +201,20 @@ test('문구: 첫 승인·2분 만료·전부 거절만, 병원 이름·분·안
     );
     assert.equal(signupNo?.body, '가입이 반려됐어요 · 사유를 확인하고 다시 신청해 주세요');
 
+    // 팀 초대 (SFR-159): 잠금 화면에 보이니 보낸 사람 이름은 넣지 않는다
+    const invited = await messageFor(
+      ctx.pool,
+      event('team.invited', 'paramedic:1', {
+        inviteId: 7,
+        teamCode: '4821',
+        fromName: '김도윤',
+        expiresAt: '2026-11-08T05:05:00.000Z',
+      }),
+    );
+    assert.equal(invited?.body, '팀 초대가 왔어요 · 5분 안에 수락해 주세요');
+    assert.deepEqual(invited?.data, { event: 'team.invited', inviteId: '7' });
+    assert.ok(!invited?.body.includes('김도윤'));
+
     // 다른 이유의 예비 전환·다른 이벤트는 S3 푸시 대상이 아니다
     for (const other of [
       event('transport.status', team, { status: 'fallback', reason: 'none_delivered' }),

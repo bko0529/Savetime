@@ -213,13 +213,17 @@ test('sync: 놓친 이벤트만 순서대로 다시 보내고, 처음이면 전�
 
     const again = await kimSocket.emitWithAck('sync', { lastSeq: 0 });
     assert.equal(again.snapshotRequired, false);
-    assert.equal(again.replayed, 1);
-    assert.deepEqual(replayed, ['transport.created']);
-    assert.ok(again.latestSeq >= 1);
+    assert.equal(again.replayed, 2);
+    assert.deepEqual(replayed, ['transport.created', 'team.member_joined']);
+    assert.ok(again.latestSeq >= 2);
 
+    // 이하준은 들어오기 전 이벤트(transport.created)는 받지 않고, 자기가 들어온 것만 받는다
     const leeSocket = await h.connect('/app', { auth: { token: lee } });
+    const leeReplayed: string[] = [];
+    leeSocket.onAny((name: string) => leeReplayed.push(name));
     const leeSync = await leeSocket.emitWithAck('sync', { lastSeq: 0 });
-    assert.equal(leeSync.replayed, 0);
+    assert.equal(leeSync.replayed, 1);
+    assert.deepEqual(leeReplayed, ['team.member_joined']);
   });
 });
 
