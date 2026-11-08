@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { abnormalFields } from '../../domain/abnormal.js';
 import { hreqCanViewPatient, type HreqStatus } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
+import { assessmentFromRow, assessmentSelect, changedFields } from '../transport/assessment.js';
 import type { HospitalPc } from './pcAuth.js';
 
 export const listQuerySchema = z.object({
@@ -21,6 +22,20 @@ export type ListQuery = z.infer<typeof listQuerySchema>;
 const LATEST_ASSESSMENT = `LEFT JOIN LATERAL (
          SELECT * FROM assessment WHERE transport_id = r.transport_id ORDER BY seq DESC LIMIT 1
        ) a ON true`;
+// 이 병원이 요청을 받을 때 본 환자 평가 = 그 회차를 보낼 때까지 보낸 마지막 행 (없으면 첫 행).
+// 지금 행과 비교해 '받은 뒤 바뀐 항목'을 강조한다. 반경 넓히기로 나중에 받은 병원에는 처음 본 값이라 강조하지 않는다 (SFR-105)
+const BASE_ASSESSMENT = `LEFT JOIN LATERAL (
+         SELECT * FROM assessment WHERE transport_id = r.transport_id
+          ORDER BY (sent_at <= r.sent_at) DESC, CASE WHEN sent_at <= r.sent_at THEN seq ELSE -seq END DESC
+          LIMIT 1
+       ) b ON true`;
+const BASE_COLUMNS = assessmentSelect('b', 'b_');
+
+// 받은 뒤 바뀐 항목 (지금 행과 받을 때 본 행이 같으면 빈 목록)
+function updatedSinceReceived(row: Record<string, unknown>): string[] {
+  return changedFields(assessmentFromRow(row, 'b_'), assessmentFromRow(row));
+}
+
 // 환자 평가 칸만 고른다 (전부 고르면 assessment.id 가 요청 id 와 섞인다)
 const ASSESSMENT_COLUMNS = `a.chief_complaint, a.sex, a.age_band, a.consciousness, a.bp, a.pulse,
        a.resp, a.spo2, a.pain_site, a.pain_score, a.onset, a.trauma, a.trauma_cause, a.history,
@@ -93,12 +108,13 @@ const UNTIL_US = '(extract(epoch FROM r.respond_until) * 1000000)::bigint';
 export async function listRequests(pool: pg.Pool, hospitalId: number, query: ListQuery) {
   const [afterUs, afterId] = query.cursor ? query.cursor.split('_') : [null, null];
   const { rows } = await pool.query<RequestRow>(
-    `SELECT ${ASSESSMENT_COLUMNS}, hr.id, hr.status, hr.closed_reason, hr.eta_min, hr.eta_source,
+    `SELECT ${ASSESSMENT_COLUMNS}, ${BASE_COLUMNS}, hr.id, hr.status, hr.closed_reason, hr.eta_min, hr.eta_source,
             hr.prev_approved_recheck, hr.responder_name, hr.version, hr.arrived_at, r.respond_until,
             ${UNTIL_US}::text AS until_us, now() AS server_now
        FROM hospital_request hr
        JOIN request_round r ON r.id = hr.round_id
        ${LATEST_ASSESSMENT}
+       ${BASE_ASSESSMENT}
       WHERE hr.hospital_id = $1
         -- 전달 못 한 요청은 병원이 받은 적이 없다
         AND hr.status <> 'delivery_failed'
@@ -136,8 +152,10 @@ export async function listRequests(pool: pg.Pool, hospitalId: number, query: Lis
         abnormalCount: viewable ? abnormalFields(assessment).length : null,
         prevApprovedRecheck: row.prev_approved_recheck,
         respondedBy: row.responder_name,
-        // 바뀐 항목 표시(SFR-105)는 '변경 사항 보내기'가 생기면 채운다
-        updatedFields: [] as string[],
+        // '변경 사항 보내기'로 받은 뒤 바뀐 항목 (SFR-105). 환자 정보를 못 여는 건은 비운다
+        updatedFields: viewable
+          ? updatedSinceReceived(row as unknown as Record<string, unknown>)
+          : [],
         version: row.version,
       };
     }),
@@ -159,12 +177,13 @@ const bedText = (avail: number | null, total: number | null) =>
 // 요청 상세 (SFR-118). 열 때마다 열람 기록을 남긴다 (SFR-137)
 export async function getRequestDetail(pool: pg.Pool, pc: HospitalPc, requestId: number) {
   const { rows } = await pool.query<DetailRow>(
-    `SELECT ${ASSESSMENT_COLUMNS}, hr.id, hr.hospital_id, hr.status, hr.closed_reason, hr.eta_min, hr.eta_source,
+    `SELECT ${ASSESSMENT_COLUMNS}, ${BASE_COLUMNS}, hr.id, hr.hospital_id, hr.status, hr.closed_reason, hr.eta_min, hr.eta_source,
             hr.prev_approved_recheck, hr.responder_name, hr.memo, hr.extra_memo, hr.version, hr.arrived_at,
             r.respond_until, now() AS server_now
        FROM hospital_request hr
        JOIN request_round r ON r.id = hr.round_id
        ${LATEST_ASSESSMENT}
+       ${BASE_ASSESSMENT}
       WHERE hr.id = $1`,
     [requestId],
   );
@@ -225,7 +244,7 @@ export async function getRequestDetail(pool: pg.Pool, pc: HospitalPc, requestId:
     serverNow: row.server_now.toISOString(),
     assessment,
     abnormalFields: abnormalFields(assessment),
-    updatedFields: [] as string[],
+    updatedFields: updatedSinceReceived(row as unknown as Record<string, unknown>),
     etaMin: row.eta_min,
     etaSource: row.eta_source,
     prevApprovedRecheck: row.prev_approved_recheck,

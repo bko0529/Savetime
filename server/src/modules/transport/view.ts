@@ -1,7 +1,8 @@
 // 대원 앱에 보내는 이송 건 모양 (openapi Transport). 만들기·진행 중 불러오기·이후 상태 변경 응답이 같이 쓴다.
 // 환자 평가 내용은 넣지 않는다. 병원 요청도 병원 이름·상태·시간만 (AppHospitalRequest).
 import type pg from 'pg';
-import type { HreqStatus } from '../../domain/stateMachine.js';
+import { ACTIVE, type HreqStatus } from '../../domain/stateMachine.js';
+import { draftAndLastSent, pendingCount } from './assessment.js';
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -26,6 +27,7 @@ interface TransportRow {
   phone_target_name: string | null;
   phone_target_er_phone: string | null;
   last_seq: number | null;
+  team_id: string;
 }
 
 interface RoundRow {
@@ -71,6 +73,7 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
             t.fallback_reason, t.requested_grade, t.location_consent, t.address, t.offline_created,
             t.nav_device_id, t.departed_at, t.dest_changed_at, t.distance_m, t.created_at,
             t.phone_target_hospital_id, ph.name AS phone_target_name, ph.er_phone AS phone_target_er_phone,
+            t.team_id,
             (SELECT max(seq) FROM assessment a WHERE a.transport_id = t.id) AS last_seq
        FROM transport t
        JOIN team_member tm ON tm.team_id = t.team_id AND tm.left_at IS NULL AND tm.paramedic_id = $2
@@ -80,6 +83,11 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
   );
   const t = rows[0];
   if (!t) return undefined;
+  let pendingChanges = 0;
+  if ((ACTIVE as readonly string[]).includes(t.status)) {
+    const { draft, last } = await draftAndLastSent(db, transportId, t.team_id);
+    pendingChanges = pendingCount(draft, last);
+  }
 
   const { rows: rounds } = await db.query<RoundRow>(
     `SELECT id, round_no, kind, radius_km, sent_at, respond_until, approval_valid_until,
@@ -199,8 +207,8 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
     etaMin: null,
     departedAt: t.departed_at,
     lastSentAssessmentSeq: t.last_seq ?? 0,
-    // 팀 작성 중 환자 정보(S6)와 비교해 센다. 지금은 0
-    pendingChanges: 0,
+    // 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 센다. 팀원 모두 같은 n (SFR-105). 끝난 건은 보낼 수 없어 0
+    pendingChanges,
     excludedHospitalIds: excluded.map((e) => Number(e.hospital_id)),
     locationConsent: t.location_consent,
     address: t.address,

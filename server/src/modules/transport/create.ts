@@ -18,8 +18,9 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
-import { assessmentSchema } from './assessment.js';
+import { assessmentSchema, cleanAssessment } from './assessment.js';
 import type { Realtime } from '../realtime/server.js';
+import { syncTeamDraft } from '../team/draft.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
@@ -262,6 +263,15 @@ export async function createTransport(
       fallbackReason: to === 'fallback' ? history.reason : null,
     },
   });
+  // 팀 작성 중 정보 = 방금 보낸 환자 정보. '변경 사항 보내기(n)'를 0에서 시작한다 (SFR-105)
+  events.push(
+    await syncTeamDraft(client, {
+      teamId,
+      paramedicId,
+      byName: me[0].name,
+      data: cleanAssessment({ ...a, chiefComplaint: a.chiefComplaint?.trim() }),
+    }),
+  );
 
   let roundId: string | null = null;
   if (to === 'requesting') {
