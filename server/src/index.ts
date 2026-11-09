@@ -20,6 +20,7 @@ import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
 import { PAUSE_REMIND_EVERY_MS, remindLongPauses } from './modules/hospital-web/pause.js';
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
+import { PREV_PATIENT_SWEEP_EVERY_MS, releaseEndedTransports } from './modules/team/prevPatient.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
 import { createPhotoStore, createS3Storage, parsePhotoKey } from './modules/auth/photoStore.js';
@@ -187,6 +188,16 @@ scheduledJobs.push({
   everyMs: AUTO_END_EVERY_MS,
   run: async () => {
     const events = await endInactiveTransports(pool, logger);
+    realtime?.publish(events);
+  },
+});
+
+// 종료 10분 뒤: 팀 연결 끊기(DAR-013) + 직전 환자 정보 비우기(SFR-157). 키와 상관없이 항상 켠다
+scheduledJobs.push({
+  name: 'transport-release-ended',
+  everyMs: PREV_PATIENT_SWEEP_EVERY_MS,
+  run: async () => {
+    const events = await releaseEndedTransports(pool, logger);
     realtime?.publish(events);
   },
 });

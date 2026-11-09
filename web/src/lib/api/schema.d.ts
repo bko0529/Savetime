@@ -818,7 +818,9 @@ export interface paths {
          *
          *     **요구사항**: SFR-132, SFR-133
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, VERSION_CONFLICT
+         *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, NOT_NAV_DEVICE, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
+         *
+         *     담당 정하기: 확정(confirm·전화 확인 수용) 때 팀에 운전 역할이 없거나 확정한 사람이 운전자면 그 단말이 바로 담당 (transport.confirmed.navDeviceId + transport.nav_device). 운전자가 따로 있으면 navDeviceId null로 두고 운전 단말을 10초(DB 시각) 기다린다. 그 사이 운전 역할 대원만 자기 로그인 단말(deviceId)로 부를 수 있고(아니면 403 NOT_NAV_DEVICE, 남의 단말 ID면 400), 10초가 지나면 서버 작업이 확정한 대원 단말로 넘긴다. 이미 담당이 있으면 같은 단말은 200(isMe true), 다른 단말은 409 NAV_DEVICE_ASSIGNED(details.navDeviceId). 담당을 정하면 이송 건 version +1. 목적지 변경·다시 요청 뒤 다시 확정해도 담당은 그대로. 출발 전이면 409 INVALID_TRANSITION.
          */
         post: operations["post_transports__transportId__nav_device"];
         delete?: never;
@@ -865,7 +867,7 @@ export interface paths {
         put?: never;
         /**
          * 위치 올리기 (5초마다, 담당 단말만)
-         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당이 아직 없으면 출발 뒤 처음 보낸 단말이 담당(nav_device_id)이 되고(SFR-132 전까지), 다른 단말이면 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
          *
          *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
          *     **화면**: S-09 경로 안내
@@ -3310,7 +3312,7 @@ export interface operations {
                         assessment?: components["schemas"]["Assessment"];
                         /** @description 항목별 {byName, at} */
                         fieldMeta?: Record<string, never>;
-                        /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157) */
+                        /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157). 팀의 가장 최근 이송이 도착·취소로 끝난 뒤 아무도 안 고쳤고 진행 중 이송이 없을 때 그 건 ID. 앱은 '직전 환자 정보 · 지우기'를 띄우고, 지우기는 DELETE. 10분이 지나면 빈 작성 중 정보(version 0)로 보이고 서버가 1분 안에 비운다 */
                         prefilledFromTransportId?: string | null;
                         /** Format: date-time */
                         prefillExpiresAt?: string | null;
@@ -3519,7 +3521,7 @@ export interface operations {
                     id: string;
                     /**
                      * Format: uuid
-                     * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157)
+                     * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157). 같은 팀이고 끝난 지 10분 안이면 그 건의 수용 불가 병원을 이번 요청에서 빼고 excluded_hospital(unacceptable_prev)에 넣는다. 조건이 안 맞으면 이어받지 않는다(오류 아님)
                      */
                     prevTransportId?: string | null;
                     /** @description 진행 중 건이 '이동 중'일 때 '이전 이송 끝내기'를 확인함 (SFR-104) */
@@ -5626,7 +5628,7 @@ export interface operations {
                 lng: number;
                 radiusKm: 10 | 20 | 30 | 40;
                 grade?: 1 | 2 | 3;
-                /** @description 제외 병원 이어받기 */
+                /** @description 제외 병원 이어받기 (같은 팀·끝난 지 10분 안인 직전 건의 수용 불가 병원을 빼고 센다, SFR-157) */
                 prevTransportId?: string;
             };
             header?: never;

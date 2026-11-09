@@ -122,14 +122,9 @@ export async function recordLocations(
     });
   }
 
-  // 담당 단말 1대만 기록한다 (SFR-036·037). 담당을 정하는 흐름(SFR-132)이 생기기 전까지는
-  // 출발 뒤 처음 위치를 보낸 단말이 담당이 된다. 행을 잠근 뒤라 두 단말이 동시에 보내도 한 대만 된다
-  if (t.nav_device_id === null) {
-    await client.query('UPDATE transport SET nav_device_id = $2 WHERE id = $1', [
-      transportId,
-      input.deviceId,
-    ]);
-  } else if (t.nav_device_id !== input.deviceId) {
+  // 담당 단말 1대만 기록한다 (SFR-036·037·132). 담당은 확정 때 또는 운전 단말 응답·10초 작업이 정한다(navDevice.ts).
+  // 아직 정해지지 않았으면(운전 단말 응답 대기 중) 아무도 기록하지 않는다. 앱 재실행 때도 담당만 다시 시작한다 (SFR-133)
+  if (t.nav_device_id === null || t.nav_device_id !== input.deviceId) {
     throw new AppError(403, 'NOT_NAV_DEVICE', '경로 안내 담당 단말만 위치를 기록해요');
   }
 

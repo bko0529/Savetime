@@ -23,6 +23,8 @@ export interface TargetQuery {
   grade: number | null;
   // 이번 이송의 제외 병원을 뺀다 (SFR-086). alreadyRequested면 이번 이송에서 이미 요청한 병원도 뺀다 (반경 넓히기, SFR-131)
   transport?: { id: string; skipAlreadyRequested: boolean };
+  // 아직 이송 건이 없을 때 뺄 병원 (직전 건 수용 불가 병원 이어받기, SFR-157). 생성·미리보기가 같이 쓴다
+  excludeHospitalIds?: string[];
 }
 
 // 요청 대상 = 반경 안 · 병원 계정 활성 · 잠시 요청 중지 아님 · 알림 켠 PC가 있음 (SFR-109·117·139)
@@ -62,7 +64,8 @@ async function allTargets(db: Queryable, q: TargetQuery): Promise<Target[]> {
     q.transport?.id ?? null,
     q.transport?.skipAlreadyRequested ?? false,
   ]);
-  return rows;
+  const skip = new Set(q.excludeHospitalIds ?? []);
+  return skip.size ? rows.filter((t) => !skip.has(String(t.id))) : rows;
 }
 
 const meetsGrade = (grade: number | null) => (t: Target) => grade === null || t.grade <= grade;
