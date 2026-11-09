@@ -291,3 +291,97 @@ test('요청 대상 미리보기: 지금 조건의 수, 등급마다 고르면 �
     assert.equal(anonymous.status, 401);
   });
 });
+
+// 회차의 병원별 '직전 승인 · 재확인' 표시 (SFR-156)
+async function recheckFlags(pool: pg.Pool, transportId: string, roundNo: number) {
+  const { rows } = await pool.query<{ name: string; prev_approved_recheck: boolean }>(
+    `SELECT h.name, hr.prev_approved_recheck FROM hospital_request hr
+       JOIN request_round r ON r.id = hr.round_id JOIN hospital h ON h.id = hr.hospital_id
+      WHERE r.transport_id = $1 AND r.round_no = $2 ORDER BY h.name`,
+    [transportId, roundNo],
+  );
+  return Object.fromEntries(rows.map((r) => [r.name, r.prev_approved_recheck]));
+}
+
+test("직전 요청에서 승인한 C병원은 다시 요청에 '직전 승인 · 재확인', 처음 받는 병원은 표시 없음 (SFR-156 인수 기준 1)", async () => {
+  await withAuthContext(async (ctx) => {
+    // 1회차: B·C 승인, D 대기 → B 확정 → B 승인 취소
+    const s = await scene(ctx);
+    const version = await confirmThenCancel(ctx, s, 'B병원', 1);
+    // 1회차에 없던 E병원도 반경 안에 생겼다
+    await addHospital(ctx.pool, 'E병원', 0.08);
+
+    const res = await rounds(ctx, s, { kind: 're_request', version });
+    assert.equal(res.status, 201);
+    assert.deepEqual(await recheckFlags(ctx.pool, s.transportId, 2), {
+      C병원: true, // 1회차에 승인했다가 B 확정으로 닫힘
+      D병원: false, // 1회차에 요청은 받았지만 승인하지 않음
+      E병원: false, // 처음 받는 병원
+    });
+    // 대원 앱 응답에도 그대로 나온다 (병원 웹 /hw/requests 도 같은 칸을 읽는다)
+    const flags = Object.fromEntries(
+      res.body.requests.map((r: { hospitalName: string; prevApprovedRecheck: boolean }) => [
+        r.hospitalName,
+        r.prevApprovedRecheck,
+      ]),
+    );
+    assert.deepEqual(flags, { C병원: true, D병원: false, E병원: false });
+  });
+});
+
+test("새 요청에서 D병원이 먼저, C병원이 나중에 승인하면 승인 순서대로 나오고 C병원에만 '직전 승인' (SFR-156 인수 기준 2)", async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const version = await confirmThenCancel(ctx, s, 'B병원', 1);
+    const res = await rounds(ctx, s, { kind: 're_request', version });
+    assert.equal(res.status, 201);
+
+    const ids = Object.fromEntries(
+      res.body.requests.map((r: { hospitalName: string; id: number }) => [r.hospitalName, r.id]),
+    );
+    // D병원(가까움)이 먼저, C병원이 10초 뒤에 승인
+    await ctx.pool.query(
+      `UPDATE hospital_request SET status = 'approved', delivered_at = now(),
+              responded_at = now() - CASE WHEN id = $1 THEN interval '20 seconds' ELSE interval '10 seconds' END
+        WHERE id = ANY($2::bigint[])`,
+      [ids['D병원'], [ids['C병원'], ids['D병원']]],
+    );
+
+    const view = await request(appFor(ctx))
+      .get('/api/v1/transports/current')
+      .set('Authorization', `Bearer ${s.kim}`);
+    assert.equal(view.status, 200);
+    const approved = view.body.requests
+      .filter((r: { status: string }) => r.status === 'approved')
+      .map((r: { hospitalName: string; prevApprovedRecheck: boolean }) => [
+        r.hospitalName,
+        r.prevApprovedRecheck,
+      ]);
+    assert.deepEqual(approved, [
+      ['D병원', false],
+      ['C병원', true],
+    ]);
+  });
+});
+
+// 반경 넓히기는 이미 요청한 병원에 다시 보내지 않아서(SFR-131) 앞에서 승인한 병원이 그 회차에 들어갈 일이 없다
+test('거절했던 병원 · 첫 요청에는 직전 승인 표시를 붙이지 않는다 (SFR-156)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    // 첫 요청: 아무도 표시 없음
+    assert.deepEqual(await recheckFlags(ctx.pool, s.transportId, 1), {
+      B병원: false,
+      C병원: false,
+      D병원: false,
+    });
+    // D병원은 1회차에 거절했다
+    await ctx.pool.query(
+      `UPDATE hospital_request SET status = 'rejected', responded_at = now(), reason = 'er_bed' WHERE id = $1`,
+      [s.req['D병원']],
+    );
+    const version = await confirmThenCancel(ctx, s, 'B병원', 1);
+    const res = await rounds(ctx, s, { kind: 're_request', version });
+    assert.equal(res.status, 201);
+    assert.deepEqual(await recheckFlags(ctx.pool, s.transportId, 2), { C병원: true, D병원: false });
+  });
+});
