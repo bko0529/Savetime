@@ -1,0 +1,14 @@
+# Docker 이미지에 넣지 않는 것. .env(비밀 값)는 절대 이미지에 들어가면 안 된다 (절대 규칙 1)
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/.next
+.git
+.claude
+app
+docs
+perf
+tools
+deploy

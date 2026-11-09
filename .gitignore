@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+# 배포 서버의 비밀 값 (deploy/app·admin/server.env)
+server.env
 *.log
 .DS_Store
 .idea/

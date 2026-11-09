@@ -1,0 +1,26 @@
+# 앱 서버 Caddy: HTTPS(인증서 자동) + 경로 나누기 (기술정의서 7장)
+# 병원 웹과 API 가 같은 도메인이라 병원 PC 쿠키(SameSite=Strict)가 그대로 동작한다 (T-03)
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# 서버(Express·Socket.IO)로
+	handle /api/* {
+		reverse_proxy server:4000
+	}
+	handle /socket.io/* {
+		reverse_proxy server:4000
+	}
+	handle /health {
+		reverse_proxy server:4000
+	}
+
+	# 관리자 화면은 이 서버에 없다 (관리자 서버 admin. 도메인, T-11)
+	handle /admin* {
+		respond 404
+	}
+
+	# 나머지는 병원 웹(Next.js)
+	handle {
+		reverse_proxy web:3000
+	}
+}

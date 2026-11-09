@@ -10,6 +10,7 @@ import { authRouter } from './modules/auth/routes.js';
 import type { AuthContext } from './modules/auth/session.js';
 import { auditRouter } from './modules/admin/audit.js';
 import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
+import { adminIpGuard } from './modules/admin/ipGuard.js';
 import { adminHospitalRouter } from './modules/admin/hospitals.js';
 import { adminNotificationRouter } from './modules/admin/notifications.js';
 import { adminParamedicRouter } from './modules/admin/paramedics.js';
@@ -113,6 +114,8 @@ export function createApp({
     app.use('/api/v1', hospitalWebRouter(hospitalWeb));
   }
   if (admin) {
+    // 허용 IP 가 아니면 로그인부터 막는다 (T-11). 그래서 IP 검사를 맨 앞에 둔다
+    app.use('/api/v1/admin', adminIpGuard(admin.allowedIps ?? []));
     // adminAuthRouter 가 /admin 전체에 Origin 검사를 건다. 그래서 로그인 라우터를 맨 앞에 둔다
     app.use('/api/v1', adminAuthRouter(admin));
     // 로그인 말고는 모두 관리자 토큰이 있어야 한다 (SER-010)

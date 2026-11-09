@@ -39,6 +39,16 @@ const schema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  // 관리자 서버 접속 허용 IP(쉼표로 여러 개). 관리자 API 는 이 주소에서만 쓸 수 있다 (T-11)
+  ADMIN_ALLOWED_IPS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
   // Firebase 서비스 계정 JSON을 base64 한 줄로. 없으면 푸시만 꺼진다 (SFR-130)
   FIREBASE_SERVICE_ACCOUNT_BASE64: z.preprocess(
     (v) => (v === '' ? undefined : v),

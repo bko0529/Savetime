@@ -87,6 +87,9 @@ export interface RealtimeOptions {
   prefix?: string;
   // FCM 발송 함수. 없으면(키 없음·테스트) 푸시 없이 웹소켓만 보낸다 (SFR-130)
   push?: PushSender;
+  // false = 보내기 전용 (관리자 서버, T-11). 앱·병원 웹 연결을 받지 않고(attach 안 함),
+  // 타이머·전달 확인 작업도 돌리지 않는다. 보내기·끊기는 Redis 어댑터로 main 서버에 붙은 연결에 간다
+  runJobs?: boolean;
 }
 
 interface AppSocketData {
@@ -138,6 +141,7 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     : undefined;
   const timeoutMs = options.deliveryTimeoutMs ?? 5000;
   const prefix = options.prefix ?? 'savetime';
+  const runJobs = options.runJobs ?? true;
 
   // INR-003: ping 5초, 응답 대기 5초 → 끊김을 10초 안에 안다. 처음부터 웹소켓만 써서 서버 고정이 필요 없다 (T-08)
   const io = new Server({ transports: ['websocket'], pingInterval: 5000, pingTimeout: 5000 });
@@ -337,18 +341,22 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   queue.on('error', (err) => logger.error({ message: err.message }, '전달 확인 큐 오류'));
   worker.on('error', (err) => logger.error({ message: err.message }, '전달 확인 워커 오류'));
   worker.on('failed', (_job, err) => logger.error({ message: err.message }, '전달 확인 실패'));
-  void worker.run().catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+  if (runJobs)
+    void worker
+      .run()
+      .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
 
   // 서버가 재시작되면 Redis의 예약 작업이 사라졌을 수 있다. 판정이 안 끝난 최근 회차를 DB에서 찾아 다시 건다 (기술정의서 타이머)
   // 같은 jobId라 이미 걸려 있으면 다시 만들지 않는다
-  void pool
-    .query<{ id: string }>(
-      `SELECT DISTINCT r.id FROM request_round r JOIN hospital_request hr ON hr.round_id = r.id
+  if (runJobs)
+    void pool
+      .query<{ id: string }>(
+        `SELECT DISTINCT r.id FROM request_round r JOIN hospital_request hr ON hr.round_id = r.id
         WHERE hr.status = 'waiting' AND hr.delivered_at IS NULL
           AND r.sent_at > now() - interval '2 minutes'`,
-    )
-    .then(({ rows }) => Promise.all(rows.map((row) => scheduleCheck(row.id, 0))))
-    .catch((err: Error) => logger.error({ message: err.message }, '전달 확인 다시 걸기 실패'));
+      )
+      .then(({ rows }) => Promise.all(rows.map((row) => scheduleCheck(row.id, 0))))
+      .catch((err: Error) => logger.error({ message: err.message }, '전달 확인 다시 걸기 실패'));
 
   // ---------- 응답 제한 2분 (SFR-124) ----------
   const expiryQueue = new Queue(EXPIRY_QUEUE, { connection, prefix });
@@ -367,9 +375,10 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   expiryWorker.on('failed', (_job, err) =>
     logger.error({ message: err.message }, '2분 타이머 실행 실패'),
   );
-  void expiryWorker
-    .run()
-    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+  if (runJobs)
+    void expiryWorker
+      .run()
+      .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
 
   // 마감까지 남은 시간도 DB 시각으로 잰다. 이미 지났으면 바로 실행
   async function scheduleExpiry(roundId: string): Promise<void> {
@@ -394,13 +403,14 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   }
 
   // 재시작 때: 마감이 지났거나 다가오는데 아직 대기 요청이 남은 회차의 타이머를 다시 건다
-  void pool
-    .query<{ id: string }>(
-      `SELECT DISTINCT r.id FROM request_round r JOIN hospital_request hr ON hr.round_id = r.id
+  if (runJobs)
+    void pool
+      .query<{ id: string }>(
+        `SELECT DISTINCT r.id FROM request_round r JOIN hospital_request hr ON hr.round_id = r.id
         WHERE hr.status = 'waiting' AND r.respond_until > now() - interval '1 hour'`,
-    )
-    .then(({ rows }) => Promise.all(rows.map((row) => scheduleExpiry(row.id))))
-    .catch((err: Error) => logger.error({ message: err.message }, '2분 타이머 다시 걸기 실패'));
+      )
+      .then(({ rows }) => Promise.all(rows.map((row) => scheduleExpiry(row.id))))
+      .catch((err: Error) => logger.error({ message: err.message }, '2분 타이머 다시 걸기 실패'));
 
   // ---------- 승인 유효시간 5분 (SFR-127): 4분 해제 경보 + 5분 승인 해제 ----------
   const approvalQueue = new Queue(APPROVAL_QUEUE, { connection, prefix });
@@ -425,9 +435,10 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   approvalWorker.on('failed', (_job, err) =>
     logger.error({ message: err.message }, '5분 타이머 실행 실패'),
   );
-  void approvalWorker
-    .run()
-    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+  if (runJobs)
+    void approvalWorker
+      .run()
+      .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
 
   // 4분·5분 작업 두 개를 건다. 남은 시간은 DB 시각으로 재고, 이미 지났으면 바로 실행
   async function scheduleApprovalWindow(roundId: string): Promise<void> {
@@ -460,15 +471,16 @@ export function createRealtime(options: RealtimeOptions): Realtime {
 
   // 재시작 때: 아직 요청 중·전화 확인 중인 이송 건의 지금 회차 중 승인 해제가 안 끝난 것을 다시 건다
   // (같은 jobId면 다시 만들지 않는다. 이미 지난 경보는 늦게 보내도 의미가 없어 5분 작업만 바로 실행된다)
-  void pool
-    .query<{ id: string }>(
-      `SELECT r.id FROM request_round r JOIN transport t ON t.id = r.transport_id
+  if (runJobs)
+    void pool
+      .query<{ id: string }>(
+        `SELECT r.id FROM request_round r JOIN transport t ON t.id = r.transport_id
         WHERE t.status IN ('requesting','phone_check')
           AND r.round_no = (SELECT max(round_no) FROM request_round WHERE transport_id = r.transport_id)
           AND r.approval_valid_until > now() - interval '1 hour'`,
-    )
-    .then(({ rows }) => Promise.all(rows.map((row) => scheduleApprovalWindow(row.id))))
-    .catch((err: Error) => logger.error({ message: err.message }, '5분 타이머 다시 걸기 실패'));
+      )
+      .then(({ rows }) => Promise.all(rows.map((row) => scheduleApprovalWindow(row.id))))
+      .catch((err: Error) => logger.error({ message: err.message }, '5분 타이머 다시 걸기 실패'));
 
   // ---------- 팀 초대 5분 만료 (SFR-159) ----------
   const inviteQueue = new Queue(INVITE_QUEUE, { connection, prefix });
@@ -489,9 +501,10 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   inviteWorker.on('failed', (_job, err) =>
     logger.error({ message: err.message }, '초대 타이머 실행 실패'),
   );
-  void inviteWorker
-    .run()
-    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+  if (runJobs)
+    void inviteWorker
+      .run()
+      .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
 
   async function scheduleInviteExpiry(inviteId: string): Promise<void> {
     const { rows } = await pool.query<{ delay: number }>(
@@ -515,12 +528,13 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   }
 
   // 재시작 때: 아직 답이 없는 초대의 만료 타이머를 다시 건다 (이미 지났으면 바로 만료)
-  void pool
-    .query<{ id: string }>(
-      `SELECT id FROM team_invite WHERE status = 'sent' AND expires_at > now() - interval '1 hour'`,
-    )
-    .then(({ rows }) => Promise.all(rows.map((row) => scheduleInviteExpiry(row.id))))
-    .catch((err: Error) => logger.error({ message: err.message }, '초대 타이머 다시 걸기 실패'));
+  if (runJobs)
+    void pool
+      .query<{ id: string }>(
+        `SELECT id FROM team_invite WHERE status = 'sent' AND expires_at > now() - interval '1 hour'`,
+      )
+      .then(({ rows }) => Promise.all(rows.map((row) => scheduleInviteExpiry(row.id))))
+      .catch((err: Error) => logger.error({ message: err.message }, '초대 타이머 다시 걸기 실패'));
 
   // ---------- 경로 안내 담당 단말 10초 넘김 (SFR-132) ----------
   const navQueue = new Queue(NAV_QUEUE, { connection, prefix });
@@ -539,9 +553,10 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   navWorker.on('failed', (_job, err) =>
     logger.error({ message: err.message }, '담당 단말 넘김 실패'),
   );
-  void navWorker
-    .run()
-    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+  if (runJobs)
+    void navWorker
+      .run()
+      .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
 
   async function scheduleNavFallback(transportId: string): Promise<void> {
     const { rows } = await pool.query<{ delay: number; confirmed_at: Date }>(
@@ -567,17 +582,18 @@ export function createRealtime(options: RealtimeOptions): Realtime {
   }
 
   // 재시작 때: 운전 단말 응답을 기다리던 건의 10초 타이머를 다시 건다 (이미 지났으면 바로 넘김)
-  void pool
-    .query<{ id: string }>(
-      `SELECT id FROM transport
+  if (runJobs)
+    void pool
+      .query<{ id: string }>(
+        `SELECT id FROM transport
         WHERE nav_device_id IS NULL AND nav_fallback_device_id IS NOT NULL
           AND status = ANY($1::transport_status[])`,
-      [ACTIVE],
-    )
-    .then(({ rows }) => Promise.all(rows.map((row) => scheduleNavFallback(row.id))))
-    .catch((err: Error) =>
-      logger.error({ message: err.message }, '담당 단말 타이머 다시 걸기 실패'),
-    );
+        [ACTIVE],
+      )
+      .then(({ rows }) => Promise.all(rows.map((row) => scheduleNavFallback(row.id))))
+      .catch((err: Error) =>
+        logger.error({ message: err.message }, '담당 단말 타이머 다시 걸기 실패'),
+      );
 
   // 1대라도 ack하면 그 병원에 '전달'. ack 안 한 PC는 :on에서 빼고 알림을 끈다 (설계 4-2 전달 판정)
   async function sendToPc(
