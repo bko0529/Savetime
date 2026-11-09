@@ -818,7 +818,9 @@ export interface paths {
          *
          *     **요구사항**: SFR-132, SFR-133
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, VERSION_CONFLICT
+         *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, NOT_NAV_DEVICE, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
+         *
+         *     담당 정하기: 확정(confirm·전화 확인 수용) 때 팀에 운전 역할이 없거나 확정한 사람이 운전자면 그 단말이 바로 담당 (transport.confirmed.navDeviceId + transport.nav_device). 운전자가 따로 있으면 navDeviceId null로 두고 운전 단말을 10초(DB 시각) 기다린다. 그 사이 운전 역할 대원만 자기 로그인 단말(deviceId)로 부를 수 있고(아니면 403 NOT_NAV_DEVICE, 남의 단말 ID면 400), 10초가 지나면 서버 작업이 확정한 대원 단말로 넘긴다. 이미 담당이 있으면 같은 단말은 200(isMe true), 다른 단말은 409 NAV_DEVICE_ASSIGNED(details.navDeviceId). 담당을 정하면 이송 건 version +1. 목적지 변경·다시 요청 뒤 다시 확정해도 담당은 그대로. 출발 전이면 409 INVALID_TRANSITION.
          */
         post: operations["post_transports__transportId__nav_device"];
         delete?: never;
@@ -863,7 +865,7 @@ export interface paths {
         put?: never;
         /**
          * 위치 올리기 (5초마다, 담당 단말만)
-         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당이 아직 없으면 출발 뒤 처음 보낸 단말이 담당(nav_device_id)이 되고(SFR-132 전까지), 다른 단말이면 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
          *
          *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
          *     **화면**: S-09 경로 안내

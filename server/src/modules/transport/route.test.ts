@@ -209,7 +209,8 @@ test('위치 기록이 없으면 익명 경로를 만들지 않고 이동 거리
       points: 0,
       routes: 0,
       distance_m: null,
-      nav_device_id: null,
+      // 운전자가 확정해 그 단말이 담당이다. 위치를 안 보냈을 뿐 (SFR-132)
+      nav_device_id: 'device-kim01',
     });
   });
 });

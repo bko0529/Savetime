@@ -21,6 +21,7 @@ import type { AuthContext } from '../auth/session.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
+import { navAssignedEvent, navOnConfirm } from './navDevice.js';
 import { loadTransport } from './view.js';
 
 // 앱이 재시도하는 동안만 필요하다. 5분 판정이 끝난 뒤에는 의미가 없어 10분 뒤 지운다
@@ -45,6 +46,8 @@ interface ConfirmInput {
 interface ConfirmOutcome {
   body: unknown;
   events: LoggedEvent[];
+  // 운전 단말 응답을 10초 기다림 → 커밋 뒤 10초 작업을 건다 (SFR-132)
+  navPending?: boolean;
 }
 
 export async function confirmTransport(
@@ -152,12 +155,19 @@ export async function confirmTransport(
     }
   }
 
+  // 경로 안내 담당 단말 (SFR-132): 바로 정해지면 같은 UPDATE 에 넣는다. 운전자 응답을 기다리면 커밋 뒤 10초 작업
+  const nav = await navOnConfirm(client, { transportId, teamId: transport.team_id, paramedicId });
+  const { rows: before } = await client.query<{ nav_device_id: string | null }>(
+    'SELECT nav_device_id FROM transport WHERE id = $1',
+    [transportId],
+  );
   const { rows: moved } = await client.query<{ version: number }>(
     `UPDATE transport
         SET status = $2, confirmed_hospital_id = $3, confirmed_at = now(),
-            departed_at = coalesce(departed_at, now()), last_activity_at = now(), version = version + 1
+            departed_at = coalesce(departed_at, now()), last_activity_at = now(), version = version + 1,
+            nav_device_id = coalesce($4, nav_device_id)
       WHERE id = $1 RETURNING version`,
-    [transportId, to, target.hospital_id],
+    [transportId, to, target.hospital_id, nav.navDeviceId],
   );
   await client.query(
     `INSERT INTO transport_status_history (transport_id, from_status, to_status, event, reason, at)
@@ -183,10 +193,20 @@ export async function confirmTransport(
       byName: me[0].name,
       etaMin: target.eta_min,
       memo: target.memo,
-      // 경로 안내 담당 단말은 SFR-132(S6)에서 정한다
-      navDeviceId: null,
+      // 경로 안내 담당 단말. null = 운전 단말 응답을 기다리는 중 (transport.nav_device 로 알림, SFR-132)
+      navDeviceId: nav.navDeviceId,
     },
   });
+  if (nav.navDeviceId && nav.navDeviceId !== before[0].nav_device_id) {
+    events.push(
+      await navAssignedEvent(client, {
+        transportId,
+        teamId: transport.team_id,
+        version: moved[0].version,
+        navDeviceId: nav.navDeviceId,
+      }),
+    );
+  }
   // 확정 병원 도착 예정 목록에 추가 (SFR-121). 내용은 GET /hw/incoming으로
   events.push({
     room: `hospital:${target.hospital_id}`,
@@ -206,7 +226,7 @@ export async function confirmTransport(
     'INSERT INTO idempotency_key (key, transport_id, response) VALUES ($1, $2, $3)',
     [input.key, transportId, JSON.stringify(body)],
   );
-  return { body, events: await appendEvents(client, events) };
+  return { body, events: await appendEvents(client, events), navPending: nav.pending };
 }
 
 export function confirmRouter(
@@ -254,6 +274,7 @@ export function confirmRouter(
     );
     // 커밋된 뒤에만 보낸다
     realtime?.publish(outcome.events);
+    if (outcome.navPending) realtime?.scheduleNavFallback(transportId);
     res.json(outcome.body);
   });
 
