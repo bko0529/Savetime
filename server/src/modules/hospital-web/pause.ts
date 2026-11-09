@@ -14,6 +14,7 @@ import {
 } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
+import { recordRejection } from '../stats/records.js';
 import type { HospitalPc } from './pcAuth.js';
 
 export const pauseSchema = z.object({ paused: z.boolean() });
@@ -105,10 +106,11 @@ async function autoReject(
   const { rows: locked } = await client.query<{
     status: HreqStatus;
     round_id: string;
+    hospital_id: string;
     hospital_name: string;
     is_current: boolean;
   }>(
-    `SELECT hr.status, hr.round_id, h.name AS hospital_name,
+    `SELECT hr.status, hr.round_id, hr.hospital_id, h.name AS hospital_name,
             r.round_no = (SELECT max(round_no) FROM request_round WHERE transport_id = r.transport_id) AS is_current
        FROM hospital_request hr
        JOIN request_round r ON r.id = hr.round_id
@@ -135,6 +137,14 @@ async function autoReject(
     [requestId, result.to, result.inStats],
   );
   const version = updated[0].version;
+  // 요청 중지 자동 거절도 통계 원장에 남긴다. 출처가 'paused' 라 병원 거절 기본 수치에는 안 들어간다 (SFR-126)
+  await recordRejection(client, {
+    transportId,
+    hospitalId: request.hospital_id,
+    source: 'paused',
+    reason: 'paused',
+    reasonText: null,
+  });
   // 병원 응답도 '활동'이다 (SFR-086). 이송 건 상태는 그대로라 version 은 안 올린다
   await client.query('UPDATE transport SET last_activity_at = now() WHERE id = $1', [transportId]);
 

@@ -25,6 +25,7 @@ import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
+import { recordTransportStat } from '../stats/records.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
@@ -75,6 +76,8 @@ async function finishPrevious(
   );
   // 이전 이송의 위치 기록 → 익명 경로, 원본 삭제 (SFR-039·041)
   await closeRoute(client, previous.id, { cancelled: false });
+  // 익명 소요시간 통계 1줄 (SFR-126). 이동 거리는 바로 위 closeRoute 가 채운 값을 쓴다
+  await recordTransportStat(client, previous.id);
   // 연쇄: 확정 병원 요청 → 도착 (부록 A-2 46)
   for (const { target, event } of CASCADE.FINISH_PREVIOUS ?? []) {
     const { rows: requests } = await client.query<{
