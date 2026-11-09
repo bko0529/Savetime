@@ -56,6 +56,8 @@ export interface ArriveInput {
   paramedicId: string;
   method: Exclude<ArrivalMethod, 'finish_previous'>;
   clientVersion: number | undefined;
+  // 통신 두절 중 누른 도착을 복구 때 올림 (SFR-099): 단말 시각. 출발~지금 사이로 맞춰 기록한다
+  occurredAt?: Date;
 }
 
 export async function arriveTransport(client: pg.PoolClient, input: ArriveInput) {
@@ -79,11 +81,13 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
     departed_at: Date | null;
   }>(
     `UPDATE transport
-        SET status = $2, arrived_at = now(), arrival_method = $3, version = version + 1,
+        SET status = $2, arrival_method = $3, version = version + 1,
+            -- 보통은 지금. 통신 두절 중 누른 도착이면 단말 시각을 출발(없으면 생성)~지금 사이로 맞춘다 (단말 시계 오차)
+            arrived_at = LEAST(now(), GREATEST(coalesce(departed_at, created_at), coalesce($4::timestamptz, now()))),
             last_activity_at = now(), origin_lat = NULL, origin_lng = NULL
       WHERE id = $1
      RETURNING version, arrived_at, departed_at`,
-    [transportId, to, input.method],
+    [transportId, to, input.method, input.occurredAt ?? null],
   );
   await client.query(
     `INSERT INTO transport_status_history (transport_id, from_status, to_status, event, reason, at)
@@ -109,9 +113,9 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
     for (const request of requests) {
       const result = transitionHreq(request.status, event, { now, version: request.version });
       const { rows: arrived } = await client.query<{ version: number }>(
-        `UPDATE hospital_request SET status = $2, arrived_at = now(), version = version + 1, updated_at = now()
+        `UPDATE hospital_request SET status = $2, arrived_at = $3, version = version + 1, updated_at = now()
           WHERE id = $1 RETURNING version`,
-        [request.id, result.to],
+        [request.id, result.to, moved[0].arrived_at],
       );
       events.push(
         {

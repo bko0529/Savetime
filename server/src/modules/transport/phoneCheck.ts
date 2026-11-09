@@ -141,6 +141,8 @@ export interface PhoneResultInput {
   reasonText?: string | null;
   rejectReason?: PhoneRejectReason | null;
   clientVersion?: number;
+  // 통신 두절 중 기록을 복구 때 올림 (SFR-099): 앱이 만든 기록 ID(두 번 저장 안 함)와 단말 시각(이미 범위를 맞춘 값)
+  offline?: { clientRecordId: string; at: Date };
 }
 
 export type PhoneRejectReason =
@@ -225,8 +227,9 @@ export async function recordPhoneResult(
 
   // 결과 기록: 결과·사유·시각만, 기록한 대원은 남기지 않는다 (DAR-004)
   await client.query(
-    `INSERT INTO phone_check (transport_id, hospital_id, result, reason, reject_reason, reason_text, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO phone_check (transport_id, hospital_id, result, reason, reject_reason, reason_text, created_at,
+                              offline, client_record_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       transportId,
       input.hospitalId,
@@ -234,7 +237,9 @@ export async function recordPhoneResult(
       proceeding ? input.reason : null,
       rejectReason,
       proceeding ? (input.reasonText ?? null) : rejectText,
-      now,
+      input.offline?.at ?? now,
+      input.offline !== undefined,
+      input.offline?.clientRecordId ?? null,
     ],
   );
 

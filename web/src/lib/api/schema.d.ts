@@ -970,6 +970,8 @@ export interface paths {
          * 통신 두절 중 기록 올리기
          * @description 오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든 건은 offlineCreated=true, fallbackReason=offline.
          *
+         *     처리: 보낸 순서대로 기록마다 트랜잭션을 따로 쓴다(한 건이 거절돼도 나머지는 계속). create_fallback = 예비 추천 건 등록(병원 요청은 보내지 않음), 같은 ID면 duplicate, 팀에 다른 진행 중 건이 있으면 cancelled(offline_superseded)로 넣고 history_only. phone_check = 온라인 전화 확인과 같은 함수로 반영(서버가 아직 전화 확인 중이 아니면 그 병원으로 시작, 대상이 다르면 대상만 바꿈). 서버에 유효 승인(5분 안)이나 확정(이동 중)이 있거나 끝난 건이면 phone_check 행(offline)만 남기고 history_only. 같은 clientRecordId면 duplicate. arrive = 이동 중이면 도착, 이미 도착이면 duplicate, 그 밖이면 이력만(history_only). 판정은 DB 시각, 기록 시각(전화 결과·도착·생성)만 occurredAt을 이송 건 생성(도착은 출발)~지금 사이로 맞춰 쓴다. 기록 하나가 상태 전이표·검사에 막히면 outcome rejected + code(예: REASON_REQUIRED, NOT_FOUND). 형식 오류는 요청 전체 400. transport = 마지막 기록의 이송 건 최신 상태(복구 뒤 자동 재조회, SFR-068), 내 팀 건이 아니면 null.
+         *
          *     **요구사항**: SFR-099, SFR-068, SFR-160
          *     **화면**: S-11 오프라인 → 복구
          *     **상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE
@@ -4187,9 +4189,22 @@ export interface operations {
                         hospitalId?: number | null;
                         /** @enum {string|null} */
                         result?: "accepted" | "no_answer" | "skipped" | "rejected" | "dismissed" | null;
-                        /** @enum {string|null} */
+                        /**
+                         * @description phone_check no_answer·skipped 사유 (필수)
+                         * @enum {string|null}
+                         */
                         reason?: "no_answer" | "busy" | "urgent" | "etc" | null;
-                        /** @enum {string|null} */
+                        /** @description phone_check '기타' 글 (거절 '기타'는 20자) */
+                        reasonText?: string | null;
+                        /**
+                         * @description phone_check 거절 사유 (선택, SFR-044)
+                         * @enum {string|null}
+                         */
+                        rejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
+                        /**
+                         * @description arrive일 때
+                         * @enum {string|null}
+                         */
                         method?: "button" | "menu" | null;
                     }[];
                 };
