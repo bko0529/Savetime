@@ -164,10 +164,11 @@ test('상태 이력·환자 평가·실시간 이벤트를 남기고, 이벤트�
     );
     assert.deepEqual(
       events.map((e) => e.name),
-      ['transport.created', 'round.started'],
+      // draft.updated: 보낸 환자 정보로 팀 작성 중 정보를 맞춤 (SFR-105). 칸 이름만, 값은 없다
+      ['transport.created', 'draft.updated', 'round.started'],
     );
     assert.ok(events.every((e) => /^team:\d+$/.test(e.room)));
-    assert.equal(events[1].payload.targetCount, 1);
+    assert.equal(events[2].payload.targetCount, 1);
     assert.ok(!JSON.stringify(events).includes('두통'));
   });
 });
@@ -184,7 +185,7 @@ test('요청할 병원이 0곳이면 오류가 아니라 201 + 예비 추천(no_
     assert.deepEqual(res.body.requests, []);
 
     const { rows } = await ctx.pool.query('SELECT name FROM event_log');
-    assert.deepEqual(rows, [{ name: 'transport.created' }]);
+    assert.deepEqual(rows, [{ name: 'transport.created' }, { name: 'draft.updated' }]);
   });
 });
 
@@ -270,9 +271,10 @@ test('이동 중인 이전 건은 확인(finishPrevious)과 version이 있어야
       arrived: true,
     });
     const { rows: events } = await ctx.pool.query('SELECT name FROM event_log ORDER BY seq');
-    assert.deepEqual(events.map((e) => e.name).slice(-3), [
+    assert.deepEqual(events.map((e) => e.name).slice(-4), [
       'transport.arrived',
       'transport.created',
+      'draft.updated',
       'round.started',
     ]);
   });
