@@ -8,7 +8,7 @@ import { parseBody } from '../../http/validate.js';
 import { endDuty } from '../team/endDuty.js';
 import { paramedicAuth, requireParamedic } from './guards.js';
 import { loadMe } from './me.js';
-import { verifyPassword } from './password.js';
+import { hashPassword, verifyPassword } from './password.js';
 import { forgetSessionState, type AuthContext, type ParamedicStatus } from './session.js';
 import { hashRefreshToken, newRefreshToken, signAccessToken } from './tokens.js';
 import type { Realtime } from '../realtime/server.js';
@@ -24,6 +24,13 @@ const loginSchema = z.object({
 });
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1).max(100) });
+
+// 새 비밀번호 길이는 가입과 같다: 8자 이상 (signup.ts)
+export const PASSWORD_MIN = 8;
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(PASSWORD_MIN).max(200),
+});
 
 // FCM 토큰은 길이가 정해져 있지 않다. 넉넉히 받되 끝없이 받지는 않는다
 const pushDeviceSchema = z.object({
@@ -225,6 +232,36 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
        DO UPDATE SET platform = excluded.platform, fcm_token = excluded.fcm_token, updated_at = now()`,
       [paramedicAuth(res).paramedicId, input.deviceId, input.platform, input.fcmToken],
     );
+    res.status(204).end();
+  });
+
+  // 비밀번호 변경 (SFR-021). 관리자가 초기화한 임시 비밀번호로 들어오면 이것부터 해야 다른 기능이 열린다.
+  // 승인 확인(requireApproved)을 붙이지 않는다: 임시 비밀번호 상태에서도 이 API 는 써야 하므로
+  router.put('/me/password', requireParamedic(ctx), async (req, res) => {
+    const { paramedicId } = paramedicAuth(res);
+    const input = parseBody(changePasswordSchema, req.body);
+    if (input.newPassword === input.currentPassword) {
+      throw new AppError(400, 'VALIDATION_FAILED', '지금 비밀번호와 다른 비밀번호를 정해 주세요', {
+        fields: ['newPassword'],
+      });
+    }
+    // 새 비밀번호는 잠금 밖에서 미리 계산한다 (argon2 는 일부러 느려서 잠근 채 오래 붙잡지 않게)
+    const newHash = await hashPassword(input.newPassword);
+    const changed = await withTransaction(ctx.pool, async (client) => {
+      const { rows } = await client.query<{ password_hash: string }>(
+        'SELECT password_hash FROM paramedic WHERE id = $1 FOR UPDATE',
+        [paramedicId],
+      );
+      if (!(await verifyPassword(rows[0]?.password_hash, input.currentPassword))) return false;
+      await client.query(
+        'UPDATE paramedic SET password_hash = $2, must_change_pw = false WHERE id = $1',
+        [paramedicId, newHash],
+      );
+      return true;
+    });
+    if (!changed) throw invalidCredentials();
+    // 계정 상태 캐시를 지워 다음 요청부터 '변경 필요'가 풀린 상태로 본다
+    await forgetSessionState(ctx, paramedicId);
     res.status(204).end();
   });
 

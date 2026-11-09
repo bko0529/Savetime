@@ -148,6 +148,39 @@ describe('대원 계정 정지·해제 (SFR-151)', () => {
     );
   });
 
+  it('비밀번호 초기화: 확인을 거쳐 임시 비밀번호를 한 번만 보여 주고, 닫으면 다시 볼 수 없다 (SFR-021 인수 기준)', async () => {
+    const server = fakeServer({
+      'GET /admin/paramedics': list(KIM),
+      'POST /admin/paramedics/3/reset-password': {
+        status: 200,
+        body: { tempPassword: 'abcd2345ef' },
+      },
+    });
+    renderAdmin();
+    fireEvent.click(await screen.findByRole('button', { name: '김도윤 비밀번호 초기화' }));
+    const confirm = await screen.findByRole('dialog');
+    expect(confirm.textContent).toContain('소속 기관 전화로 본인인지 먼저 확인하세요');
+    // 확인 전에는 보내지 않는다
+    expect(server.callsTo('POST /admin/paramedics/3/reset-password')).toHaveLength(0);
+    fireEvent.click(within(confirm).getByRole('button', { name: '초기화' }));
+
+    const shown = await screen.findByRole('dialog', { name: /임시 비밀번호/ });
+    expect(within(shown).getByText('abcd2345ef')).toBeTruthy();
+    expect(shown.textContent).toContain('이 창을 닫으면 다시 볼 수 없어요');
+    expect(server.callsTo('POST /admin/paramedics/3/reset-password')).toHaveLength(1);
+
+    fireEvent.click(within(shown).getByRole('button', { name: '확인했어요' }));
+    await waitFor(() => expect(screen.queryByText('abcd2345ef')).toBeNull());
+  });
+
+  it('정지된 계정도 비밀번호를 초기화할 수 있다', async () => {
+    fakeServer({ 'GET /admin/paramedics': list({ ...KIM, status: 'suspended' }) });
+    renderAdmin();
+    const row = (await screen.findByText('김도윤')).closest('tr')!;
+    expect(within(row).getByRole('button', { name: '김도윤 비밀번호 초기화' })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: '정지 해제' })).toBeTruthy();
+  });
+
   it('정지 해제는 확인 창을 거쳐 보낸다', async () => {
     const suspended = { ...KIM, status: 'suspended' };
     const server = fakeServer({

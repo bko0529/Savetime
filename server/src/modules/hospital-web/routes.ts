@@ -19,6 +19,7 @@ import {
 } from './pcAuth.js';
 import { confirmArrival, confirmArrivalSchema } from './confirmArrival.js';
 import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
+import { detectOddPc } from './oddPc.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
 import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
@@ -155,6 +156,8 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       );
       // PC 가 바뀌면 관리자가 알 수 있게 한다 (모르는 PC 등록 감시)
       await notifyAdmin(client, 'pc_change', hospital.id);
+      // 새벽 등록·1시간 안 2대 이상이면 '이상 PC 등록' 알림도 (SFR-148). 등록은 그대로 진행한다
+      await detectOddPc(client, inserted[0].id);
       return {
         kind: 'ok',
         hospital: { id: Number(hospital.id), name: hospital.name },
