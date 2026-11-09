@@ -11,6 +11,7 @@ import type { Logger } from 'pino';
 import { Server, type DefaultEventsMap, type Namespace, type RemoteSocket } from 'socket.io';
 import { withTransaction } from '../../db/transaction.js';
 import {
+  ACTIVE,
   transitionHreq,
   type HreqStatus,
   type TransportStatus,
@@ -27,6 +28,7 @@ import {
   type PushSender,
 } from '../push/dispatch.js';
 import { expireInvite } from '../team/invites.js';
+import { NAV_WAIT_SECONDS, runNavFallback } from '../transport/navDevice.js';
 import { currentTeamId } from '../team/routes.js';
 import {
   endApprovalWindow,
@@ -53,6 +55,8 @@ export interface Realtime {
   startRound(roundId: string): void;
   // 팀 초대 5분 만료 타이머를 건다 (SFR-159). 커밋된 뒤에 부른다. 기다리지 않는다
   scheduleInviteExpiry(inviteId: string): void;
+  // 경로 안내 담당 단말 10초 넘김 타이머 (SFR-132). 운전 단말 응답을 기다릴 때 확정이 커밋된 뒤 부른다
+  scheduleNavFallback(transportId: string): void;
   joinTeam(paramedicId: string, teamId: string): Promise<void>;
   // 근무 종료·로그아웃·탈퇴: 그 대원의 연결을 모두 끊는다 (SER-016)
   disconnectParamedic(paramedicId: string): Promise<void>;
@@ -99,6 +103,7 @@ const DELIVERY_QUEUE = 'delivery-check';
 const EXPIRY_QUEUE = 'respond-timeout';
 const APPROVAL_QUEUE = 'approval-window';
 const INVITE_QUEUE = 'invite-expiry';
+const NAV_QUEUE = 'nav-fallback';
 const REPLAY_LIMIT = 500;
 // 병원 웹은 다시 받기를 하지 않고 재연결 때 목록을 새로 받으므로(설계 3장) 직접 보내는 이벤트에는 seq를 쓰지 않는다
 const NO_SEQ = 0;
@@ -517,6 +522,63 @@ export function createRealtime(options: RealtimeOptions): Realtime {
     .then(({ rows }) => Promise.all(rows.map((row) => scheduleInviteExpiry(row.id))))
     .catch((err: Error) => logger.error({ message: err.message }, '초대 타이머 다시 걸기 실패'));
 
+  // ---------- 경로 안내 담당 단말 10초 넘김 (SFR-132) ----------
+  const navQueue = new Queue(NAV_QUEUE, { connection, prefix });
+  const navWorker = new Worker(
+    NAV_QUEUE,
+    async (job) => {
+      const result = await runNavFallback(pool, String(job.data.transportId));
+      // 일찍 깨어났으면 실패로 돌려 조금 뒤 다시 한다 (판정은 DB 시각)
+      if (result === 'not_due') throw new Error('아직 10초가 안 됐어요');
+      publish(result);
+    },
+    { connection, prefix, concurrency: 10, autorun: false },
+  );
+  navQueue.on('error', (err) => logger.error({ message: err.message }, '담당 단말 큐 오류'));
+  navWorker.on('error', (err) => logger.error({ message: err.message }, '담당 단말 워커 오류'));
+  navWorker.on('failed', (_job, err) =>
+    logger.error({ message: err.message }, '담당 단말 넘김 실패'),
+  );
+  void navWorker
+    .run()
+    .catch((err: Error) => logger.error({ message: err.message }, '워커 시작 실패'));
+
+  async function scheduleNavFallback(transportId: string): Promise<void> {
+    const { rows } = await pool.query<{ delay: number; confirmed_at: Date }>(
+      `SELECT GREATEST(0, ceil(extract(epoch FROM confirmed_at + make_interval(secs => $2) - now()) * 1000))::int AS delay,
+              confirmed_at
+         FROM transport WHERE id = $1 AND confirmed_at IS NOT NULL`,
+      [transportId, NAV_WAIT_SECONDS],
+    );
+    if (!rows[0]) return;
+    await navQueue.add(
+      'fallback',
+      { transportId },
+      {
+        // 확정마다 하나 (목적지 변경 뒤 다시 확정하면 새 작업)
+        jobId: `nav-${transportId}-${rows[0].confirmed_at.getTime()}`,
+        delay: rows[0].delay,
+        attempts: 5,
+        backoff: { type: 'fixed', delay: 500 },
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      },
+    );
+  }
+
+  // 재시작 때: 운전 단말 응답을 기다리던 건의 10초 타이머를 다시 건다 (이미 지났으면 바로 넘김)
+  void pool
+    .query<{ id: string }>(
+      `SELECT id FROM transport
+        WHERE nav_device_id IS NULL AND nav_fallback_device_id IS NOT NULL
+          AND status = ANY($1::transport_status[])`,
+      [ACTIVE],
+    )
+    .then(({ rows }) => Promise.all(rows.map((row) => scheduleNavFallback(row.id))))
+    .catch((err: Error) =>
+      logger.error({ message: err.message }, '담당 단말 타이머 다시 걸기 실패'),
+    );
+
   // 1대라도 ack하면 그 병원에 '전달'. ack 안 한 PC는 :on에서 빼고 알림을 끈다 (설계 4-2 전달 판정)
   async function sendToPc(
     socket: RemoteSocket<DefaultEventsMap, HospitalSocketData>,
@@ -708,6 +770,11 @@ export function createRealtime(options: RealtimeOptions): Realtime {
         logger.error({ message: err.message, roundId }, '요청 전달 실패'),
       );
     },
+    scheduleNavFallback(transportId) {
+      scheduleNavFallback(transportId).catch((err: Error) =>
+        logger.error({ message: err.message, transportId }, '담당 단말 타이머 걸기 실패'),
+      );
+    },
     scheduleInviteExpiry(inviteId) {
       scheduleInviteExpiry(inviteId).catch((err: Error) =>
         logger.error({ message: err.message, inviteId }, '초대 타이머 걸기 실패'),
@@ -771,12 +838,14 @@ export function createRealtime(options: RealtimeOptions): Realtime {
         expiryWorker.close(),
         approvalWorker.close(),
         inviteWorker.close(),
+        navWorker.close(),
       ]);
       await Promise.all([
         queue.close(),
         expiryQueue.close(),
         approvalQueue.close(),
         inviteQueue.close(),
+        navQueue.close(),
       ]);
       pub.disconnect();
       sub.disconnect();

@@ -24,6 +24,7 @@ import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { recordRejection } from '../stats/records.js';
+import { navAssignedEvent, navOnConfirm } from './navDevice.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import { rankForTransport } from './recommend.js';
 import { loadTransport } from './view.js';
@@ -48,6 +49,8 @@ const resultSchema = z.object({
 interface Outcome {
   body: unknown;
   events: LoggedEvent[];
+  // 운전 단말 응답을 10초 기다림 → 커밋 뒤 10초 작업 (SFR-132)
+  navPending?: boolean;
 }
 
 async function dbNow(client: pg.PoolClient): Promise<Date> {
@@ -311,13 +314,24 @@ export async function recordPhoneResult(
     }
   }
 
+  // 경로 안내 담당 단말: 확정 API 와 같은 규칙 (SFR-132)
+  const nav = await navOnConfirm(client, {
+    transportId,
+    teamId: transport.team_id,
+    paramedicId: input.paramedicId,
+  });
+  const { rows: before } = await client.query<{ nav_device_id: string | null }>(
+    'SELECT nav_device_id FROM transport WHERE id = $1',
+    [transportId],
+  );
   // 목적지 = 전화한 병원. 출발 시각은 처음만 (SFR-036). 전화 확인 대상은 끝났으니 비운다
   const { rows: moved } = await client.query<{ version: number }>(
     `UPDATE transport
         SET status = $2, confirmed_hospital_id = $3, confirmed_at = now(), phone_target_hospital_id = NULL,
-            departed_at = coalesce(departed_at, now()), last_activity_at = now(), version = version + 1
+            departed_at = coalesce(departed_at, now()), last_activity_at = now(), version = version + 1,
+            nav_device_id = coalesce($4, nav_device_id)
       WHERE id = $1 RETURNING version`,
-    [transportId, to, input.hospitalId],
+    [transportId, to, input.hospitalId, nav.navDeviceId],
   );
   await client.query(
     `INSERT INTO transport_status_history (transport_id, from_status, to_status, event, reason, at)
@@ -338,10 +352,21 @@ export async function recordPhoneResult(
       byName: null,
     },
   });
+  if (nav.navDeviceId && nav.navDeviceId !== before[0].nav_device_id) {
+    events.push(
+      await navAssignedEvent(client, {
+        transportId,
+        teamId: transport.team_id,
+        version: moved[0].version,
+        navDeviceId: nav.navDeviceId,
+      }),
+    );
+  }
 
   return {
     body: await loadTransport(client, transportId, input.paramedicId),
     events: await appendEvents(client, events),
+    navPending: nav.pending,
   };
 }
 
@@ -451,6 +476,7 @@ export function phoneCheckRouter(
       ),
     );
     realtime?.publish(outcome.events);
+    if (outcome.navPending) realtime?.scheduleNavFallback(transportId);
     res.status(201).json(outcome.body);
   });
 

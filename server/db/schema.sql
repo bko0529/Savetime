@@ -282,6 +282,7 @@ CREATE TABLE transport (                               -- 이송 건
   fallback_reason       varchar(24),                    -- 예비 추천 전환 사유 (마지막)
   confirmed_hospital_id bigint           REFERENCES hospital(id),
   nav_device_id         varchar(80),                    -- 경로 안내 담당 단말
+  nav_fallback_device_id varchar(80),                   -- 운전 단말이 확정 후 10초 안에 응답 안 하면 넘길 단말 = 확정한 대원 단말 (SFR-132)
   version               int              NOT NULL DEFAULT 1,  -- 이송 건 행이 바뀔 때만 +1 (병원 응답은 안 올림)
   confirmed_at          timestamptz,
   departed_at           timestamptz,                    -- 처음 출발 시각, 다시 요청·목적지 변경 뒤에도 유지 (SFR-036)

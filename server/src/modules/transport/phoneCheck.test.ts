@@ -174,7 +174,14 @@ test('수용 확정하면 이동 중이 되고 열려 있던 요청은 요청 �
     const events = await eventsSince(ctx.pool, since);
     assert.deepEqual(
       events.map((x) => x.name),
-      ['request.changed', 'request.changed', 'request.changed', 'transport.status'],
+      // 운전자(김도윤)가 수용 확정 → 그 단말이 바로 경로 안내 담당 (SFR-132)
+      [
+        'request.changed',
+        'request.changed',
+        'request.changed',
+        'transport.status',
+        'transport.nav_device',
+      ],
     );
     assert.equal(events[0].payload.closeReason, 'fallback');
     assert.equal(events[3].payload.event, 'PHONE_ACCEPTED');
