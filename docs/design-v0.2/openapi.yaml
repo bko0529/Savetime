@@ -3608,7 +3608,9 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 응급실 입구 좌표 지정
-      description: "**요구사항**: SFR-145  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND"
+      description: "지도에서 찍은 좌표 저장. 앱 목적지·병원 웹 도착 확인(200m)이 이 좌표를 먼저 쓴다. 작업 이력 1건(좌표 값은\
+        \ 남기지 않음). 대한민국 밖 좌표는 400.\n\n**요구사항**: SFR-145  \n**화면**: A-03 병원 관리  \n**오류 코드**: NOT_FOUND,\
+        \ VALIDATION_FAILED"
       operationId: put_admin_hospitals__id__entrance
       security: *id017
       x-error-codes:
@@ -5007,8 +5009,16 @@ components:
             daysLeft:
               type: integer
           nullable: true
+        location:
+          description: 공공 데이터 병원 좌표 (SFR-145 입구 지정 지도의 처음 가운데). 대한민국 밖·없으면 null
+          allOf:
+          - $ref: '#/components/schemas/LatLng'
+          nullable: true
         entrance:
-          $ref: '#/components/schemas/LatLng'
+          description: 응급실 입구 좌표 (SFR-145). null 이면 '입구 좌표 없음', 도착 판정은 location 으로
+          allOf:
+          - $ref: '#/components/schemas/LatLng'
+          nullable: true
     HospitalStat:
       type: object
       properties:

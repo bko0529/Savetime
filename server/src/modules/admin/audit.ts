@@ -17,6 +17,7 @@ export const AUDIT_ACTIONS = {
   view_signup_photo: '공무원증 사진 열람',
   approve_signup: '가입 승인',
   reject_signup: '가입 반려',
+  set_entrance: '응급실 입구 좌표 지정',
 } as const;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 

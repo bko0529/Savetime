@@ -1747,9 +1747,11 @@ export interface paths {
         get?: never;
         /**
          * 응급실 입구 좌표 지정
-         * @description **요구사항**: SFR-145
+         * @description 지도에서 찍은 좌표 저장. 앱 목적지·병원 웹 도착 확인(200m)이 이 좌표를 먼저 쓴다. 작업 이력 1건(좌표 값은 남기지 않음). 대한민국 밖 좌표는 400.
+         *
+         *     **요구사항**: SFR-145
          *     **화면**: A-03 병원 관리
-         *     **오류 코드**: NOT_FOUND
+         *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
          */
         put: operations["put_admin_hospitals__id__entrance"];
         post?: never;
@@ -2446,7 +2448,10 @@ export interface components {
                 expiresAt?: string;
                 daysLeft?: number;
             } | null;
-            entrance?: components["schemas"]["LatLng"];
+            /** @description 공공 데이터 병원 좌표 (SFR-145 입구 지정 지도의 처음 가운데). 대한민국 밖·없으면 null */
+            location?: components["schemas"]["LatLng"] | null;
+            /** @description 응급실 입구 좌표 (SFR-145). null 이면 '입구 좌표 없음', 도착 판정은 location 으로 */
+            entrance?: components["schemas"]["LatLng"] | null;
         };
         HospitalStat: {
             hospitalId?: number;
