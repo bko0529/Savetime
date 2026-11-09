@@ -28,7 +28,8 @@ const refreshSchema = z.object({ refreshToken: z.string().min(1).max(100) });
 // FCM 토큰은 길이가 정해져 있지 않다. 넉넉히 받되 끝없이 받지는 않는다
 const pushDeviceSchema = z.object({
   deviceId: z.string().min(1).max(80),
-  platform: z.enum(['android', 'ios']),
+  // web: 구급대원 웹앱의 브라우저 푸시 토큰 (CR-010)
+  platform: z.enum(['android', 'ios', 'web']),
   fcmToken: z.string().min(1).max(4096),
 });
 

@@ -14,7 +14,7 @@ CREATE TYPE invite_status      AS ENUM ('sent','accepted','declined','expired');
 CREATE TYPE transport_status   AS ENUM ('requesting','fallback','phone_check','moving','arrived','cancelled');  -- 상태 전이표 v0.2 (부록 A)
 CREATE TYPE hreq_status        AS ENUM ('waiting','delivery_failed','approved','rejected','expired','closed','confirmed','arrived','unacceptable');
 CREATE TYPE phone_result       AS ENUM ('accepted','rejected','no_answer','skipped','dismissed');  -- dismissed = 결과 미선택 (부록 A18)
-CREATE TYPE platform_kind      AS ENUM ('android','ios');
+CREATE TYPE platform_kind      AS ENUM ('android','ios','web');  -- web: 구급대원 웹앱 (CR-010)
 CREATE TYPE owner_kind         AS ENUM ('paramedic','admin');
 
 -- =====================================================================

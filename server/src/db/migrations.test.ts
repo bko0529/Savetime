@@ -83,11 +83,11 @@ test('마이그레이션을 두 번 실행해도 아무 일도 일어나지 않�
     await migrate(url, 'up');
     await migrate(url, 'up');
     const rows = await query<{ count: string }>(url, 'SELECT count(*) FROM pgmigrations');
-    assert.equal(rows[0].count, '8');
+    assert.equal(rows[0].count, '9');
   });
 });
 
-test('0002~0008은 수집 데이터가 있어도 되돌렸다가 다시 적용할 수 있다', async () => {
+test('0002~0009는 수집 데이터가 있어도 되돌렸다가 다시 적용할 수 있다', async () => {
   await withTempDatabase(async (url) => {
     await migrate(url, 'up');
     await query(
@@ -97,7 +97,7 @@ test('0002~0008은 수집 데이터가 있어도 되돌렸다가 다시 적용�
        )
        INSERT INTO hospital_capability SELECT id, 'mkioskty1', true, now() FROM h`,
     );
-    await migrate(url, 'down', 7);
+    await migrate(url, 'down', 8);
     const tables = await query(url, `SELECT 1 FROM pg_tables WHERE tablename = 'collect_log'`);
     assert.equal(tables.length, 0);
     await migrate(url, 'up');

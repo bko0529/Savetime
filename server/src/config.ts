@@ -29,6 +29,16 @@ const schema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  // 구급대원 앱(웹앱) 주소(쉼표로 여러 개). 이 주소에서 온 대원 API 요청만 CORS 로 허락한다 (CR-010)
+  APP_ORIGINS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
   // Firebase 서비스 계정 JSON을 base64 한 줄로. 없으면 푸시만 꺼진다 (SFR-130)
   FIREBASE_SERVICE_ACCOUNT_BASE64: z.preprocess(
     (v) => (v === '' ? undefined : v),
