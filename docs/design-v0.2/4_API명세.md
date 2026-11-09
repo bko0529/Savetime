@@ -190,6 +190,7 @@
 | 403 | `NOT_APPROVED` | 가입 승인 전 계정 |
 | 403 | `NOT_NAV_DEVICE` | 경로 안내 담당 단말이 아님 → 보기 전용 |
 | 403 | `ORIGIN_NOT_ALLOWED` | 허용되지 않은 Origin (CSRF 방어) |
+| 403 | `IP_NOT_ALLOWED` | 관리자 서버: 허용 IP(`ADMIN_ALLOWED_IPS`)가 아닌 곳에서 접속 (T-11) |
 | 403 | `OTP_SETUP_REQUIRED` | OTP 첫 연결 필요 (details.setupToken·otpauthUrl) |
 | 404 | `ADDRESS_NOT_FOUND` | 주소를 좌표로 못 바꿈 |
 | 404 | `AGENCY_NOT_FOUND` | 소속기관 코드 없음 |

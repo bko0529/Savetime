@@ -1,0 +1,29 @@
+# 데이터 서버 1대: PostgreSQL 16 + Redis 7. 앱 서버와 관리자 서버가 같이 쓴다 (기술정의서 7장).
+# 포트는 Lightsail 사설 IP 에만 연다(PRIVATE_IP). 인터넷에 열지 말 것 — 방화벽도 두 서버 사설 IP 만 허용
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: savetime
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 를 .env 에 적어 주세요}
+      POSTGRES_DB: savetime
+      TZ: UTC
+    ports: ["${PRIVATE_IP:?PRIVATE_IP 를 .env 에 적어 주세요}:5432:5432"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U savetime"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    # AOF 켬(T-08) + 비밀번호
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD 를 .env 에 적어 주세요}"]
+    ports: ["${PRIVATE_IP}:6379:6379"]
+    volumes:
+      - redis-data:/data
+volumes:
+  db-data:
+  redis-data:

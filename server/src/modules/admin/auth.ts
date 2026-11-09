@@ -20,6 +20,8 @@ export interface AdminContext {
   // 갱신 토큰을 쓸 수 있는 시간 (대원 근무 시간과 같은 값)
   sessionHours: number;
   allowedOrigins: string[];
+  // 관리자 서버 접속 허용 IP (ADMIN_ALLOWED_IPS, T-11). 비우면 검사하지 않는다 (개발·테스트)
+  allowedIps?: string[];
 }
 
 export const MAX_FAILURES = 5;

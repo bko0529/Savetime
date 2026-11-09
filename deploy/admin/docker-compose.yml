@@ -1,0 +1,30 @@
+# 관리자 서버 1대 (T-11). 같은 이미지를 APP_ROLE=admin 으로 띄운다.
+# Caddy 가 허용 IP 만 통과시키고, 서버도 ADMIN_ALLOWED_IPS 로 한 번 더 막는다 (둘 다 채울 것)
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN 을 .env 에 적어 주세요}
+      # 띄어쓰기로 여러 개 (예: "203.0.113.10 198.51.100.0/24")
+      CADDY_ALLOWED_IPS: ${CADDY_ALLOWED_IPS:?CADDY_ALLOWED_IPS 를 .env 에 적어 주세요}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [server, web]
+  server:
+    build: { context: ../.., dockerfile: server/Dockerfile }
+    restart: unless-stopped
+    env_file: ./server.env   # ADMIN_ALLOWED_IPS 를 꼭 채운다 (비우면 서버가 켜지지 않음)
+    environment:
+      APP_ROLE: admin
+      NODE_ENV: production
+    stop_grace_period: 35s
+  web:
+    build: { context: ../.., dockerfile: web/Dockerfile }
+    restart: unless-stopped
+    environment:
+      APP_ROLE: admin
+volumes:
+  caddy-data:

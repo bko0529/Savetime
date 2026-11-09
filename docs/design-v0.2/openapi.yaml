@@ -23,6 +23,8 @@ info:
     - 구급대원 웹앱(CR-010): 대원 API는 `APP_ORIGINS`에 있는 주소에만 CORS 허용(쿠키 없음, `X-Server-Now` 노출).
     `/hw`·`/admin`에는 CORS 없음
 
+    - 관리자 API(`/admin/*`)는 관리자 서버에서만 열림(T-11). 허용 IP(`ADMIN_ALLOWED_IPS`)가 아니면 로그인부터 403 `IP_NOT_ALLOWED`
+
     - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
 
     - 상태 변경: 상태 전이표 v0.2의 전이 함수를 거친다. 사용자 요청에는 `version` 필수(SFR-160). 검사 순서 = 표 →

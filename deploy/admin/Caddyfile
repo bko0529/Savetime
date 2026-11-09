@@ -1,0 +1,26 @@
+# 관리자 서버 Caddy (T-11): admin. 도메인, 허용 IP 만 통과.
+# Caddy 가 맨 앞이라 접속 주소(remote_ip)를 그대로 본다. 밖에서 보낸 X-Forwarded-For 는 믿지 않고 덮어쓴다
+{$ADMIN_DOMAIN} {
+	encode zstd gzip
+
+	# 상태 점검(UptimeRobot)은 IP 와 상관없이
+	handle /health {
+		reverse_proxy server:4000
+	}
+
+	@blocked not remote_ip {$CADDY_ALLOWED_IPS}
+	handle @blocked {
+		respond 403
+	}
+
+	handle /api/* {
+		reverse_proxy server:4000
+	}
+	# 관리자 서버는 실시간 연결을 받지 않는다 (보내기 전용)
+	handle /socket.io/* {
+		respond 404
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

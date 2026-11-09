@@ -1,0 +1,29 @@
+# 앱 서버 1대 (대원·병원, 2026-11-09 결정: 앱 서버는 1대). Caddy 가 HTTPS 를 맡고 경로로 나눠 준다.
+# 실행: deploy/README.md 참고. 비밀 값은 같은 폴더의 server.env 에만 (커밋 금지)
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN 을 .env 에 적어 주세요}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data   # HTTPS 인증서. 지우면 다시 발급받는다
+    depends_on: [server, web]
+  server:
+    build: { context: ../.., dockerfile: server/Dockerfile }
+    restart: unless-stopped
+    env_file: ./server.env
+    environment:
+      APP_ROLE: main
+      NODE_ENV: production
+    # 종료 신호 뒤 처리 중인 요청을 끝낼 시간 (index.ts 는 30초 안에 끝낸다)
+    stop_grace_period: 35s
+  web:
+    build: { context: ../.., dockerfile: web/Dockerfile }
+    restart: unless-stopped
+    environment:
+      APP_ROLE: hospital
+volumes:
+  caddy-data:

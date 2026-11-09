@@ -83,15 +83,39 @@ const auth =
   config.APP_ROLE === 'main' && config.JWT_SECRET
     ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
     : undefined;
-// 실시간(Socket.IO)은 대원·병원 API가 있는 서버에서만 켠다. 관리자 서버(T-11)는 켜지 않는다
 // 키가 없으면 푸시만 꺼진다. 앱이 켜져 있을 때의 실시간 알림은 그대로 (SFR-130)
 const push = config.FIREBASE_SERVICE_ACCOUNT_BASE64
   ? createFcmSender(config.FIREBASE_SERVICE_ACCOUNT_BASE64)
   : undefined;
 if (!push) logger.warn('FIREBASE_SERVICE_ACCOUNT_BASE64가 없어 푸시 알림을 보내지 않습니다');
-const realtime = auth
-  ? createRealtime({ auth, redisUrl: config.REDIS_URL, logger, push })
+// 실시간(Socket.IO): 대원·병원 서버(main)는 연결을 받고 타이머 작업도 돌린다.
+// 관리자 서버(T-11)는 '보내기 전용': 연결은 받지 않고, 정지·PC 해제·가입 결과를 Redis 어댑터로 main 서버의 연결에 보낸다
+const realtimeAuth =
+  auth ??
+  (config.APP_ROLE === 'admin' && config.JWT_SECRET
+    ? { pool, redis, jwtKey: signingKey(config.JWT_SECRET), shiftHours: config.SHIFT_MAX_HOURS }
+    : undefined);
+const realtime = realtimeAuth
+  ? createRealtime({
+      auth: realtimeAuth,
+      redisUrl: config.REDIS_URL,
+      logger,
+      push,
+      runJobs: config.APP_ROLE === 'main',
+    })
   : undefined;
+
+// 관리자 API 는 관리자 서버에서만 켠다 (T-11). 개발 중에는 편하게 main 서버에서도 켠다
+const adminEnabled =
+  !!config.JWT_SECRET && (config.APP_ROLE === 'admin' || config.NODE_ENV === 'development');
+// 운영 관리자 서버를 허용 IP 없이 켜면 누구나 관리자 로그인 화면에 닿는다. 아예 켜지 않는다
+if (
+  config.APP_ROLE === 'admin' &&
+  config.NODE_ENV === 'production' &&
+  config.ADMIN_ALLOWED_IPS.length === 0
+) {
+  throw new Error('관리자 서버는 ADMIN_ALLOWED_IPS를 채워야 켜집니다');
+}
 
 // 공무원증 사진 저장소 (SFR-017, SER-015). 값이 다 있어야 켠다. 암호화 키 길이가 틀리면 여기서 멈춘다
 const photos =
@@ -127,16 +151,17 @@ const app = createApp({
     config.APP_ROLE === 'main'
       ? { pool, redis, allowedOrigins: config.ALLOWED_ORIGINS, realtime }
       : undefined,
-  // 관리자 API 는 관리자 서버와, S7 에 서버를 나누기 전까지는 대원·병원 서버에서도 켠다 (T-11)
-  admin: config.JWT_SECRET
-    ? {
-        pool,
-        redis,
-        jwtKey: signingKey(config.JWT_SECRET),
-        sessionHours: config.SHIFT_MAX_HOURS,
-        allowedOrigins: config.ALLOWED_ORIGINS,
-      }
-    : undefined,
+  admin:
+    adminEnabled && config.JWT_SECRET
+      ? {
+          pool,
+          redis,
+          jwtKey: signingKey(config.JWT_SECRET),
+          sessionHours: config.SHIFT_MAX_HOURS,
+          allowedOrigins: config.ALLOWED_ORIGINS,
+          allowedIps: config.ADMIN_ALLOWED_IPS,
+        }
+      : undefined,
   healthChecks: {
     db: () => pool.query('SELECT 1'),
     redis: () => redis.ping(),
@@ -146,8 +171,8 @@ const app = createApp({
 const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT }, '서버 시작');
 });
-// REST와 같은 포트에서 /socket.io 경로로 받는다 (Caddy가 /socket.io를 서버로 넘김)
-realtime?.attach(server);
+// REST와 같은 포트에서 /socket.io 경로로 받는다 (Caddy가 /socket.io를 서버로 넘김). 관리자 서버는 연결을 받지 않는다
+if (config.APP_ROLE === 'main') realtime?.attach(server);
 
 // 키가 없어도 서버는 켜진다. 수집만 빠지고 저장된 데이터로 동작한다.
 const scheduledJobs: ScheduledJob[] = [];
