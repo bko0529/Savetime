@@ -28,6 +28,7 @@ import { journalRouter } from './modules/transport/journal.js';
 import { locationRouter } from './modules/transport/route.js';
 import { phoneCheckRouter } from './modules/transport/phoneCheck.js';
 import { roundsRouter } from './modules/transport/rounds.js';
+import { assessmentSendRouter } from './modules/transport/assessmentSend.js';
 import { navDeviceRouter } from './modules/transport/navDevice.js';
 import { finishRouter } from './modules/transport/finish.js';
 import { transportRouter } from './modules/transport/create.js';
@@ -96,6 +97,7 @@ export function createApp({
     app.use('/api/v1', journalRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', roundsRouter(auth.pool, approvedParamedic, realtime, eta));
+    app.use('/api/v1', assessmentSendRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', navDeviceRouter(auth.pool, approvedParamedic, realtime));
   }
   if (hospitalWeb) {
