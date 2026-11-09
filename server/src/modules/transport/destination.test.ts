@@ -259,3 +259,24 @@ test('사유 없음 422 · 버전 없음 400 · 옛 버전 409 · 이동 중 아
     assert.equal((await change(ctx, s, { reason: 'road', version }, other)).status, 404);
   });
 });
+
+test("목적지 변경으로 보낸 새 요청에도 앞에서 승인했던 병원에 '직전 승인 · 재확인' (SFR-156)", async () => {
+  await withAuthContext(async (ctx) => {
+    // 1회차: B·C 승인, D 대기 → B 확정 → 목적지 변경
+    const s = await scene(ctx);
+    const version = await movingTo(ctx, s, 'B병원', 1);
+    const res = await change(ctx, s, { reason: 'patient_change', version });
+    assert.equal(res.status, 200);
+
+    const { rows } = await ctx.pool.query(
+      `SELECT h.name, hr.prev_approved_recheck AS recheck FROM hospital_request hr
+         JOIN request_round r ON r.id = hr.round_id JOIN hospital h ON h.id = hr.hospital_id
+        WHERE r.transport_id = $1 AND r.round_no = 2 ORDER BY h.name`,
+      [s.transportId],
+    );
+    assert.deepEqual(rows, [
+      { name: 'C병원', recheck: true },
+      { name: 'D병원', recheck: false },
+    ]);
+  });
+});

@@ -90,6 +90,17 @@ export async function previewRequestTargets(
   };
 }
 
+// 이번 이송의 앞 회차에서 '승인했던' 병원인가 (SFR-156). $2 = 병원, $6 = 이송 건.
+// 승인한 요청은 응답 시각이 남고, 그 뒤 다른 병원 확정(other_hospital)·5분 지남(expired_approval)으로 닫혀도 승인했던 것이다.
+// 거절(rejected)은 응답 시각이 있어도 승인이 아니다. 스스로 승인을 취소했거나(approval_cancelled) 목적지를 바꿔 떠난(dest_changed)
+// 병원은 제외 병원이라 어차피 요청이 가지 않지만, 혹시 몰라 여기서도 뺀다
+const PREV_APPROVED_SQL = `
+  SELECT 1 FROM hospital_request p JOIN request_round pr ON pr.id = p.round_id
+   WHERE pr.transport_id = $6 AND p.round_id <> $1 AND p.hospital_id = $2
+     AND p.responded_at IS NOT NULL AND p.status <> 'rejected'
+     AND p.closed_reason IS DISTINCT FROM 'approval_cancelled'
+     AND p.closed_reason IS DISTINCT FROM 'dest_changed'`;
+
 export interface NewRound {
   roundId: string;
   event: EventRecord; // round.started (방은 부르는 쪽이 정한다)
@@ -119,12 +130,21 @@ export async function insertRound(
      RETURNING id, round_no, respond_until, approval_valid_until`,
     [input.transportId, input.kind, input.radiusKm],
   );
+  // 다시 요청·목적지 변경이면 이번 이송의 앞 회차에서 승인했던 병원에 '직전 승인 · 재확인'을 붙인다 (SFR-156)
+  const recheck = input.kind === 're_request' || input.kind === 'dest_change';
   for (const target of input.targets) {
     const { to } = transitionHreq(null, 'SEND', { now: input.now, version: 1 });
     await client.query(
-      `INSERT INTO hospital_request (round_id, hospital_id, status, eta_min, eta_source)
-       VALUES ($1, $2, $3, $4, 'straight')`,
-      [round[0].id, target.id, to, Math.max(1, Math.ceil((target.km / STRAIGHT_KMH) * 60))],
+      `INSERT INTO hospital_request (round_id, hospital_id, status, eta_min, eta_source, prev_approved_recheck)
+       VALUES ($1, $2, $3, $4, 'straight', $5::boolean AND EXISTS (${PREV_APPROVED_SQL}))`,
+      [
+        round[0].id,
+        target.id,
+        to,
+        Math.max(1, Math.ceil((target.km / STRAIGHT_KMH) * 60)),
+        recheck,
+        input.transportId,
+      ],
     );
   }
   return {
