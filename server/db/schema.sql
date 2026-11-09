@@ -297,7 +297,10 @@ CREATE TABLE transport (                               -- 이송 건
   dest_changed_at       timestamptz,                   -- 목적지 변경은 1번만 (SFR-077)
   dest_changed_from_hospital_id bigint REFERENCES hospital(id),
   dest_change_reason    varchar(16) CHECK (dest_change_reason IN ('patient_change','road','hospital','etc')),
-  created_at            timestamptz      NOT NULL DEFAULT now()
+  created_at            timestamptz      NOT NULL DEFAULT now(),
+  nav_eta_min           smallint CHECK (nav_eta_min BETWEEN 0 AND 600),  -- 앱 안 내비(KNSDK)가 계산한 남은 분 (SFR-121·132)
+  nav_eta_at            timestamptz,                    -- 그 값을 서버가 받은 DB 시각. 보여 줄 때 지난 분을 뺀다
+  near_entrance_at      timestamptz                     -- 확정 병원 입구 200m 안에 처음 들어온 시각 → incoming.near 한 번 (SFR-144)
 );
 -- 팀당 진행 중 이송 1건 (서버가 강제)
 CREATE UNIQUE INDEX one_active_transport_per_team ON transport (team_id)

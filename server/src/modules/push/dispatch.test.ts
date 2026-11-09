@@ -377,3 +377,19 @@ test('실시간 서버: 커밋된 이벤트를 보낼 때 app.visibility로 화�
     }
   });
 });
+
+test("병원 웹 '도착 확인'(위치 없는 건)은 앱이 꺼져 있어도 '도착 처리할까요?' 푸시가 간다 (SFR-144)", async () => {
+  const message = await messageFor({} as never, {
+    seq: 1,
+    room: 'team:1',
+    name: 'transport.arrive_requested',
+    entityVersion: null,
+    payload: { transportId: 't-1', hospitalName: 'B병원' },
+    occurredAt: new Date(),
+  });
+  assert.deepEqual(message, {
+    title: '세이브타임',
+    body: 'B병원에서 도착을 확인했어요 · 도착 처리할까요?',
+    data: { event: 'transport.arrive_requested', transportId: 't-1' },
+  });
+});

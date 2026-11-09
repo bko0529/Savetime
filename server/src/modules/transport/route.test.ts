@@ -237,3 +237,140 @@ test("도착을 잊고 새로 요청하면('이전 이송 끝내기') 이전 건
     assert.ok(after.distance_m > 1000);
   });
 });
+
+async function eventNames(pool: pg.Pool, since: number) {
+  const { rows } = await pool.query<{
+    room: string;
+    name: string;
+    payload: Record<string, unknown>;
+  }>('SELECT room, name, payload FROM event_log WHERE seq > $1 ORDER BY seq', [since]);
+  return rows;
+}
+async function lastSeq(pool: pg.Pool): Promise<number> {
+  const { rows } = await pool.query('SELECT coalesce(max(seq), 0)::int AS n FROM event_log');
+  return rows[0].n;
+}
+const currentEta = async (ctx: AuthContext, s: Scene) =>
+  (
+    await request(appFor(ctx))
+      .get('/api/v1/transports/current')
+      .set('Authorization', `Bearer ${s.lee}`)
+  ).body.etaMin;
+
+test('담당 단말이 내비 남은 시간을 보내면 팀원 화면·병원 도착 예정에 같은 값, 바뀔 때만 알린다 (SFR-121·132)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await moving(ctx, s);
+    const { rows: b } = await ctx.pool.query("SELECT id FROM hospital WHERE name = 'B병원'");
+
+    let since = await lastSeq(ctx.pool);
+    const first = await locations(ctx, s, {
+      deviceId: 'device-kim01',
+      points: track(0),
+      etaMin: 12,
+    });
+    assert.equal(first.status, 204);
+    // 팀원(이서준) 화면도 같은 값
+    assert.equal(await currentEta(ctx, s), 12);
+    const sent = await eventNames(ctx.pool, since);
+    const teamRoom = sent.find((e) => e.name === 'transport.eta')!;
+    assert.match(teamRoom.room, /^team:/);
+    assert.deepEqual(teamRoom.payload, { transportId: s.transportId, etaMin: 12 });
+    const hospital = sent.find((e) => e.name === 'incoming.updated')!;
+    assert.equal(hospital.room, `hospital:${b[0].id}`);
+    assert.deepEqual(hospital.payload, { requestId: s.req['B병원'], etaMin: 12 });
+    // 병원으로 가는 이벤트에 구급차 좌표는 없다
+    assert.doesNotMatch(JSON.stringify(sent), /lat|lng/);
+
+    // 같은 분이면 다시 알리지 않는다 (5초마다 보내지 않게)
+    since = await lastSeq(ctx.pool);
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.001), etaMin: 12 });
+    assert.deepEqual(await eventNames(ctx.pool, since), []);
+    // 바뀌면 알린다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.002), etaMin: 11 });
+    assert.deepEqual(
+      (await eventNames(ctx.pool, since)).map((e) => e.name),
+      ['transport.eta', 'incoming.updated'],
+    );
+  });
+});
+
+test('남은 시간이 2분 넘게 안 오면 마지막 값에서 지난 분을 빼고, 한 번도 안 왔으면 확정 때 값에서 뺀다 (SFR-121)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await moving(ctx, s);
+    // 아직 내비 값이 없음: 확정 때 도착 예상 시간 − 확정 뒤 지난 분
+    await ctx.pool.query('UPDATE hospital_request SET eta_min = 9 WHERE id = $1', [s.req['B병원']]);
+    await ctx.pool.query(
+      "UPDATE transport SET confirmed_at = now() - interval '2 minutes 10 seconds' WHERE id = $1",
+      [s.transportId],
+    );
+    assert.equal(await currentEta(ctx, s), 7);
+
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0), etaMin: 12 });
+    // 3분 동안 값이 안 왔다 (단말 통신 끊김). 확정은 그보다 먼저였다
+    await ctx.pool.query(
+      `UPDATE transport SET nav_eta_at = now() - interval '3 minutes 5 seconds',
+              confirmed_at = now() - interval '10 minutes' WHERE id = $1`,
+      [s.transportId],
+    );
+    assert.equal(await currentEta(ctx, s), 9);
+    // 0분 밑으로는 내려가지 않는다
+    await ctx.pool.query(
+      "UPDATE transport SET nav_eta_at = now() - interval '30 minutes' WHERE id = $1",
+      [s.transportId],
+    );
+    assert.equal(await currentEta(ctx, s), 0);
+  });
+});
+
+test('담당 단말이 아니면 남은 시간도 받지 않고, 범위 밖 값은 400', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await moving(ctx, s);
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0) });
+    const other = await locations(
+      ctx,
+      s,
+      { deviceId: 'device-lee01', points: track(0.001), etaMin: 3 },
+      s.lee,
+    );
+    assert.equal(other.status, 403);
+    const bad = await locations(ctx, s, {
+      deviceId: 'device-kim01',
+      points: track(0.001),
+      etaMin: -1,
+    });
+    assert.equal(bad.status, 400);
+    const { rows } = await ctx.pool.query('SELECT nav_eta_min FROM transport WHERE id = $1', [
+      s.transportId,
+    ]);
+    assert.equal(rows[0].nav_eta_min, null);
+  });
+});
+
+test('구급차가 확정 병원 입구 200m 안에 처음 들어오면 병원 웹에 incoming.near 를 한 번만 보낸다 (SFR-144)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await moving(ctx, s);
+    const { rows: b } = await ctx.pool.query("SELECT id FROM hospital WHERE name = 'B병원'");
+    const nearOnes = async () =>
+      (await eventNames(ctx.pool, 0)).filter((e) => e.name === 'incoming.near');
+
+    // B병원은 출발지에서 북쪽 0.02도(약 2.2km). 아직 멀다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.01) });
+    assert.deepEqual(await nearOnes(), []);
+    // 입구 앞
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.0199) });
+    assert.deepEqual(await nearOnes(), [
+      {
+        room: `hospital:${b[0].id}`,
+        name: 'incoming.near',
+        payload: { requestId: s.req['B병원'] },
+      },
+    ]);
+    // 계속 입구 근처에 있어도 다시 보내지 않는다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.02) });
+    assert.equal((await nearOnes()).length, 1);
+  });
+});
