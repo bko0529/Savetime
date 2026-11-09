@@ -47,7 +47,7 @@ export interface AppServerEvents {
   'team.member_joined':    (e: Envelope<{ paramedicId: number; name: string; role: 'driver' | 'care' }>) => void;
   'team.member_left':      (e: Envelope<{ paramedicId: number; name: string; reason: 'duty_end' | 'logout' | 'auto_14h' | 'withdrawal' | 'suspended' }>) => void;
   'team.role_changed':     (e: Envelope<{ paramedicId: number; role: 'driver' | 'care' }>) => void;
-  'draft.updated':         (e: Envelope<{ version: number; fields: string[]; byName: string; overwritten: { field: string; prevByName: string }[] }>) => void; // 값은 GET /teams/current/draft (SFR-114)
+  'draft.updated':         (e: Envelope<{ version: number; fields: string[]; byName: string | null; overwritten: { field: string; prevByName: string }[]; reason?: 'prev_expired' }>) => void; // 값은 GET /teams/current/draft (SFR-114). byName null + reason prev_expired = 직전 환자 정보 10분 지나 서버가 비움 (SFR-157)
 
   // --- 이송 건 (team 방, entityVersion = transport.version) ---
   'transport.created':     (e: Envelope<{ transportId: string; status: 'requesting' | 'fallback'; byName: string; fallbackReason: FallbackReason | null }>) => void;

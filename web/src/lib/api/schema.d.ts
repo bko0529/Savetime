@@ -3310,7 +3310,7 @@ export interface operations {
                         assessment?: components["schemas"]["Assessment"];
                         /** @description 항목별 {byName, at} */
                         fieldMeta?: Record<string, never>;
-                        /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157) */
+                        /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157). 팀의 가장 최근 이송이 도착·취소로 끝난 뒤 아무도 안 고쳤고 진행 중 이송이 없을 때 그 건 ID. 앱은 '직전 환자 정보 · 지우기'를 띄우고, 지우기는 DELETE. 10분이 지나면 빈 작성 중 정보(version 0)로 보이고 서버가 1분 안에 비운다 */
                         prefilledFromTransportId?: string | null;
                         /** Format: date-time */
                         prefillExpiresAt?: string | null;
@@ -3519,7 +3519,7 @@ export interface operations {
                     id: string;
                     /**
                      * Format: uuid
-                     * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157)
+                     * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157). 같은 팀이고 끝난 지 10분 안이면 그 건의 수용 불가 병원을 이번 요청에서 빼고 excluded_hospital(unacceptable_prev)에 넣는다. 조건이 안 맞으면 이어받지 않는다(오류 아님)
                      */
                     prevTransportId?: string | null;
                     /** @description 진행 중 건이 '이동 중'일 때 '이전 이송 끝내기'를 확인함 (SFR-104) */
@@ -5626,7 +5626,7 @@ export interface operations {
                 lng: number;
                 radiusKm: 10 | 20 | 30 | 40;
                 grade?: 1 | 2 | 3;
-                /** @description 제외 병원 이어받기 */
+                /** @description 제외 병원 이어받기 (같은 팀·끝난 지 10분 안인 직전 건의 수용 불가 병원을 빼고 센다, SFR-157) */
                 prevTransportId?: string;
             };
             header?: never;
