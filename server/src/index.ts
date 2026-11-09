@@ -59,6 +59,9 @@ const eta = config.KAKAO_REST_API_KEY
 if (config.ALLOWED_ORIGINS.length === 0) {
   logger.warn('ALLOWED_ORIGINS가 비어 있어 병원 웹 요청의 Origin을 검사하지 않습니다');
 }
+if (config.APP_ROLE === 'main' && config.APP_ORIGINS.length === 0) {
+  logger.warn('APP_ORIGINS가 비어 있어 브라우저의 구급대원 앱이 대원 API를 부를 수 없습니다');
+}
 if (!eta) logger.warn('KAKAO_REST_API_KEY가 없어 예상 이동시간을 구하지 않습니다');
 
 // 같은 카카오 키를 쓴다. 키가 없으면 주소→좌표만 503이 된다 (SFR-009)
@@ -112,6 +115,8 @@ if (!photos) logger.warn('S3_*·PHOTO_ENC_KEY가 없어 가입 신청(사진 저
 
 const app = createApp({
   logger,
+  // 대원 앱은 대원·병원 서버(main)만 부른다 (T-11)
+  appOrigins: config.APP_ROLE === 'main' ? config.APP_ORIGINS : [],
   photos,
   eta,
   geocoder,

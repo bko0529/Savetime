@@ -229,7 +229,9 @@ export interface paths {
         get?: never;
         /**
          * 푸시 토큰 등록
-         * @description **요구사항**: SFR-130, COR-009
+         * @description web은 구급대원 웹앱의 브라우저 푸시 토큰(FCM 웹, CR-010).
+         *
+         *     **요구사항**: SFR-130, COR-009, CR-010
          *     **화면**: 앱 시작
          */
         put: operations["put_me_push_device"];
@@ -2919,7 +2921,7 @@ export interface operations {
                 "application/json": {
                     deviceId: string;
                     /** @enum {string} */
-                    platform: "android" | "ios";
+                    platform: "android" | "ios" | "web";
                     fcmToken: string;
                 };
             };

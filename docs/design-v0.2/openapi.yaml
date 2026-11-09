@@ -20,6 +20,9 @@ info:
 
     - 병원·관리자 웹: 상태를 바꾸는 요청은 `Origin` 헤더가 허용 목록일 때만 (CSRF 방어)
 
+    - 구급대원 웹앱(CR-010): 대원 API는 `APP_ORIGINS`에 있는 주소에만 CORS 허용(쿠키 없음, `X-Server-Now` 노출).
+    `/hw`·`/admin`에는 CORS 없음
+
     - **내 것이 아니면 404**: 다른 팀 이송 건, 다른 병원 요청, 남의 초대·메모 (SER-010·013)
 
     - 상태 변경: 상태 전이표 v0.2의 전이 함수를 거친다. 사용자 요청에는 `version` 필수(SFR-160). 검사 순서 = 표 →
@@ -443,7 +446,7 @@ paths:
       tags:
       - 1. 대원 인증·계정
       summary: 푸시 토큰 등록
-      description: "**요구사항**: SFR-130, COR-009  \n**화면**: 앱 시작"
+      description: "web은 구급대원 웹앱의 브라우저 푸시 토큰(FCM 웹, CR-010).\n\n**요구사항**: SFR-130, COR-009, CR-010  \n**화면**: 앱 시작"
       operationId: put_me_push_device
       security: *id009
       requestBody:
@@ -460,6 +463,7 @@ paths:
                   enum:
                   - android
                   - ios
+                  - web
                 fcmToken:
                   type: string
               required:

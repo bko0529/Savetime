@@ -2,6 +2,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import type { Logger } from 'pino';
+import { appCors } from './http/appCors.js';
 import { errorHandler, notFoundHandler } from './http/errors.js';
 import { serverNow } from './http/serverNow.js';
 import { requireApproved, requireParamedic } from './modules/auth/guards.js';
@@ -53,6 +54,8 @@ export interface AppDeps {
   admin?: AdminContext;
   // 사진 저장소 설정이 없으면 비워 둔다. 가입 신청만 503 이 된다 (SFR-017)
   photos?: PhotoStore;
+  // 구급대원 앱(웹앱) 주소. 여기 있는 주소에서 온 대원 API 요청만 CORS 로 허락한다 (CR-010)
+  appOrigins?: string[];
 }
 
 export function createApp({
@@ -65,6 +68,7 @@ export function createApp({
   hospitalWeb,
   admin,
   photos,
+  appOrigins = [],
 }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -76,6 +80,8 @@ export function createApp({
   app.use(serverNow);
   app.use(helmet());
   app.use(express.json());
+  // 라우터보다 먼저: 401·404 같은 오류 응답에도 CORS 가 붙어야 앱이 오류 코드를 읽는다
+  app.use('/api/v1', appCors(appOrigins));
 
   app.use(healthRouter(healthChecks));
   if (auth) {

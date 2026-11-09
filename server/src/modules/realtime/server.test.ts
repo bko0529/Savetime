@@ -159,6 +159,18 @@ test('/app: 토큰이 없거나 틀리면 연결을 거절하고, 맞으면 붙�
   });
 });
 
+test('/app: 다른 주소의 브라우저(구급대원 웹앱)에서도 토큰으로 붙는다 (CR-010)', async () => {
+  await withRealtime(async (h) => {
+    const token = await login(h, 'kim01');
+    // 웹소켓 전용이라 CORS 확인 요청이 없다. 인증은 쿠키가 아니라 토큰이어서 다른 사이트가 흉내 낼 수 없다
+    const socket = await h.connect('/app', {
+      auth: { token },
+      extraHeaders: { origin: 'https://savetime-app.lovable.app' },
+    });
+    assert.ok(socket.connected);
+  });
+});
+
 test('팀원 앱은 커밋된 이송 건 이벤트를 받고, 실패한 요청의 이벤트는 받지 않는다', async () => {
   await withRealtime(async (h) => {
     const kim = await login(h, 'kim01');
