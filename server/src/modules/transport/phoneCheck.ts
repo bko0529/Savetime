@@ -23,6 +23,7 @@ import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
+import { recordRejection } from '../stats/records.js';
 import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
 import { rankForTransport } from './recommend.js';
 import { loadTransport } from './view.js';
@@ -37,6 +38,10 @@ const resultSchema = z.object({
   result: z.enum(['accepted', 'no_answer', 'skipped', 'rejected', 'dismissed']),
   reason: z.enum(['no_answer', 'busy', 'urgent', 'etc']).nullish(),
   reasonText: z.string().trim().max(30).nullish(),
+  // 거절 사유 (선택, SFR-044). 병원 웹 거절과 같은 7가지. '기타' 글은 reasonText 에 20자까지
+  rejectReason: z
+    .enum(['er_bed', 'or_room', 'ward', 'icu', 'no_specialist', 'equipment', 'etc'])
+    .nullish(),
   version: z.number().int().optional(),
 });
 
@@ -131,8 +136,12 @@ export interface PhoneResultInput {
   result: 'accepted' | 'no_answer' | 'skipped' | 'rejected' | 'dismissed';
   reason?: PhoneProceedReason | null;
   reasonText?: string | null;
+  rejectReason?: PhoneRejectReason | null;
   clientVersion?: number;
 }
+
+export type PhoneRejectReason =
+  'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
 
 // 거절 뒤 다음 후보: 이번 이송 추천(제외 병원 뺌)의 1순위. 앱 추천 목록과 같은 함수로 계산한다 (SFR-074·112)
 // 출발 위치가 없어 추천을 못 내는 건은 후보 없음으로 본다
@@ -196,16 +205,32 @@ export async function recordPhoneResult(
     });
   }
 
+  // 거절 사유는 거절일 때만, '기타' 글은 20자까지 (SFR-044)
+  const rejecting = input.result === 'rejected';
+  const rejectReason = input.rejectReason ?? null;
+  if (rejectReason && !rejecting) {
+    throw new AppError(400, 'VALIDATION_FAILED', '거절 사유는 거절일 때만 보낼 수 있어요', {
+      fields: ['rejectReason'],
+    });
+  }
+  const rejectText = rejectReason === 'etc' ? input.reasonText || null : null;
+  if (rejectText && rejectText.length > 20) {
+    throw new AppError(400, 'VALIDATION_FAILED', '기타 사유는 20자까지 쓸 수 있어요', {
+      fields: ['reasonText'],
+    });
+  }
+
   // 결과 기록: 결과·사유·시각만, 기록한 대원은 남기지 않는다 (DAR-004)
   await client.query(
-    `INSERT INTO phone_check (transport_id, hospital_id, result, reason, reason_text, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO phone_check (transport_id, hospital_id, result, reason, reject_reason, reason_text, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       transportId,
       input.hospitalId,
       input.result,
       proceeding ? input.reason : null,
-      proceeding ? (input.reasonText ?? null) : null,
+      rejectReason,
+      proceeding ? (input.reasonText ?? null) : rejectText,
       now,
     ],
   );
@@ -219,6 +244,14 @@ export async function recordPhoneResult(
          ON CONFLICT DO NOTHING`,
         [transportId, input.hospitalId],
       );
+      // 통계 원장에는 출처 '전화 확인'으로 남긴다. 사유를 안 고르면 사유 없이 1건 (SFR-126)
+      await recordRejection(client, {
+        transportId,
+        hospitalId: input.hospitalId,
+        source: 'phone_check',
+        reason: rejectReason,
+        reasonText: rejectText,
+      });
       next = await nextCandidate(client, transportId, input.paramedicId);
     }
     event = phoneEvent(input.result, next !== null);
@@ -412,6 +445,7 @@ export function phoneCheckRouter(
           result: input.result,
           reason: input.reason,
           reasonText: input.reasonText,
+          rejectReason: input.rejectReason,
           clientVersion: input.version,
         }),
       ),

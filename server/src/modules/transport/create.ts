@@ -18,13 +18,15 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
-import { assessmentSchema } from './assessment.js';
+import { assessmentSchema, cleanAssessment } from './assessment.js';
 import type { Realtime } from '../realtime/server.js';
+import { syncTeamDraft } from '../team/draft.js';
 import { inheritedExclusions } from '../team/prevPatient.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
+import { recordTransportStat } from '../stats/records.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
@@ -75,6 +77,8 @@ async function finishPrevious(
   );
   // 이전 이송의 위치 기록 → 익명 경로, 원본 삭제 (SFR-039·041)
   await closeRoute(client, previous.id, { cancelled: false });
+  // 익명 소요시간 통계 1줄 (SFR-126). 이동 거리는 바로 위 closeRoute 가 채운 값을 쓴다
+  await recordTransportStat(client, previous.id);
   // 연쇄: 확정 병원 요청 → 도착 (부록 A-2 46)
   for (const { target, event } of CASCADE.FINISH_PREVIOUS ?? []) {
     const { rows: requests } = await client.query<{
@@ -281,6 +285,15 @@ export async function createTransport(
       fallbackReason: to === 'fallback' ? history.reason : null,
     },
   });
+  // 팀 작성 중 정보 = 방금 보낸 환자 정보. '변경 사항 보내기(n)'를 0에서 시작한다 (SFR-105)
+  events.push(
+    await syncTeamDraft(client, {
+      teamId,
+      paramedicId,
+      byName: me[0].name,
+      data: cleanAssessment({ ...a, chiefComplaint: a.chiefComplaint?.trim() }),
+    }),
+  );
 
   let roundId: string | null = null;
   if (to === 'requesting') {

@@ -76,6 +76,11 @@ test('중지하면 대기 요청은 모두 거절(요청 중지)·통계 제외�
       'SELECT count(*)::int AS n FROM excluded_hospital',
     );
     assert.equal(excluded[0].n, 0);
+    // 거절 원장에는 출처 '요청 중지'로 2건. 병원 웹 직접 거절(hospital_web) 수치에는 안 들어간다 (SFR-126)
+    const { rows: records } = await h.pool.query(
+      'SELECT source, reason, count(*)::int AS n FROM rejection_record GROUP BY 1, 2',
+    );
+    assert.deepEqual(records, [{ source: 'paused', reason: 'paused', n: 2 }]);
 
     const { rows: hospital } = await h.pool.query(
       'SELECT requests_paused, paused_at IS NOT NULL AS has_at FROM hospital WHERE id = $1',

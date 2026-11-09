@@ -12,7 +12,7 @@ import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import type { AuthContext } from '../auth/session.js';
-import { appendEvents } from '../realtime/eventLog.js';
+import { appendEvents, type EventRecord } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { assessmentChangesSchema } from '../transport/assessment.js';
 import { clearExpiredPrevPatient, prevPatientState } from './prevPatient.js';
@@ -83,6 +83,43 @@ async function isDriving(
     [teamId, ACTIVE, RECENT_SPEED_SECONDS],
   );
   return (rows[0]?.speed ?? 0) >= DRIVING_KMH;
+}
+
+// 병원에 보낸 환자 정보로 팀 작성 중 정보를 맞춘다 (이송 요청 때, SFR-105).
+// 이렇게 해야 '변경 사항 보내기(n)'가 0에서 시작한다. 안 맞추면 작성 중 정보를 안 쓴 팀은 보내자마자 모든 칸이 '바뀜'이 된다.
+// 칸별 '누가 고쳤나'는 보낸 사람으로 새로 쓴다. 돌려준 이벤트는 부르는 쪽이 같은 트랜잭션에서 기록한다
+export async function syncTeamDraft(
+  client: pg.PoolClient,
+  input: { teamId: string; paramedicId: string; byName: string; data: Record<string, unknown> },
+): Promise<EventRecord> {
+  const { rows } = await client.query<{ version: number; now: Date }>(
+    `INSERT INTO team_draft (team_id, data, field_meta, version, updated_by)
+     VALUES ($1, $2, '{}', 1, $3)
+     ON CONFLICT (team_id) DO UPDATE
+       SET data = EXCLUDED.data, version = team_draft.version + 1, updated_by = EXCLUDED.updated_by,
+           updated_at = now()
+     RETURNING version, now() AS now`,
+    [input.teamId, input.data, input.paramedicId],
+  );
+  const { version, now } = rows[0];
+  const meta = Object.fromEntries(
+    Object.keys(input.data).map((field) => [
+      field,
+      { by: input.paramedicId, byName: input.byName, at: now.toISOString(), version },
+    ]),
+  );
+  await client.query('UPDATE team_draft SET field_meta = $2 WHERE team_id = $1', [
+    input.teamId,
+    meta,
+  ]);
+  return {
+    room: `team:${input.teamId}`,
+    name: 'draft.updated',
+    entityType: 'team_draft',
+    entityId: input.teamId,
+    entityVersion: version,
+    payload: { version, fields: Object.keys(input.data), byName: input.byName, overwritten: [] },
+  };
 }
 
 export function draftRouter(

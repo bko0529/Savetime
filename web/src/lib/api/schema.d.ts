@@ -593,7 +593,7 @@ export interface paths {
         put?: never;
         /**
          * 이송 건 만들기 + 병원에 동시 요청
-         * @description 요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님 · requestedGrade를 보냈으면 그 등급 이상)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이 API를 부르지 않는다 (SFR-109).
+         * @description 요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님 · requestedGrade를 보냈으면 그 등급 이상)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이 API를 부르지 않는다 (SFR-109). 보낸 환자 평가로 팀 작성 중 정보를 맞추고 draft.updated를 보낸다 ('변경 사항 보내기(n)'가 0에서 시작, SFR-105).
          *
          *     **요구사항**: SFR-109, SFR-162, SFR-104, SFR-129, SFR-157, SFR-161
          *     **화면**: S-04 → S-05 응답 대기 / S-06
@@ -838,12 +838,14 @@ export interface paths {
         put?: never;
         /**
          * 변경 사항 보내기
-         * @description requesting·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.
+         * @description requesting·phone_check·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.
          *
          *     **요구사항**: SFR-121, SFR-105
          *     **화면**: S-05 · S-09
-         *     **오류 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_CONFLICT, INVALID_TRANSITION
+         *     **오류 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
          *     **상태 전이 사건**: ASSESSMENT_UPDATED
+         *
+         *     작성 중 정보 전체를 assessment 새 행(seq+1)으로 저장해 이전 행과 함께 전후 값·시각이 남는다. 이송 건 version은 그대로. 받는 병원: 요청 중·전화 확인 중이면 2분 안 대기·5분 안 승인 병원(request.updated), 이동 중이면 확정 병원(incoming.updated). 팀에는 assessment.sent. 이벤트에는 바뀐 칸 이름만. 주 증상을 지운 채면 400 VALIDATION_FAILED(chiefComplaint).
          */
         post: operations["post_transports__transportId__assessments"];
         delete?: never;
@@ -891,8 +893,10 @@ export interface paths {
          *
          *     **요구사항**: SFR-077, SFR-156
          *     **화면**: S-09 경로 안내
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED, NO_REQUEST_TARGET, LOCATION_REQUIRED, VALIDATION_FAILED
          *     **상태 전이 사건**: CHANGE_DESTINATION
+         *
+         *     location이 없으면 출발 위치 기준. 확정 병원(confirmed_hospital_id)은 비우고 이전 목적지·사유·시각(dest_changed_*)을 남긴다. 새 대상이 0곳이면 422 NO_REQUEST_TARGET이고 아무것도 바뀌지 않는다.
          */
         post: operations["post_transports__transportId__destination"];
         delete?: never;
@@ -2201,7 +2205,7 @@ export interface components {
              */
             departedAt?: string | null;
             lastSentAssessmentSeq?: number;
-            /** @description '변경 사항 보내기(n)'의 n */
+            /** @description '변경 사항 보내기(n)'의 n. 팀 작성 중 정보와 마지막으로 보낸 값을 칸별로 비교한 수. 끝난 건은 0 (SFR-105) */
             pendingChanges?: number;
             excludedHospitalIds?: number[];
             locationConsent?: boolean;
@@ -2343,7 +2347,7 @@ export interface components {
             abnormalCount?: number | null;
             prevApprovedRecheck?: boolean;
             respondedBy?: string | null;
-            /** @description 대기·승인 중 바뀐 항목 (SFR-105) */
+            /** @description 이 병원이 요청을 받은 뒤 '변경 사항 보내기'로 바뀐 항목 (SFR-105). 환자 정보를 못 여는 건은 빈 목록 */
             updatedFields?: string[];
             version?: number;
         };
@@ -3852,7 +3856,13 @@ export interface operations {
                      * @enum {string|null}
                      */
                     reason?: "no_answer" | "busy" | "urgent" | "etc" | null;
+                    /** @description no_answer·skipped의 '기타' 글(30자), 또는 rejectReason이 etc일 때 글(20자) */
                     reasonText?: string | null;
+                    /**
+                     * @description 거절 사유 (선택, SFR-044). result가 rejected일 때만, 아니면 400. 거절 원장에 출처 phone_check로 쌓임 (SFR-126)
+                     * @enum {string|null}
+                     */
+                    rejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
                     /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
                     version: number;
                 };
@@ -3934,7 +3944,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description 마지막으로 보낸 seq */
+                    /** @description 마지막으로 보낸 seq (Transport.lastSentAssessmentSeq). 빠지면 400 VERSION_REQUIRED */
                     baseSeq: number;
                 };
             };
