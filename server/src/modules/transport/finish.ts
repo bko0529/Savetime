@@ -17,7 +17,12 @@ import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
 import { appendEvents, type EventRecord, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
-import { lockMyTransport, transportIdParam, withCurrentOnBlock } from './access.js';
+import {
+  lockMyTransport,
+  transportIdParam,
+  withCurrentOnBlock,
+  type LockedTransport,
+} from './access.js';
 import { cancelTransport } from './cancel.js';
 import { closeRoute } from './route.js';
 import { recordTransportStat } from '../stats/records.js';
@@ -61,8 +66,26 @@ export interface ArriveInput {
 }
 
 export async function arriveTransport(client: pg.PoolClient, input: ArriveInput) {
-  const { transportId } = input;
-  const transport = await lockMyTransport(client, transportId, input.paramedicId);
+  const transport = await lockMyTransport(client, input.transportId, input.paramedicId);
+  return arriveLockedTransport(
+    client,
+    input.transportId,
+    transport,
+    input.method,
+    input.clientVersion,
+  );
+}
+
+// 이미 잠근 이송 건을 '도착'으로 끝낸다. 대원 도착(위)과 병원 웹 '도착 확인'(SFR-144, hospital-web/confirmArrival.ts)이
+// 같은 처리를 쓴다: 병원은 팀원이 아니라 lockMyTransport 대신 병원 요청으로 이송 건을 찾아 직접 잠근 뒤 부른다
+export async function arriveLockedTransport(
+  client: pg.PoolClient,
+  transportId: string,
+  transport: Pick<LockedTransport, 'status' | 'version' | 'team_id'>,
+  method: ArriveInput['method'],
+  clientVersion: number | undefined,
+) {
+  const input = { method, clientVersion };
   const { rows: clock } = await client.query<{ now: Date }>('SELECT now()');
   const now = clock[0].now;
 

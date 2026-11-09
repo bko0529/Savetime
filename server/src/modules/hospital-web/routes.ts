@@ -17,6 +17,7 @@ import {
   UNUSED_DAYS,
   type HospitalWebContext,
 } from './pcAuth.js';
+import { confirmArrival, confirmArrivalSchema } from './confirmArrival.js';
 import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
@@ -346,6 +347,18 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     );
     ctx.realtime?.publish(events);
     res.status(204).end();
+  });
+
+  // 도착 확인: 위치 있는 건은 입구 200m 안일 때만 바로 도착, 위치 없는 건은 대원 앱에 확인 요청 (SFR-144)
+  router.post('/hw/requests/:requestId/confirm-arrival', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(confirmArrivalSchema, req.body);
+    const outcome = await withTransaction(ctx.pool, (client) =>
+      confirmArrival(client, hospitalPc(res), requestId, input),
+    );
+    // 커밋된 뒤에만 보낸다 (도착이면 대원 앱 transport.arrived·병원 incoming.arrived, 아니면 transport.arrive_requested)
+    ctx.realtime?.publish(outcome.events);
+    res.json({ result: outcome.result });
   });
 
   return router;
