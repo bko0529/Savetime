@@ -19,7 +19,7 @@ interface Harness {
   pool: pg.Pool;
   adminToken: string;
   jwtKey: Uint8Array;
-  admin: (method: 'get' | 'post', path: string, token?: string) => request.Test;
+  admin: (method: 'get' | 'post' | 'put', path: string, token?: string) => request.Test;
   hw: (method: 'get' | 'post', path: string, cookie?: string) => request.Test;
   addHospital: (name: string, publicId: string) => Promise<number>;
   // 실시간 서버 대신: 정지 때 부른 병원 id 를 모은다
@@ -458,6 +458,75 @@ test('두 관리자가 동시에 재발급해도 살아 있는 키는 하나만 
       'SELECT count(*)::int AS n FROM license_key WHERE revoked_at IS NULL',
     );
     assert.equal(rows[0].n, 1);
+  });
+});
+
+test('응급실 입구를 저장하면 그 병원 좌표가 바뀌고 작업 이력에 1건, 저장 안 한 병원은 입구 좌표 없음 (SFR-145 인수 기준)', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await h.addHospital('A대학교병원', 'A1');
+    await h.addHospital('B병원', 'B1');
+
+    const res = await h
+      .admin('put', `/admin/hospitals/${a}/entrance`)
+      .send({ lat: 36.812345, lng: 127.123456 });
+    assert.equal(res.status, 204);
+
+    // 도착 판정(앱 목적지·병원 웹 도착 확인)이 보는 칸에 저장된다
+    const { rows } = await h.pool.query(
+      'SELECT entrance_lat::float8 AS lat, entrance_lng::float8 AS lng FROM hospital WHERE id = $1',
+      [a],
+    );
+    assert.deepEqual(rows[0], { lat: 36.812345, lng: 127.123456 });
+
+    const list = await h.admin('get', '/admin/hospitals');
+    const byName = Object.fromEntries(
+      list.body.items.map((i: { name: string; entrance: unknown }) => [i.name, i.entrance]),
+    );
+    assert.deepEqual(byName['A대학교병원'], { lat: 36.812345, lng: 127.123456 });
+    assert.equal(byName['B병원'], null, '저장 안 한 병원은 입구 좌표 없음');
+    // 공공 데이터 병원 좌표도 같이 준다 (지도의 처음 가운데, 입구가 없을 때 도착 판정 기준)
+    assert.deepEqual(list.body.items[0].location, { lat: 36.8, lng: 127.1 });
+
+    const audit = await auditRows(h.pool);
+    assert.deepEqual(audit, [
+      {
+        action: 'set_entrance',
+        target_type: 'hospital',
+        target_id: a,
+        detail: { targetName: 'A대학교병원', reason: null },
+      },
+    ]);
+    const log = await h.admin('get', '/admin/audit-logs');
+    assert.equal(log.body.items[0].action, '응급실 입구 좌표 지정');
+
+    // 다시 찍으면 새 좌표로 바뀐다
+    await h.admin('put', `/admin/hospitals/${a}/entrance`).send({ lat: 36.8, lng: 127.1 });
+    const again = await h.admin('get', '/admin/hospitals?q=A대학교');
+    assert.deepEqual(again.body.items[0].entrance, { lat: 36.8, lng: 127.1 });
+  });
+});
+
+test('입구 좌표: 대한민국 밖·숫자가 아니면 400, 없는 병원은 404, 관리자가 아니면 401', async () => {
+  await withAdminHospitals(async (h) => {
+    const a = await h.addHospital('A병원', 'A1');
+    for (const body of [{ lat: 0, lng: 0 }, { lat: 36.8 }, { lat: '36.8', lng: '127.1' }, {}]) {
+      const res = await h.admin('put', `/admin/hospitals/${a}/entrance`).send(body);
+      assert.equal(res.status, 400, JSON.stringify(body));
+    }
+    const missing = await h
+      .admin('put', '/admin/hospitals/99999/entrance')
+      .send({ lat: 36.8, lng: 127.1 });
+    assert.equal(missing.status, 404);
+
+    const paramedic = await signAccessToken(h.jwtKey, { paramedicId: '1', sessionVersion: 1 });
+    const noAdmin = await h
+      .admin('put', `/admin/hospitals/${a}/entrance`, paramedic)
+      .send({ lat: 36.8, lng: 127.1 });
+    assert.equal(noAdmin.status, 401);
+
+    const { rows } = await h.pool.query('SELECT entrance_lat FROM hospital WHERE id = $1', [a]);
+    assert.equal(rows[0].entrance_lat, null);
+    assert.equal((await auditRows(h.pool)).length, 0);
   });
 });
 

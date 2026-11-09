@@ -4,6 +4,7 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
+import { isInKorea } from '../../domain/geo.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { hashLicenseKey, licenseKeyPrefix, newLicenseKey } from '../hospital-web/licenseKey.js';
@@ -21,6 +22,11 @@ const searchSchema = z.object({
   cursor: z.string().regex(/^\d+$/).optional(),
 });
 const idParams = z.object({ id: z.coerce.number().int().positive() });
+// 응급실 입구 좌표 (SFR-145). 지도에서 찍은 값. 소수점 6자리(약 10cm)까지만 저장한다 (DB numeric(9,6))
+const entranceSchema = z.object({
+  lat: z.number().finite(),
+  lng: z.number().finite(),
+});
 // 폐기·재발급 사유 (SFR-146). 비어 있으면 422 REASON_REQUIRED, 60자 넘으면 400
 const reasonSchema = z.object({ reason: z.string().trim().max(60).optional() });
 
@@ -68,6 +74,8 @@ interface HospitalRow {
   key_days_left: number | null;
   entrance_lat: string | null;
   entrance_lng: string | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 // LIKE 의 % · _ 를 글자 그대로 찾게 한다 (병원 이름에 들어 있어도 검색이 이상해지지 않게)
@@ -87,6 +95,7 @@ export function adminHospitalRouter(
     const q = parseBody(searchSchema, req.query);
     const { rows } = await pool.query<HospitalRow>(
       `SELECT h.id, h.name, h.account_active, h.entrance_lat, h.entrance_lng,
+              h.lat::float8 AS lat, h.lng::float8 AS lng,
               (SELECT count(*)::int FROM hospital_pc p
                 WHERE p.hospital_id = h.id AND p.released_at IS NULL) AS pc_count,
               k.id AS key_id, k.key_prefix, k.expires_at AS key_expires_at,
@@ -119,6 +128,12 @@ export function adminHospitalRouter(
               daysLeft: Math.max(0, h.key_days_left ?? 0),
             }
           : null,
+        // 공공 데이터 병원 좌표. 입구를 저장하지 않으면 도착 판정은 이 좌표로 한다.
+        // 관리자 화면이 입구를 찍을 지도의 처음 가운데로도 쓴다 (SFR-145)
+        location:
+          h.lat !== null && h.lng !== null && isInKorea(h.lat, h.lng)
+            ? { lat: h.lat, lng: h.lng }
+            : null,
         entrance:
           h.entrance_lat && h.entrance_lng
             ? { lat: Number(h.entrance_lat), lng: Number(h.entrance_lng) }
@@ -285,6 +300,42 @@ export function adminHospitalRouter(
       return hospital.id;
     });
     if (revoked) await realtime?.revokeHospital(revoked, 'key_revoked');
+    res.status(204).end();
+  });
+
+  // 응급실 입구 좌표 지정 (SFR-145). 저장하면 이 병원의 도착 판정·목적지 좌표가 이 좌표로 바뀐다
+  // (앱 목적지 view.ts, 병원 웹 도착 확인 200m confirmArrival.ts 가 모두 entrance_lat/lng 을 먼저 본다)
+  router.put('/admin/hospitals/:id/entrance', adminOnly, async (req, res) => {
+    const { id } = parseBody(idParams, req.params);
+    const input = parseBody(entranceSchema, req.body);
+    // 지도에서 잘못 찍은 바다 한가운데 같은 값은 받지 않는다
+    if (!isInKorea(input.lat, input.lng)) {
+      throw new AppError(400, 'VALIDATION_FAILED', '좌표 범위 오류: 대한민국 밖 좌표예요', {
+        fields: ['lat', 'lng'],
+        reason: 'coords_out_of_korea',
+      });
+    }
+    await withTransaction(pool, async (client) => {
+      const { rows } = await client.query<{ id: string; name: string }>(
+        'SELECT id, name FROM hospital WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      const hospital = rows[0];
+      if (!hospital) throw notFound();
+      await client.query('UPDATE hospital SET entrance_lat = $2, entrance_lng = $3 WHERE id = $1', [
+        id,
+        input.lat,
+        input.lng,
+      ]);
+      // 좌표 값은 이력에 넣지 않는다 (병원 이름만). 지금 좌표는 병원 목록에서 본다
+      await recordAudit(client, {
+        adminId: adminId(res),
+        action: 'set_entrance',
+        targetType: 'hospital',
+        targetId: hospital.id,
+        targetName: hospital.name,
+      });
+    });
     res.status(204).end();
   });
 

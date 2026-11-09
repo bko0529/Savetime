@@ -14,6 +14,7 @@ import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
 import { useAdminApi } from '../useAdminApi';
+import { EntranceDialog } from './EntranceDialog';
 import { HospitalPcs } from './HospitalPcs';
 
 type HospitalList =
@@ -67,6 +68,8 @@ export function HospitalAdmin() {
   const [pending, setPending] = useState<Pending>(null);
   // 등록 PC 목록을 펼친 병원 (SFR-147)
   const [pcsOf, setPcsOf] = useState<AdminHospital | null>(null);
+  // 응급실 입구 좌표를 지정할 병원 (SFR-145)
+  const [entranceOf, setEntranceOf] = useState<AdminHospital | null>(null);
   // 발급 직후 한 번만 보여 줄 키. 창을 닫으면 지워서 다시 볼 수 없다
   const [issued, setIssued] = useState<{ name: string; key: string } | null>(null);
 
@@ -145,6 +148,7 @@ export function HospitalAdmin() {
               <th className="p-3">계정</th>
               <th className="p-3">등록 PC</th>
               <th className="p-3">라이선스 키</th>
+              <th className="p-3">응급실 입구</th>
               <th className="p-3">
                 <span className="sr-only">작업</span>
               </th>
@@ -171,6 +175,24 @@ export function HospitalAdmin() {
                 {/* 발급 뒤에는 앞 4자리만 보여 준다 (SFR-123) */}
                 <td className="p-3 font-mono">
                   {h.license ? `${h.license.prefix}-····  (${h.license.daysLeft}일 남음)` : '—'}
+                </td>
+                {/* 저장 안 한 병원은 공공 데이터 좌표로 도착 판정 (SFR-145) */}
+                <td className="p-3">
+                  <div className="flex flex-col items-start gap-1">
+                    {h.entrance ? (
+                      <span>지정됨</span>
+                    ) : (
+                      <span className="font-bold text-destructive">입구 좌표 없음</span>
+                    )}
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-lg"
+                      aria-label={`${h.name} 응급실 입구 ${h.entrance ? '바꾸기' : '지정'}`}
+                      onClick={() => setEntranceOf(h)}
+                    >
+                      {h.entrance ? '바꾸기' : '입구 지정'}
+                    </Button>
+                  </div>
                 </td>
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
@@ -213,6 +235,13 @@ export function HospitalAdmin() {
       )}
 
       {pcsOf && <HospitalPcs key={pcsOf.id} hospital={pcsOf} onClose={() => setPcsOf(null)} />}
+      {entranceOf && (
+        <EntranceDialog
+          key={entranceOf.id}
+          hospital={entranceOf}
+          onClose={() => setEntranceOf(null)}
+        />
+      )}
 
       <ConfirmDialog
         pending={pending}
