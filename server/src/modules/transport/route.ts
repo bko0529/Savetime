@@ -11,7 +11,10 @@ import { ACTIVE, type TransportStatus } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
 import { paramedicAuth } from '../auth/guards.js';
+import { appendEvents, type LoggedEvent } from '../realtime/eventLog.js';
+import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam } from './access.js';
+import { afterLocations } from './navEta.js';
 
 interface PointRow {
   lat: number;
@@ -91,6 +94,8 @@ const locationsSchema = z.object({
   deviceId: z.string().min(1).max(80),
   // 5초마다 1개가 기본. 잠깐 끊겼다 붙으면 모아 둔 것을 한 번에 보낸다 (10분치까지)
   points: z.array(pointSchema).min(1).max(120),
+  // 앱 안 내비(KNSDK)가 계산한 남은 분. 1분마다 한 번 실어 보내면 된다 (SFR-121·132). 없으면 지난 값으로 계산
+  etaMin: z.number().int().min(0).max(600).optional(),
 });
 
 export async function recordLocations(
@@ -100,8 +105,9 @@ export async function recordLocations(
     paramedicId: string;
     deviceId: string;
     points: z.infer<typeof pointSchema>[];
+    etaMin?: number;
   },
-): Promise<number> {
+): Promise<{ saved: number; events: LoggedEvent[] }> {
   const { transportId } = input;
   // 내 팀 이송 건만. 같은 이송 건의 위치 올리기·도착·취소가 한 줄로 선다 (규칙 5)
   await lockMyTransport(client, transportId, input.paramedicId);
@@ -159,23 +165,34 @@ export async function recordLocations(
     ],
   );
   // 위치 기록은 '활동'에 넣지 않는다 (SFR-086 2시간 자동 종료는 위치 기록 제외)
-  return rowCount ?? 0;
+  // 남은 시간 저장·입구 200m 안 알림 (SFR-121·144). 커밋된 뒤에만 보낸다
+  const events = await appendEvents(
+    client,
+    await afterLocations(client, transportId, input.etaMin),
+  );
+  return { saved: rowCount ?? 0, events };
 }
 
-export function locationRouter(pool: pg.Pool, guards: RequestHandler[]): Router {
+export function locationRouter(
+  pool: pg.Pool,
+  guards: RequestHandler[],
+  realtime?: Pick<Realtime, 'publish'>,
+): Router {
   const router = Router();
   router.post('/transports/:transportId/locations', ...guards, async (req, res) => {
     const transportId = transportIdParam(req.params.transportId);
     const input = parseBody(locationsSchema, req.body);
     const { paramedicId } = paramedicAuth(res);
-    await withTransaction(pool, (client) =>
+    const { events } = await withTransaction(pool, (client) =>
       recordLocations(client, {
         transportId,
         paramedicId,
         deviceId: input.deviceId,
         points: input.points,
+        etaMin: input.etaMin,
       }),
     );
+    realtime?.publish(events);
     res.status(204).end();
   });
   return router;

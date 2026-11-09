@@ -869,7 +869,7 @@ export interface paths {
         put?: never;
         /**
          * 위치 올리기 (5초마다, 담당 단말만)
-         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안이면 병원 웹에 incoming.near (SFR-144, 병원 웹 도착 확인 작업에서).
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안에 처음 들어오면 병원 웹에 incoming.near 한 번 (SFR-144). etaMin = 앱 안 내비(KNSDK)가 계산한 남은 분, 1분마다 한 번 실어 보내면 된다. 보여 줄 값이 바뀔 때만 팀에 transport.eta, 병원에 incoming.updated (SFR-121·132).
          *
          *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
          *     **화면**: S-09 경로 안내
@@ -1259,7 +1259,9 @@ export interface paths {
         };
         /**
          * 도착 예정 환자
-         * @description **요구사항**: SFR-121, SFR-105, SFR-158
+         * @description 우리 병원으로 확정된 이송 건(이동 중) + 도착 1시간 안의 건(도착·수용 불가). 구급차 위치·거리·구급대 소속은 주지 않는다. etaMin = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분. summary는 도착 후 1시간까지만.
+         *
+         *     **요구사항**: SFR-121, SFR-105, SFR-158
          *     **화면**: H-03 도착 예정
          */
         get: operations["get_hw_incoming"];
@@ -2205,7 +2207,7 @@ export interface components {
             destinationChangeUsed?: boolean;
             /** @description 경로 안내 담당 단말 */
             navDeviceId?: string | null;
-            /** @description 서버가 1분마다 다시 계산 */
+            /** @description 이동 중 남은 분 = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분 (SFR-121·132). 이동 중이 아니면 null */
             etaMin?: number | null;
             /**
              * Format: date-time
@@ -4004,6 +4006,8 @@ export interface operations {
                         /** Format: date-time */
                         recordedAt?: string;
                     }[];
+                    /** @description 앱 안 내비가 계산한 남은 분 (선택). 보여 줄 때 서버가 받은 뒤 지난 분을 뺀다(2분 넘게 안 와도 줄어듦) */
+                    etaMin?: number;
                 };
             };
         };

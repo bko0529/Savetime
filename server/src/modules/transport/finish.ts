@@ -73,6 +73,7 @@ export async function arriveTransport(client: pg.PoolClient, input: ArriveInput)
     transport,
     input.method,
     input.clientVersion,
+    input.occurredAt,
   );
 }
 
@@ -84,8 +85,10 @@ export async function arriveLockedTransport(
   transport: Pick<LockedTransport, 'status' | 'version' | 'team_id'>,
   method: ArriveInput['method'],
   clientVersion: number | undefined,
+  // 통신 두절 중 누른 도착의 단말 시각 (SFR-099). 병원 웹 도착 확인은 넘기지 않는다
+  occurredAt?: Date,
 ) {
-  const input = { method, clientVersion };
+  const input = { method, clientVersion, occurredAt };
   const { rows: clock } = await client.query<{ now: Date }>('SELECT now()');
   const now = clock[0].now;
 
