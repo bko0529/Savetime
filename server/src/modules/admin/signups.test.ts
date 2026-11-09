@@ -205,7 +205,9 @@ test('승인하면 계정이 승인되고, 사진이 지워지고, 확인자·�
     const photo = await h.admin('get', `/admin/signups/${id}/photo`);
     assert.equal(photo.status, 410);
     assert.equal(photo.body.error.code, 'PHOTO_DELETED');
-    const again = await h.admin('post', `/admin/signups/${id}/reject`).send({ reason: 'etc' });
+    const again = await h
+      .admin('post', `/admin/signups/${id}/reject`)
+      .send({ reason: 'photo_unclear' });
     assert.equal(again.status, 409);
     assert.equal(again.body.error.code, 'ALREADY_RESPONDED');
     assert.equal((await h.admin('get', '/admin/signups')).body.items.length, 0);
@@ -252,12 +254,18 @@ test("'사진 불명확'으로 반려하면 사진이 지워지고, 로그인하
   });
 });
 
-test('반려: 사유가 없으면 422, 목록에 없는 사유면 400, 기타는 쓴 내용을 이력에 남긴다', async () => {
+test('반려: 사유가 없거나 기타인데 내용이 없으면 422, 목록에 없는 사유면 400, 기타는 쓴 내용을 이력에 남긴다', async () => {
   await withAdminSignups(async (h) => {
     const id = await h.apply('newbie01');
     const missing = await h.admin('post', `/admin/signups/${id}/reject`).send({});
     assert.equal(missing.status, 422);
     assert.equal(missing.body.error.code, 'REASON_REQUIRED');
+    // 기타는 무엇 때문인지 적어야 한다 (빈칸·공백만도 안 됨)
+    for (const body of [{ reason: 'etc' }, { reason: 'etc', etcText: '   ' }]) {
+      const etc = await h.admin('post', `/admin/signups/${id}/reject`).send(body);
+      assert.equal(etc.status, 422);
+      assert.equal(etc.body.error.code, 'REASON_REQUIRED');
+    }
     assert.equal(
       (await h.admin('post', `/admin/signups/${id}/reject`).send({ reason: 'ugly' })).status,
       400,

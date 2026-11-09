@@ -3074,7 +3074,7 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 가입 반려
-      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유의 etcText는\
+      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유는 etcText 필수(없으면 422 REASON_REQUIRED),\
         \ 작업 이력에만 남음(대원에게는 사유 코드만). 이미 처리한 신청은 409 ALREADY_RESPONDED.\n\n**요구사항**:\
         \ SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED, ALREADY_RESPONDED"
       operationId: post_admin_signups__id__reject

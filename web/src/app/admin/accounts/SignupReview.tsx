@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,59 +37,60 @@ const timeText = (iso?: string) => (iso ? new Date(iso).toLocaleString('ko-KR') 
 
 // 공무원증 사진은 관리자 토큰을 붙여 받아야 해서 <img src> 로 바로 걸 수 없다.
 // 받아서 이 탭 메모리(blob URL)로만 보여 주고, 창을 닫으면 바로 버린다. 디스크·캐시에 남기지 않는다 (SER-015).
-// 한 번 열 때 한 번만 받는다: 받을 때마다 서버 작업 이력에 '열람'이 1건씩 남기 때문
+// 한 번 열 때 한 번만 받는다: 받을 때마다 서버 작업 이력에 '열람'이 1건씩 남기 때문.
+// 그래서 받기는 React Query 에 맡긴다. 개발 모드(StrictMode)가 화면을 두 번 그려도 같은 키의 요청은 1번으로 합쳐진다.
+// 키를 ['admin', …] 밖에 두어 승인·반려 뒤 관리자 화면 전체를 새로 받을 때 같이 다시 받지 않게 하고,
+// 다시 받기(창 포커스·재연결·재시도)를 모두 끈다. 창을 닫으면(gcTime 0) 받아 둔 사진도 캐시에서 바로 지운다
 function useSignupPhoto(signupId: number | undefined) {
   const { tokens, signOut } = useAdminAuth();
-  const [state, setState] = useState<{ url: string | null; error: unknown }>({
-    url: null,
-    error: null,
-  });
-
-  useEffect(() => {
-    if (signupId === undefined) return;
-    let url: string | null = null;
-    let cancelled = false;
-    void (async () => {
+  const photo = useQuery({
+    queryKey: ['signup-photo', signupId],
+    enabled: signupId !== undefined,
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    queryFn: async () => {
+      let res: Response;
       try {
-        const res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
+        res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
           headers: bearer(tokens),
           cache: 'no-store',
         });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as {
-            error?: { code?: string; message?: string };
-          } | null;
-          const err = new ApiError(
-            res.status,
-            body?.error?.code ?? 'UNKNOWN',
-            body?.error?.message ?? '사진을 불러오지 못했어요',
-          );
-          if (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_REVOKED') signOut();
-          throw err;
-        }
-        const blob = await res.blob();
-        if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setState({ url, error: null });
-      } catch (error) {
-        if (cancelled) return;
-        setState({
-          url: null,
-          error:
-            error instanceof ApiError
-              ? error
-              : new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요'),
-        });
+      } catch {
+        throw new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요');
       }
-    })();
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-    // 일부러 signupId 만 본다: 토큰이 바뀌어도 다시 받지 않는다 (열람 기록이 또 남지 않게)
-  }, [signupId]);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { code?: string; message?: string };
+        } | null;
+        const err = new ApiError(
+          res.status,
+          body?.error?.code ?? 'UNKNOWN',
+          body?.error?.message ?? '사진을 불러오지 못했어요',
+        );
+        if (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_REVOKED') signOut();
+        throw err;
+      }
+      return res.blob();
+    },
+  });
 
-  return state;
+  // 받은 사진(blob)을 이 탭에서만 쓰는 주소로 바꾼다. 창을 닫거나 바뀌면 바로 버린다
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!photo.data) return;
+    const objectUrl = URL.createObjectURL(photo.data);
+    setUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+      setUrl(null);
+    };
+  }, [photo.data]);
+
+  return { url, error: photo.error };
 }
 
 // 가입 승인·반려 (SFR-083, A-01). 신청 정보와 공무원증 사진을 나란히 보고 결정한다.
@@ -99,9 +100,13 @@ export function SignupReview() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<Signup | null>(null);
 
-  const list = useQuery({
+  // 30건씩 나눠 받는다. 대기가 많으면 '더 보기'로 이어 받는다
+  const list = useInfiniteQuery({
     queryKey: ['admin', 'signups'],
-    queryFn: () => api<SignupList>('/admin/signups'),
+    queryFn: ({ pageParam }) =>
+      api<SignupList>(`/admin/signups${pageParam ? `?cursor=${pageParam}` : ''}`),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const decide = useMutation({
     mutationFn: async ({ id, reject }: { id: number; reject?: RejectBody }) => {
@@ -126,12 +131,14 @@ export function SignupReview() {
     setOpen(null);
   }
 
-  const items = list.data?.items ?? [];
+  const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+  // 아직 다 받지 않았으면 '30건 이상'처럼 보여 준다 (받은 개수가 전체인 것처럼 보이지 않게)
+  const countText = `${items.length}건${list.hasNextPage ? ' 이상' : ''}`;
 
   return (
     <section aria-labelledby="signups-title" className="flex flex-col gap-4">
       <h2 id="signups-title" className="text-2xl font-bold">
-        가입 승인 대기 {list.isSuccess && <span className="tabular-nums">{items.length}건</span>}
+        가입 승인 대기 {list.isSuccess && <span className="tabular-nums">{countText}</span>}
       </h2>
       {list.isError && (
         <p role="alert" className="text-lg font-bold text-destructive">
@@ -177,6 +184,17 @@ export function SignupReview() {
             ))}
           </tbody>
         </table>
+      )}
+      {list.hasNextPage && (
+        <Button
+          variant="outline"
+          size="lg"
+          className="self-start"
+          disabled={list.isFetchingNextPage}
+          onClick={() => void list.fetchNextPage()}
+        >
+          {list.isFetchingNextPage ? '불러오는 중…' : '가입 신청 더 보기'}
+        </Button>
       )}
 
       {open && (

@@ -218,6 +218,10 @@ export function adminSignupRouter(
     const { id } = parseBody(idParams, req.params);
     const input = parseBody(rejectSchema, req.body ?? {});
     if (!input.reason) throw new AppError(422, 'REASON_REQUIRED', '반려 사유를 골라 주세요');
+    // 기타는 무엇 때문인지 적어야 한다. 화면도 막지만 서버에서도 막는다 (이력에 '기타'만 남지 않게)
+    if (input.reason === 'etc' && !input.etcText) {
+      throw new AppError(422, 'REASON_REQUIRED', '기타 사유를 적어 주세요');
+    }
     const reasonText =
       input.reason === 'etc' && input.etcText ? input.etcText : REJECT_REASONS[input.reason];
     await afterCommit(await decide(id, adminId(res), 'rejected', input.reason, reasonText));
