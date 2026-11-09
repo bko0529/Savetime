@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import type { HwIncoming, RemovedNotice, RemovedReason } from '@/app/hospital/useIncoming';
+import { ConfirmArrivalButton } from './ConfirmArrivalButton';
 import { ExtraMemoButton } from './ExtraMemoButton';
 
 const STATUS_TEXT: Record<string, string> = {
@@ -77,14 +78,22 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
                 <td className="p-3">{STATUS_TEXT[item.status ?? ''] ?? item.status}</td>
                 <td className="p-3 tabular-nums">{etaText(item)}</td>
                 <td className="p-3">
-                  {/* 이동 중인 환자에게만 추가 메모 1번 (SFR-140) */}
+                  {/* 이동 중인 환자에게만: 도착 확인(SFR-144) · 추가 메모 1번(SFR-140).
+                      이미 도착한 환자는 버튼 없이 '도착'으로만 보인다 */}
                   {item.status === 'confirmed' && item.id != null && (
-                    <ExtraMemoButton
-                      requestId={item.id}
-                      version={item.version ?? 1}
-                      used={!!item.extraMemoUsed}
-                      className="h-12 border-2 text-lg"
-                    />
+                    <div className="flex flex-wrap items-start gap-3">
+                      <ConfirmArrivalButton
+                        requestId={item.id}
+                        version={item.version ?? 1}
+                        enabled={!!item.canConfirmArrival}
+                      />
+                      <ExtraMemoButton
+                        requestId={item.id}
+                        version={item.version ?? 1}
+                        used={!!item.extraMemoUsed}
+                        className="h-12 border-2 text-lg"
+                      />
+                    </div>
                   )}
                 </td>
               </tr>

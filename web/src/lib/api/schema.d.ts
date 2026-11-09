@@ -1300,11 +1300,11 @@ export interface paths {
         put?: never;
         /**
          * 병원에서 도착 확인
-         * @description 위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital).
+         * @description 위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital). version은 병원 요청(hospital_request)의 version. 위치 동의 건인데 위치 기록이 아직 없으면 판단할 수 없어 AMBULANCE_NOT_NEAR. 병원 웹에는 위치·거리를 주지 않는다. 근무 중인 PC만 (SHIFT_REQUIRED).
          *
          *     **요구사항**: SFR-144
          *     **화면**: H-03 도착 예정
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR, SHIFT_REQUIRED
          *     **상태 전이 사건**: ARRIVE
          */
         post: operations["post_hw_requests__requestId__confirm_arrival"];
