@@ -1415,7 +1415,7 @@ export interface paths {
         };
         /**
          * 공무원증 사진 보기 (열람 기록)
-         * @description 응답 image/jpeg, `Cache-Control: no-store`. 작업 이력에 열람 1건.
+         * @description 응답 image/jpeg 또는 image/png(가입 때 올린 형식 그대로), `Cache-Control: no-store`. 작업 이력에 열람 1건.
          *
          *     **요구사항**: SFR-083, DAR-012, SER-015
          *     **화면**: A-01 가입 승인
@@ -1441,11 +1441,11 @@ export interface paths {
         put?: never;
         /**
          * 가입 승인
-         * @description 사진 즉시 삭제, 대원에게 account.signup_result + 푸시.
+         * @description 사진 즉시 삭제, 대원에게 account.signup_result + 푸시. 이미 승인·반려한 신청은 409 ALREADY_RESPONDED.
          *
          *     **요구사항**: SFR-083, SFR-091
          *     **화면**: A-01 가입 승인
-         *     **오류 코드**: NOT_FOUND
+         *     **오류 코드**: NOT_FOUND, ALREADY_RESPONDED
          */
         post: operations["post_admin_signups__id__approve"];
         delete?: never;
@@ -1465,11 +1465,11 @@ export interface paths {
         put?: never;
         /**
          * 가입 반려
-         * @description 사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청.
+         * @description 사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유의 etcText는 작업 이력에만 남음(대원에게는 사유 코드만). 이미 처리한 신청은 409 ALREADY_RESPONDED.
          *
          *     **요구사항**: SFR-083
          *     **화면**: A-01 가입 승인
-         *     **오류 코드**: NOT_FOUND, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, REASON_REQUIRED, ALREADY_RESPONDED
          */
         post: operations["post_admin_signups__id__reject"];
         delete?: never;
@@ -4947,6 +4947,7 @@ export interface operations {
                 };
                 content: {
                     "image/jpeg": string;
+                    "image/png": string;
                 };
             };
             /** @description 오류 (코드는 오류 코드표) */

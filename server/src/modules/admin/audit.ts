@@ -14,13 +14,16 @@ export const AUDIT_ACTIONS = {
   release_pc: '병원 PC 해제',
   suspend_paramedic: '대원 계정 정지',
   unsuspend_paramedic: '대원 계정 정지 해제',
+  view_signup_photo: '공무원증 사진 열람',
+  approve_signup: '가입 승인',
+  reject_signup: '가입 반려',
 } as const;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 
 export interface AuditEntry {
   adminId: string;
   action: AuditAction;
-  targetType: 'hospital' | 'hospital_pc' | 'paramedic';
+  targetType: 'hospital' | 'hospital_pc' | 'paramedic' | 'signup_request';
   targetId: string;
   // 대상 이름(나중에 이름이 바뀌어도 그때 이름이 남게)·사유. 키 같은 비밀 값은 넣지 않는다
   targetName: string;

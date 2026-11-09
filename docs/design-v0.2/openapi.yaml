@@ -3005,7 +3005,7 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 공무원증 사진 보기 (열람 기록)
-      description: "응답 image/jpeg, `Cache-Control: no-store`. 작업 이력에 열람 1건.\n\n**요구사항**:\
+      description: "응답 image/jpeg 또는 image/png(가입 때 올린 형식 그대로), `Cache-Control: no-store`. 작업 이력에 열람 1건.\n\n**요구사항**:\
         \ SFR-083, DAR-012, SER-015  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND,\
         \ PHOTO_DELETED"
       operationId: get_admin_signups__id__photo
@@ -3032,6 +3032,10 @@ paths:
               schema:
                 type: string
                 format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
         4XX:
           description: 오류 (코드는 오류 코드표)
           content:
@@ -3043,12 +3047,13 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 가입 승인
-      description: "사진 즉시 삭제, 대원에게 account.signup_result + 푸시.\n\n**요구사항**: SFR-083,\
-        \ SFR-091  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND"
+      description: "사진 즉시 삭제, 대원에게 account.signup_result + 푸시. 이미 승인·반려한 신청은 409 ALREADY_RESPONDED.\n\n**요구사항**: SFR-083,\
+        \ SFR-091  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, ALREADY_RESPONDED"
       operationId: post_admin_signups__id__approve
       security: *id017
       x-error-codes:
       - NOT_FOUND
+      - ALREADY_RESPONDED
       parameters:
       - name: id
         in: path
@@ -3069,13 +3074,15 @@ paths:
       tags:
       - 6. 관리자 웹
       summary: 가입 반려
-      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청.\n\n**요구사항**:\
-        \ SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED"
+      description: "사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유의 etcText는\
+        \ 작업 이력에만 남음(대원에게는 사유 코드만). 이미 처리한 신청은 409 ALREADY_RESPONDED.\n\n**요구사항**:\
+        \ SFR-083  \n**화면**: A-01 가입 승인  \n**오류 코드**: NOT_FOUND, REASON_REQUIRED, ALREADY_RESPONDED"
       operationId: post_admin_signups__id__reject
       security: *id017
       x-error-codes:
       - NOT_FOUND
       - REASON_REQUIRED
+      - ALREADY_RESPONDED
       parameters:
       - name: id
         in: path
