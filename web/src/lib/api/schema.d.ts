@@ -207,11 +207,11 @@ export interface paths {
         get?: never;
         /**
          * 비밀번호 변경 (임시 비밀번호 후 필수)
-         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다.
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
          *
-         *     **요구사항**: SFR-021
+         *     **요구사항**: SFR-021, SER-011
          *     **화면**: (비밀번호 변경)
-         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED
+         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED, ACCOUNT_LOCKED
          */
         put: operations["put_me_password"];
         post?: never;
@@ -1966,10 +1966,11 @@ export interface paths {
         get: operations["get_admin_feature_flags"];
         /**
          * 기능 토글 바꾸기
-         * @description 작업 이력에 남김(SFR-091). 1분 안 반영.
+         * @description 바꿀 칸만 보낸다(둘 다 없거나 모르는 칸이면 400). 값이 실제로 바뀐 기능만 작업 이력에 1줄씩 (기능 켜기·기능 끄기). 앱·웹은 GET /config 를 1분마다 읽어 1분 안 반영. 응답은 바꾼 뒤 전체 값.
          *
          *     **요구사항**: QUR-013, SFR-091
          *     **화면**: A-02
+         *     **오류 코드**: VALIDATION_FAILED
          */
         put: operations["put_admin_feature_flags"];
         post?: never;
