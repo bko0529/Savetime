@@ -11,6 +11,8 @@ export type ParamedicStatus = 'pending' | 'approved' | 'rejected' | 'suspended' 
 export interface SessionState {
   sessionVersion: number;
   status: ParamedicStatus;
+  // 관리자가 비밀번호를 초기화해 임시 비밀번호를 쓰는 중 (SFR-021). 바꾸기 전에는 비밀번호 변경만 된다
+  mustChangePassword?: boolean;
 }
 
 export interface AuthContext {
@@ -33,12 +35,17 @@ export async function loadSessionState(
     // Redis가 안 되면 DB로 확인한다. 확인을 건너뛰고 통과시키지 않는다.
   }
 
-  const { rows } = await ctx.pool.query<{ session_version: number; status: ParamedicStatus }>(
-    'SELECT session_version, status FROM paramedic WHERE id = $1',
-    [paramedicId],
-  );
+  const { rows } = await ctx.pool.query<{
+    session_version: number;
+    status: ParamedicStatus;
+    must_change_pw: boolean;
+  }>('SELECT session_version, status, must_change_pw FROM paramedic WHERE id = $1', [paramedicId]);
   if (!rows[0]) return undefined;
-  const state = { sessionVersion: rows[0].session_version, status: rows[0].status };
+  const state: SessionState = {
+    sessionVersion: rows[0].session_version,
+    status: rows[0].status,
+    mustChangePassword: rows[0].must_change_pw,
+  };
   await ctx.redis
     .set(cacheKey(paramedicId), JSON.stringify(state), 'EX', CACHE_SECONDS)
     .catch(() => {});

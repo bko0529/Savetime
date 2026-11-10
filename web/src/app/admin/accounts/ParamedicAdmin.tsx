@@ -13,6 +13,7 @@ import {
 import { ApiError, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { useAdminApi } from '../useAdminApi';
+import { ResetPasswordButton } from './ResetPassword';
 
 type ParamedicList =
   ApiPaths['/admin/paramedics']['get']['responses'][200]['content']['application/json'];
@@ -44,7 +45,7 @@ type Pending = { kind: 'suspend' | 'unsuspend'; paramedic: Paramedic } | null;
 const needsConfirm = (error: unknown) =>
   error instanceof ApiError && error.code === 'ACTIVE_TRANSPORT_CONFIRM_REQUIRED';
 
-// 대원 계정 정지·해제 (SFR-151, A-01). 정지하면 대원 앱이 바로 로그아웃되고 다시 로그인할 수 없다
+// 대원 계정 정지·해제·비밀번호 초기화 (SFR-151·021, A-01). 정지하면 대원 앱이 바로 로그아웃되고 다시 로그인할 수 없다
 export function ParamedicAdmin() {
   const api = useAdminApi();
   const queryClient = useQueryClient();
@@ -139,23 +140,27 @@ export function ParamedicAdmin() {
                     <span className="ml-2 font-bold text-destructive">· 이송 중</span>
                   )}
                 </td>
-                <td className="p-3 text-right">
-                  {p.status === 'approved' && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => setPending({ kind: 'suspend', paramedic: p })}
-                    >
-                      정지
-                    </Button>
-                  )}
-                  {p.status === 'suspended' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
-                    >
-                      정지 해제
-                    </Button>
-                  )}
+                <td className="p-3">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {/* 비밀번호를 잊은 대원 (SFR-021) */}
+                    <ResetPasswordButton paramedic={p} />
+                    {p.status === 'approved' && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => setPending({ kind: 'suspend', paramedic: p })}
+                      >
+                        정지
+                      </Button>
+                    )}
+                    {p.status === 'suspended' && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
+                      >
+                        정지 해제
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

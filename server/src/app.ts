@@ -15,6 +15,7 @@ import { adminHospitalRouter } from './modules/admin/hospitals.js';
 import { adminNotificationRouter } from './modules/admin/notifications.js';
 import { adminParamedicRouter } from './modules/admin/paramedics.js';
 import { adminSignupRouter } from './modules/admin/signups.js';
+import { adminStatsRouter } from './modules/admin/stats.js';
 import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
@@ -126,6 +127,7 @@ export function createApp({
     app.use('/api/v1', adminNotificationRouter(admin.pool, adminOnly));
     app.use('/api/v1', adminParamedicRouter(admin.pool, admin.redis, adminOnly, realtime));
     app.use('/api/v1', adminSignupRouter(admin.pool, admin.redis, adminOnly, photos, realtime));
+    app.use('/api/v1', adminStatsRouter(admin.pool, adminOnly));
   }
 
   app.use(notFoundHandler);

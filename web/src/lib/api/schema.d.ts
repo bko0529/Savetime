@@ -207,7 +207,9 @@ export interface paths {
         get?: never;
         /**
          * 비밀번호 변경 (임시 비밀번호 후 필수)
-         * @description **요구사항**: SFR-021
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다.
+         *
+         *     **요구사항**: SFR-021
          *     **화면**: (비밀번호 변경)
          *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED
          */
@@ -257,7 +259,7 @@ export interface paths {
          *
          *     **요구사항**: SFR-113
          *     **화면**: S-03 근무 시작
-         *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED
+         *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED, PASSWORD_CHANGE_REQUIRED
          */
         post: operations["post_teams"];
         delete?: never;
@@ -1567,7 +1569,9 @@ export interface paths {
         put?: never;
         /**
          * 비밀번호 초기화
-         * @description **요구사항**: SFR-021
+         * @description 임시 비밀번호(10자)를 이 응답에서 한 번만 준다(Cache-Control: no-store). mustChangePassword를 켜고, 로그인 잠금을 풀고, 다른 기기의 로그인을 모두 끝낸다. 작업 이력 1건(임시 비밀번호는 남기지 않음). 탈퇴·없는 계정은 404.
+         *
+         *     **요구사항**: SFR-021
          *     **화면**: A-01 대원 계정
          *     **오류 코드**: NOT_FOUND
          */
@@ -1838,7 +1842,9 @@ export interface paths {
         };
         /**
          * 병원 응답 통계
-         * @description **요구사항**: SFR-106, SFR-126
+         * @description 기간 안에 요청이 간 병원만, 이름순. 응답률·응답 시간은 병원 웹에서 직접 누른 응답만(요청 중지 자동 거절·전달 실패·아직 2분이 안 끝난 대기는 뺌). 요청 10건 미만이면 sampleTooSmall=true 이고 수치 칸은 null. 거절률 급등(rejectSpike)은 고른 기간과 상관없이 7일 vs 30일, 둘 다 10건 이상일 때만. 대원·이송 건 정보는 없음(DAR-004).
+         *
+         *     **요구사항**: SFR-106, SFR-126
          *     **화면**: A-02 모니터링
          */
         get: operations["get_admin_stats_hospitals"];
@@ -2458,13 +2464,19 @@ export interface components {
         HospitalStat: {
             hospitalId?: number;
             name?: string;
-            responseRate?: number;
-            avgResponseSec?: number;
+            /** @description 기간 안에 이 병원에 닿은 요청 수 (표본 크기) */
+            requests?: number;
+            /** @description 0~1. 표본 부족이면 null */
+            responseRate?: number | null;
+            avgResponseSec?: number | null;
+            /** @description 이 병원으로 출발한 건의 평균 '요청→출발' */
+            avgRequestToDepartSec?: number | null;
             /** @enum {string|null} */
             topRejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
-            approvalCancelRate?: number;
+            /** @description (승인 취소 + 수용 불가) ÷ 승인. 표본 부족·승인 0건이면 null */
+            approvalCancelRate?: number | null;
             unacceptableCount?: number;
-            avgRequestToFirstApprovalSec?: number;
+            avgRequestToFirstApprovalSec?: number | null;
             /** @description 요청 10건 미만 */
             sampleTooSmall?: boolean;
             /** @description 최근 7일 거절률이 30일보다 20%p 이상 높음 */
@@ -5631,8 +5643,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description 핵심 지표 */
-                        avgRequestToDepartSec?: number;
+                        /** @enum {integer} */
+                        days?: 7 | 30;
+                        /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
+                        avgRequestToDepartSec?: number | null;
                         hospitals?: components["schemas"]["HospitalStat"][];
                     };
                 };

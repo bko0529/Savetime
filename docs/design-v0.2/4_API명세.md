@@ -188,6 +188,7 @@
 | 403 | `DRIVER_INPUT_LOCKED` | 운전 중 입력 잠금 |
 | 403 | `LICENSE_EXPIRED` | 라이선스 키 만료 → 관리자에게 재발급 요청 |
 | 403 | `NOT_APPROVED` | 가입 승인 전 계정 |
+| 403 | `PASSWORD_CHANGE_REQUIRED` | 관리자가 초기화한 임시 비밀번호로 로그인 → `PUT /me/password`로 바꾸기 전에는 승인 계정 API를 못 씀 (`/me`·로그아웃·비밀번호 변경만 됨, SFR-021) |
 | 403 | `NOT_NAV_DEVICE` | 경로 안내 담당 단말이 아님 → 보기 전용 |
 | 403 | `ORIGIN_NOT_ALLOWED` | 허용되지 않은 Origin (CSRF 방어) |
 | 403 | `IP_NOT_ALLOWED` | 관리자 서버: 허용 IP(`ADMIN_ALLOWED_IPS`)가 아닌 곳에서 접속 (T-11) |
