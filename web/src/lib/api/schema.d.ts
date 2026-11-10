@@ -207,11 +207,11 @@ export interface paths {
         get?: never;
         /**
          * 비밀번호 변경 (임시 비밀번호 후 필수)
-         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다.
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
          *
-         *     **요구사항**: SFR-021
+         *     **요구사항**: SFR-021, SER-011
          *     **화면**: (비밀번호 변경)
-         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED
+         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED, ACCOUNT_LOCKED
          */
         put: operations["put_me_password"];
         post?: never;
@@ -1916,7 +1916,7 @@ export interface paths {
         put?: never;
         /**
          * AI 일지 정리 (제안)
-         * @description 대원 메모·음성 입력 글을 일지 항목별로 나눈 제안을 돌려준다. 서버가 식별정보(이름·전화번호·주민번호 형태·주소)를 지운 뒤 AI로 보내고, 원문·응답은 저장하지 않는다(SER-017). 제한시간 10초(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED.
+         * @description 대원 메모 글을 일지 항목별로 나눈 제안을 돌려준다(음성 입력은 CR-007로 삭제). 서버가 식별정보(names로 받은 이름 칸 값·전화번호·주민번호 형태·주소 모양)를 [삭제]로 바꾼 뒤 AI(OpenAI)로 보내고, AI 답에서도 한 번 더 지운다. 원문·응답은 저장·로그하지 않는다(SER-017). 제한시간 AI_TIMEOUT_MS(기본 10초) 넘거나 제공사 오류·키 없음이면 503 AI_UNAVAILABLE(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED. 응답은 Cache-Control no-store. 앱은 제안만 보여 주고 '적용'을 눌러야 초안에 넣는다.
          *
          *     **요구사항**: SFR-167, SER-017, INR-006, QUR-013
          *     **화면**: S-13
@@ -1966,10 +1966,11 @@ export interface paths {
         get: operations["get_admin_feature_flags"];
         /**
          * 기능 토글 바꾸기
-         * @description 작업 이력에 남김(SFR-091). 1분 안 반영.
+         * @description 바꿀 칸만 보낸다(둘 다 없거나 모르는 칸이면 400). 값이 실제로 바뀐 기능만 작업 이력에 1줄씩 (기능 켜기·기능 끄기). 앱·웹은 GET /config 를 1분마다 읽어 1분 안 반영. 응답은 바꾼 뒤 전체 값.
          *
          *     **요구사항**: QUR-013, SFR-091
          *     **화면**: A-02
+         *     **오류 코드**: VALIDATION_FAILED
          */
         put: operations["put_admin_feature_flags"];
         post?: never;
@@ -5751,7 +5752,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description 대원 메모 (앞뒤 공백 빼고 1자 이상) */
                     text: string;
+                    /** @description 단말에만 있는 이름 칸 값(환자·보호자). 메모에서 지우려고만 쓰고 저장하지 않는다 */
+                    names?: string[];
                 };
             };
         };

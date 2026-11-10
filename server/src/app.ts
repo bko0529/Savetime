@@ -11,6 +11,7 @@ import type { AuthContext } from './modules/auth/session.js';
 import { auditRouter } from './modules/admin/audit.js';
 import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
 import { adminIpGuard } from './modules/admin/ipGuard.js';
+import { adminFeatureFlagRouter } from './modules/admin/featureFlags.js';
 import { adminHospitalRouter } from './modules/admin/hospitals.js';
 import { adminNotificationRouter } from './modules/admin/notifications.js';
 import { adminParamedicRouter } from './modules/admin/paramedics.js';
@@ -19,6 +20,7 @@ import { adminStatsRouter } from './modules/admin/stats.js';
 import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
+import { aiOrganizeRouter, type AiOrganizer } from './modules/journal/aiOrganize.js';
 import { configRouter } from './modules/ops/config.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
 import { memoRouter } from './modules/team/memos.js';
@@ -62,6 +64,9 @@ export interface AppDeps {
   photos?: PhotoStore;
   // 구급대원 앱(웹앱) 주소. 여기 있는 주소에서 온 대원 API 요청만 CORS 로 허락한다 (CR-010)
   appOrigins?: string[];
+  // AI 일지 정리 (SFR-167). 키·모델이 없으면 비워 두고, 정리 요청은 503 AI_UNAVAILABLE 이 된다
+  aiOrganizer?: AiOrganizer;
+  aiTimeoutMs?: number;
   // 앱 최소 지원 버전 (MIN_APP_VERSION, SFR-142). 이보다 낮은 앱은 '업데이트가 필요해요'만 보여 준다
   minAppVersion?: string;
 }
@@ -77,6 +82,8 @@ export function createApp({
   admin,
   photos,
   appOrigins = [],
+  aiOrganizer,
+  aiTimeoutMs = 10_000,
   minAppVersion = '1.0.0',
 }: AppDeps): express.Express {
   const app = express();
@@ -113,6 +120,13 @@ export function createApp({
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', locationRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', journalRouter(auth.pool, approvedParamedic));
+    app.use(
+      '/api/v1',
+      aiOrganizeRouter(auth.pool, approvedParamedic, logger, {
+        organizer: aiOrganizer,
+        timeoutMs: aiTimeoutMs,
+      }),
+    );
     app.use('/api/v1', syncRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', roundsRouter(auth.pool, approvedParamedic, realtime, eta));
@@ -131,6 +145,7 @@ export function createApp({
     const adminOnly = requireAdmin(admin);
     app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', auditRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminFeatureFlagRouter(admin.pool, adminOnly));
     app.use('/api/v1', adminPcRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', adminNotificationRouter(admin.pool, adminOnly));
     app.use('/api/v1', adminParamedicRouter(admin.pool, admin.redis, adminOnly, realtime));
