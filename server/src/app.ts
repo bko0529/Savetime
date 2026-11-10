@@ -20,7 +20,9 @@ import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
 import { aiOrganizeRouter, type AiOrganizer } from './modules/journal/aiOrganize.js';
+import { configRouter } from './modules/ops/config.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
+import { memoRouter } from './modules/team/memos.js';
 import { draftRouter } from './modules/team/draft.js';
 import { inviteRouter } from './modules/team/invites.js';
 import { teamRouter } from './modules/team/routes.js';
@@ -64,6 +66,8 @@ export interface AppDeps {
   // AI 일지 정리 (SFR-167). 키·모델이 없으면 비워 두고, 정리 요청은 503 AI_UNAVAILABLE 이 된다
   aiOrganizer?: AiOrganizer;
   aiTimeoutMs?: number;
+  // 앱 최소 지원 버전 (MIN_APP_VERSION, SFR-142). 이보다 낮은 앱은 '업데이트가 필요해요'만 보여 준다
+  minAppVersion?: string;
 }
 
 export function createApp({
@@ -79,6 +83,7 @@ export function createApp({
   appOrigins = [],
   aiOrganizer,
   aiTimeoutMs = 10_000,
+  minAppVersion = '1.0.0',
 }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -97,10 +102,13 @@ export function createApp({
   if (auth) {
     // 로그인한 승인 대원만 쓰는 API에 붙인다. 로그인·재발급·내 정보는 그 전 단계라 따로 둔다.
     const approvedParamedic = [requireParamedic(auth), requireApproved];
+    // 앱·웹 설정은 로그인 없이 (QUR-013, SFR-142)
+    app.use('/api/v1', configRouter(auth.pool, minAppVersion));
     app.use('/api/v1', authRouter(auth, realtime));
     app.use('/api/v1', signupRouter(auth, photos));
     app.use('/api/v1', teamRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', inviteRouter(auth, approvedParamedic, realtime));
+    app.use('/api/v1', memoRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', draftRouter(auth, approvedParamedic, realtime));
     // /hospitals/nearby가 /hospitals/:hospitalId보다 먼저 와야 'nearby'를 병원 ID로 읽지 않는다
     app.use('/api/v1', recommendRouter(auth.pool, approvedParamedic, eta));

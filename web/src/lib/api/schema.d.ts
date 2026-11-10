@@ -466,9 +466,11 @@ export interface paths {
         get?: never;
         /**
          * 나만 보는 한 줄 메모
-         * @description **요구사항**: SFR-143
+         * @description 쓴 대원만 본다(GET /paramedics/on-duty 의 myMemo). 같은 대원에게 다시 쓰면 덮어쓰고, 빈 글(공백만)이면 지운다. 앞뒤 공백은 뺀다. 같은 소방서의 승인된 다른 대원에게만 쓸 수 있고, 그 밖(나 자신·없는 대원·다른 소방서)은 404.
+         *
+         *     **요구사항**: SFR-143
          *     **화면**: S-03 팀원 목록 초대
-         *     **오류 코드**: NOT_FOUND
+         *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
          */
         put: operations["put_memos__paramedicId"];
         post?: never;
@@ -1936,7 +1938,7 @@ export interface paths {
         };
         /**
          * 앱·웹 설정 (기능 토글)
-         * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013).
+         * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013). featureFlags 는 feature_flag 표(없는 키는 false), minAppVersion 은 서버 환경 변수 MIN_APP_VERSION(숫자 3개, 기본 1.0.0). 앱은 자기 버전이 더 낮으면 기능을 막고 '업데이트가 필요해요'만 보여 준다 (SFR-142). 대원·병원 서버(main)에만 있다.
          *
          *     **요구사항**: QUR-013, SFR-142
          */

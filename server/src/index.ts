@@ -153,6 +153,7 @@ const app = createApp({
   aiTimeoutMs: config.AI_TIMEOUT_MS,
   // 대원 앱은 대원·병원 서버(main)만 부른다 (T-11)
   appOrigins: config.APP_ROLE === 'main' ? config.APP_ORIGINS : [],
+  minAppVersion: config.MIN_APP_VERSION,
   photos,
   eta,
   geocoder,
