@@ -1,3 +1,5 @@
 # 부하 테스트 PC 쿠키(인증 값)와 결과 원본은 올리지 않는다. 요약만 docs/perf/ 에 남긴다
 .pcs.csv
+.medics.csv
+.moving.csv
 results/
