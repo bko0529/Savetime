@@ -6,6 +6,14 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   APP_ROLE: z.enum(['main', 'admin']).default('main'),
+  // 앱 최소 지원 버전 (SFR-142). '1.2.0' 처럼 숫자 3개. 옛 앱이 바뀐 서버와 어긋나 오작동하지 않게 올린다
+  MIN_APP_VERSION: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .regex(/^\d+\.\d+\.\d+$/)
+      .default('1.0.0'),
+  ),
   // 짧은 키는 추측해서 토큰을 위조할 수 있다. 무작위 32바이트(base64 44자) 이상을 쓴다.
   // 수집 스크립트처럼 로그인이 필요 없는 실행도 있어서 여기서는 비워 둘 수 있고, API 서버가 켜질 때 따로 확인한다.
   // .env.example을 그대로 복사하면 'JWT_SECRET=' 빈 값이 들어온다. 빈 값은 '없음'으로 본다.
