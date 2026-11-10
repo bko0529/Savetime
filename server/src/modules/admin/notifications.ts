@@ -5,6 +5,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
+import { BURST_COUNT, BURST_WINDOW, NIGHT_END_HOUR } from '../hospital-web/oddPcRules.js';
 
 export type AdminNotificationKind =
   'collect_fail' | 'signup' | 'pc_change' | 'key_expiring' | 'odd_pc' | 'api_quota' | 'integrity';
@@ -74,6 +75,8 @@ interface NotificationRow {
   pc_name: string | null;
   pc_released: boolean | null;
   key_days_left: number | null;
+  odd_night: boolean | null;
+  odd_burst: boolean | null;
 }
 
 const FIXED_TEXT: Partial<Record<AdminNotificationKind, string>> = {
@@ -92,6 +95,11 @@ function notificationText(r: NotificationRow): string {
   if (r.kind === 'key_expiring') {
     return `${r.hospital_name ?? ''} 라이선스 키 ${r.key_days_left ?? 0}일 뒤 만료`;
   }
+  // 'A병원 이상 PC 등록(새벽)' (SFR-148). 왜 수상한지 괄호에 적는다
+  if (r.kind === 'odd_pc' && r.hospital_name) {
+    const why = [r.odd_night && '새벽', r.odd_burst && '1시간 안 2대 이상'].filter(Boolean);
+    return `${r.hospital_name} 이상 PC 등록${why.length ? `(${why.join('·')})` : ''}`;
+  }
   return FIXED_TEXT[r.kind] ?? r.kind;
 }
 
@@ -106,9 +114,22 @@ export function adminNotificationRouter(pool: pg.Pool, adminOnly: RequestHandler
       `SELECT n.id, n.kind, n.occurrences, n.last_at, n.read_at IS NOT NULL AS read,
               COALESCE(h.name, kh.name) AS hospital_name,
               p.name AS pc_name, p.released AS pc_released,
-              ceil(extract(epoch FROM lk.expires_at - n.last_at) / 86400)::int AS key_days_left
+              ceil(extract(epoch FROM lk.expires_at - n.last_at) / 86400)::int AS key_days_left,
+              o.night AS odd_night, o.burst AS odd_burst
          FROM admin_notification n
-         LEFT JOIN hospital h ON n.kind = 'pc_change' AND h.id = n.ref_id
+         LEFT JOIN hospital h ON n.kind IN ('pc_change', 'odd_pc') AND h.id = n.ref_id
+         -- 이상 PC 알림: 그 병원에서 알림 시각까지 마지막으로 등록된 PC 의 등록 시각으로 이유를 다시 본다 (oddPc.ts 와 같은 기준)
+         LEFT JOIN LATERAL (
+           SELECT extract(hour FROM pc.registered_at AT TIME ZONE 'Asia/Seoul') < $4 AS night,
+                  (SELECT count(*) FROM hospital_pc x
+                    WHERE x.hospital_id = pc.hospital_id
+                      AND x.registered_at > pc.registered_at - $5::interval
+                      AND x.registered_at <= pc.registered_at) >= $6 AS burst
+             FROM hospital_pc pc
+            WHERE n.kind = 'odd_pc' AND pc.hospital_id = n.ref_id AND pc.registered_at <= n.last_at
+            ORDER BY pc.registered_at DESC
+            LIMIT 1
+         ) o ON true
          -- PC 알림: 그 병원에서 알림 시각까지 가장 마지막에 등록·해제된 PC (같은 시각이면 등록을 먼저 본다)
          LEFT JOIN LATERAL (
            SELECT pc.name, pc.released_at IS NOT NULL AND pc.released_at <= n.last_at AS released
@@ -127,7 +148,7 @@ export function adminNotificationRouter(pool: pg.Pool, adminOnly: RequestHandler
                OR (date_trunc('milliseconds', n.last_at), n.id) < ($1, $2::bigint))
         ORDER BY date_trunc('milliseconds', n.last_at) DESC, n.id DESC
         LIMIT $3`,
-      [cursorAt, cursorId, q.limit + 1],
+      [cursorAt, cursorId, q.limit + 1, NIGHT_END_HOUR, BURST_WINDOW, BURST_COUNT],
     );
     const { rows: unread } = await pool.query<{ n: number }>(
       'SELECT count(*)::int AS n FROM admin_notification WHERE read_at IS NULL',

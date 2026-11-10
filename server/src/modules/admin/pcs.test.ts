@@ -6,7 +6,9 @@ import type pg from 'pg';
 import { pino } from 'pino';
 import request from 'supertest';
 import { createApp } from '../../app.js';
+import { withTransaction } from '../../db/transaction.js';
 import { signAccessToken, signingKey } from '../auth/tokens.js';
+import { detectOddPc } from '../hospital-web/oddPc.js';
 import { WEB_ORIGIN, withHospitalWeb } from '../../testing/hospitalWeb.js';
 import type { Realtime } from '../realtime/server.js';
 import { notifyAdmin, notifyExpiringKeys } from './notifications.js';
@@ -207,6 +209,9 @@ test("'야간 PC'를 90일 동안 쓰지 않으면 자동 정리 때 해제된�
 test('알림 목록: 새 PC 등록이 알림이 되고, 30분 안 재발생은 횟수만 늘고, 열면 읽음 (SFR-100 인수 기준)', async () => {
   await withAdminPcs(async (h) => {
     await h.hospitalWithPcs('A병원', ['응급실 접수대']);
+    // 이 테스트를 한국 시간 새벽에 돌리면 '이상 PC 등록(새벽)'(SFR-148) 알림도 생긴다.
+    // 여기서는 SFR-100 쌓기·횟수만 보므로 그 알림은 지우고 시작한다 (실행 시각과 상관없이 같은 결과)
+    await h.pool.query("DELETE FROM admin_notification WHERE kind = 'odd_pc'");
     let res = await h.admin('get', '/admin/notifications');
     assert.equal(res.status, 200);
     assert.equal(res.body.unread, 1);
@@ -331,5 +336,71 @@ test('관리자 토큰이 없거나 대원 토큰이면 막는다 (SER-010)', as
         assert.equal((await h.admin(method, path, token)).status, 401, `${method} ${path}`);
       }
     }
+  });
+});
+
+// 어제 한국 시간 hh:mm 에 등록된 PC 를 직접 넣는다 (실행 시각과 상관없이 새벽·낮을 만들려고)
+async function pcRegisteredAt(pool: pg.Pool, hospitalId: number, name: string, hhmm: string) {
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO hospital_pc (hospital_id, name, token_hash, registered_at)
+     VALUES ($1, $2, $3,
+             ((date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') - interval '1 day' + $4::interval)
+               AT TIME ZONE 'Asia/Seoul'))
+     RETURNING id`,
+    [hospitalId, name, `hash-${name}-${hhmm}`, hhmm],
+  );
+  return rows[0].id;
+}
+
+const oddNotes = async (h: Harness) =>
+  ((await h.admin('get', '/admin/notifications')).body.items as { kind: string; text: string }[])
+    .filter((i) => i.kind === 'odd_pc')
+    .map((i) => i.text);
+
+test("A병원(천안)에 새벽 3시에 새 PC 가 등록되면 'A병원 이상 PC 등록(새벽)' 알림 1건 (SFR-148 인수 기준)", async () => {
+  await withAdminPcs(async (h) => {
+    const a = await h.hospitalWithPcs('A병원', []);
+    const pc = await pcRegisteredAt(h.pool, a.id, '야간 PC', '03:00');
+
+    assert.deepEqual(await withTransaction(h.pool, (c) => detectOddPc(c, pc)), ['night']);
+    assert.deepEqual(await oddNotes(h), ['A병원 이상 PC 등록(새벽)']);
+  });
+});
+
+test("오후 2시에 PC 1대 등록은 '이상 PC 등록' 알림이 없다 (SFR-148 인수 기준)", async () => {
+  await withAdminPcs(async (h) => {
+    const a = await h.hospitalWithPcs('A병원', []);
+    const pc = await pcRegisteredAt(h.pool, a.id, '접수대', '14:00');
+    assert.deepEqual(await withTransaction(h.pool, (c) => detectOddPc(c, pc)), []);
+    assert.deepEqual(await oddNotes(h), []);
+    // 6시 정각부터는 새벽이 아니다
+    const six = await pcRegisteredAt(h.pool, a.id, '아침 PC', '06:00');
+    assert.deepEqual(await withTransaction(h.pool, (c) => detectOddPc(c, six)), []);
+  });
+});
+
+test('같은 병원에서 1시간 안에 2대째가 등록되면 알림, 2시간 간격이면 없다 (SFR-148)', async () => {
+  await withAdminPcs(async (h) => {
+    const a = await h.hospitalWithPcs('A병원', []);
+    await pcRegisteredAt(h.pool, a.id, '접수대', '14:00');
+    const second = await pcRegisteredAt(h.pool, a.id, '처치실', '14:40');
+    assert.deepEqual(await withTransaction(h.pool, (c) => detectOddPc(c, second)), ['burst']);
+    assert.deepEqual(await oddNotes(h), ['A병원 이상 PC 등록(1시간 안 2대 이상)']);
+
+    const b = await h.hospitalWithPcs('B병원', []);
+    await pcRegisteredAt(h.pool, b.id, '접수대', '10:00');
+    const later = await pcRegisteredAt(h.pool, b.id, '처치실', '12:00');
+    assert.deepEqual(await withTransaction(h.pool, (c) => detectOddPc(c, later)), []);
+  });
+});
+
+test('실제 PC 등록 API 로 바로 2대를 등록하면 등록은 되고 이상 PC 알림이 남는다 (SFR-148, 등록은 막지 않음)', async () => {
+  await withAdminPcs(async (h) => {
+    // hospitalWithPcs 가 등록 API 를 부르고 201 을 확인한다
+    await h.hospitalWithPcs('A병원', ['접수대', '처치실']);
+    const notes = await oddNotes(h);
+    assert.equal(notes.length, 1);
+    // 실행 시각이 새벽이면 '새벽'도 같이 붙는다
+    assert.match(notes[0], /^A병원 이상 PC 등록\((새벽·)?1시간 안 2대 이상\)$/);
   });
 });

@@ -18,6 +18,7 @@ export const AUDIT_ACTIONS = {
   approve_signup: '가입 승인',
   reject_signup: '가입 반려',
   set_entrance: '응급실 입구 좌표 지정',
+  reset_password: '대원 비밀번호 초기화',
 } as const;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 

@@ -304,3 +304,100 @@ test('정지: 없는·탈퇴한 계정은 404, 승인 전 계정은 409, 사유�
     assert.equal(rows[0].status, 'approved');
   });
 });
+
+const loginWith = (h: Harness, loginId: string, password: string) =>
+  h
+    .app()
+    .post('/api/v1/auth/login')
+    .send({ loginId, password, deviceId: `device-${loginId}` });
+
+test('비밀번호 초기화: 임시 비밀번호가 한 번 표시되고 작업 이력에 1건, 다른 기기 로그인도 끝난다 (SFR-021 인수 기준)', async () => {
+  await withAdminParamedics(async (h) => {
+    const id = await addParamedic(h.pool, { loginId: 'kim01' });
+    const before = (await login(h, 'kim01')).body.tokens.accessToken;
+
+    const res = await h.admin('post', `/admin/paramedics/${id}/reset-password`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers['cache-control'], 'no-store');
+    const temp: string = res.body.tempPassword;
+    assert.match(temp, /^[a-hj-km-np-z2-9]{10}$/, '헷갈리는 글자 없이 10자');
+
+    // 작업 이력 1건, 임시 비밀번호는 어디에도 남기지 않는다
+    const { rows } = await h.pool.query(
+      "SELECT target_type, detail FROM admin_audit_log WHERE action = 'reset_password'",
+    );
+    assert.deepEqual(rows, [
+      { target_type: 'paramedic', detail: { targetName: '김도윤', reason: null } },
+    ]);
+    const log = await h.admin('get', '/admin/audit-logs');
+    assert.equal(log.body.items[0].action, '대원 비밀번호 초기화');
+    assert.doesNotMatch(JSON.stringify(log.body), new RegExp(temp));
+
+    // 옛 비밀번호·옛 토큰은 더 못 쓴다
+    const old = await h.app().get('/api/v1/me').set('Authorization', `Bearer ${before}`);
+    assert.equal(old.status, 401);
+    assert.equal((await login(h, 'kim01')).status, 401);
+  });
+});
+
+test('임시 비밀번호로 로그인하면 비밀번호 변경만 되고, 바꾼 뒤에는 이전 비밀번호로 들어올 수 없다 (SFR-021 인수 기준)', async () => {
+  await withAdminParamedics(async (h) => {
+    const id = await addParamedic(h.pool, { loginId: 'kim01' });
+    const temp = (await h.admin('post', `/admin/paramedics/${id}/reset-password`)).body
+      .tempPassword as string;
+
+    const first = await loginWith(h, 'kim01', temp);
+    assert.equal(first.status, 200);
+    assert.equal(first.body.me.mustChangePassword, true, '앱은 이걸 보고 변경 화면만 띄운다');
+    const token = first.body.tokens.accessToken;
+    const bearer = { Authorization: `Bearer ${token}` };
+
+    // 근무 기능은 막히고, 내 정보·비밀번호 변경은 된다
+    const team = await h.app().post('/api/v1/teams').set(bearer);
+    assert.equal(team.status, 403);
+    assert.equal(team.body.error.code, 'PASSWORD_CHANGE_REQUIRED');
+    assert.equal((await h.app().get('/api/v1/me').set(bearer)).status, 200);
+
+    const change = (body: object) => h.app().put('/api/v1/me/password').set(bearer).send(body);
+    const wrong = await change({ currentPassword: 'nope', newPassword: 'brand-new-1234' });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.body.error.code, 'INVALID_CREDENTIALS');
+    assert.equal((await change({ currentPassword: temp, newPassword: 'short' })).status, 400);
+    assert.equal((await change({ currentPassword: temp, newPassword: temp })).status, 400);
+
+    assert.equal(
+      (await change({ currentPassword: temp, newPassword: 'brand-new-1234' })).status,
+      204,
+    );
+    // 같은 토큰으로 바로 근무 기능이 열린다
+    const after = await h.app().post('/api/v1/teams').set(bearer);
+    assert.notEqual(after.body?.error?.code, 'PASSWORD_CHANGE_REQUIRED');
+    // 임시 비밀번호(이전 비밀번호)로는 더 못 들어오고, 새 비밀번호로는 바로 쓴다
+    assert.equal((await loginWith(h, 'kim01', temp)).status, 401);
+    const fresh = await loginWith(h, 'kim01', 'brand-new-1234');
+    assert.equal(fresh.status, 200);
+    assert.equal(fresh.body.me.mustChangePassword, false);
+  });
+});
+
+test('비밀번호 초기화는 5번 틀려 잠긴 계정도 풀어 준다. 없는·탈퇴한 계정은 404, 관리자가 아니면 401', async () => {
+  await withAdminParamedics(async (h) => {
+    const id = await addParamedic(h.pool, { loginId: 'kim01' });
+    await h.pool.query(
+      "UPDATE paramedic SET failed_count = 0, locked_until = now() + interval '10 minutes' WHERE id = $1",
+      [id],
+    );
+    const temp = (await h.admin('post', `/admin/paramedics/${id}/reset-password`)).body
+      .tempPassword as string;
+    assert.equal((await loginWith(h, 'kim01', temp)).status, 200);
+
+    const gone = await addParamedic(h.pool, { loginId: 'kim03', status: 'withdrawn' });
+    assert.equal((await h.admin('post', `/admin/paramedics/${gone}/reset-password`)).status, 404);
+    assert.equal((await h.admin('post', '/admin/paramedics/99999/reset-password')).status, 404);
+    const noAdmin = await h
+      .app()
+      .post(`/api/v1/admin/paramedics/${id}/reset-password`)
+      .set('Origin', WEB_ORIGIN);
+    assert.equal(noAdmin.status, 401);
+  });
+});

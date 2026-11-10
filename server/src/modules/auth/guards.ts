@@ -7,6 +7,7 @@ import { verifyAccessToken } from './tokens.js';
 export interface ParamedicAuth {
   paramedicId: string;
   status: ParamedicStatus;
+  mustChangePassword: boolean;
 }
 
 export function paramedicAuth(res: Response): ParamedicAuth {
@@ -41,7 +42,7 @@ export async function authenticateParamedic(
   if (state.status === 'suspended') {
     throw new AppError(403, 'ACCOUNT_SUSPENDED', '정지된 계정이에요');
   }
-  return { paramedicId, status: state.status };
+  return { paramedicId, status: state.status, mustChangePassword: !!state.mustChangePassword };
 }
 
 export function requireParamedic(ctx: AuthContext): RequestHandler {
@@ -53,9 +54,19 @@ export function requireParamedic(ctx: AuthContext): RequestHandler {
 }
 
 // 가입 승인 전·반려 계정은 로그인과 내 정보 확인만 할 수 있다 (SFR-022·083)
+// 임시 비밀번호로 들어온 계정도 비밀번호를 바꾸기 전에는 근무 기능을 쓸 수 없다 (SFR-021).
+// 내 정보(/me)·로그아웃·비밀번호 변경(PUT /me/password)은 이 확인을 붙이지 않아 그대로 쓴다
 export const requireApproved: RequestHandler = (_req, res, next) => {
-  if (paramedicAuth(res).status !== 'approved') {
+  const auth = paramedicAuth(res);
+  if (auth.status !== 'approved') {
     throw new AppError(403, 'NOT_APPROVED', '가입 승인 후에 쓸 수 있어요');
+  }
+  if (auth.mustChangePassword) {
+    throw new AppError(
+      403,
+      'PASSWORD_CHANGE_REQUIRED',
+      '임시 비밀번호를 새 비밀번호로 바꿔 주세요',
+    );
   }
   next();
 };
