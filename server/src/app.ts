@@ -102,7 +102,7 @@ export function createApp({
     app.use('/api/v1', transportRouter(auth.pool, approvedParamedic, realtime, eta));
     app.use('/api/v1', confirmRouter(auth, approvedParamedic, realtime));
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
-    app.use('/api/v1', locationRouter(auth.pool, approvedParamedic));
+    app.use('/api/v1', locationRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', journalRouter(auth.pool, approvedParamedic));
     app.use('/api/v1', syncRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
