@@ -55,6 +55,17 @@ async function isVisible(redis: Redis, paramedicId: string): Promise<boolean> {
   }
 }
 
+// 병원 거절·수용 불가 사유 (부록 G, 병원 웹 RejectReasonDialog 와 같은 말)
+const REASON_LABEL: Record<string, string> = {
+  er_bed: '응급실 병상 부족',
+  or_room: '수술실 부족',
+  ward: '입원실 부족',
+  icu: '중환자실 부족',
+  no_specialist: '해당 전문의 부재',
+  equipment: '의료장비 고장',
+  etc: '기타',
+};
+
 // 받침이 있으면 '이', 없으면 '가' (예: 'B대학교병원이', '세브란스가'). 한글이 아니면 '이(가)'
 function subjectParticle(word: string): string {
   const code = word.charCodeAt(word.length - 1) - 0xac00;
@@ -64,7 +75,7 @@ function subjectParticle(word: string): string {
 
 // 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료 (S3)
 // · 승인 취소 (SFR-128) · 승인 해제 1분 전·해제 (SFR-127) · 확정 병원 추가 메모 (SFR-140) (S4)
-// · 병원 도착 확인 요청 (SFR-144) (S7)
+// · 병원 도착 확인 요청 (SFR-144) · 도착 후 수용 불가 (SFR-158) (S7)
 export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<PushMessage | null> {
   const p = event.payload;
   const data = (extra: Record<string, string> = {}) => ({
@@ -147,6 +158,15 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
     return {
       title: TITLE,
       body: `${p.hospitalName}에서 도착을 확인했어요 · 도착 처리할까요?`,
+      data: data(),
+    };
+  }
+  // 도착 후 수용 불가 (SFR-158). 'A병원 수용 불가 · 해당 전문의 부재'. 기타 글은 이벤트에 없어 '기타'로만 (절대 규칙 5)
+  if (event.name === 'transport.unacceptable' && typeof p.hospitalName === 'string') {
+    const why = REASON_LABEL[String(p.reason ?? '')] ?? '';
+    return {
+      title: TITLE,
+      body: `${p.hospitalName} 수용 불가${why ? ` · ${why}` : ''} · 다시 요청해 주세요`,
       data: data(),
     };
   }
