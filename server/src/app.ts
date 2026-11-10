@@ -19,6 +19,7 @@ import { adminStatsRouter } from './modules/admin/stats.js';
 import { adminPcRouter } from './modules/admin/pcs.js';
 import type { HospitalWebContext } from './modules/hospital-web/pcAuth.js';
 import { hospitalWebRouter } from './modules/hospital-web/routes.js';
+import { aiOrganizeRouter, type AiOrganizer } from './modules/journal/aiOrganize.js';
 import { healthRouter, type HealthChecks } from './modules/ops/health.js';
 import { draftRouter } from './modules/team/draft.js';
 import { inviteRouter } from './modules/team/invites.js';
@@ -60,6 +61,9 @@ export interface AppDeps {
   photos?: PhotoStore;
   // 구급대원 앱(웹앱) 주소. 여기 있는 주소에서 온 대원 API 요청만 CORS 로 허락한다 (CR-010)
   appOrigins?: string[];
+  // AI 일지 정리 (SFR-167). 키·모델이 없으면 비워 두고, 정리 요청은 503 AI_UNAVAILABLE 이 된다
+  aiOrganizer?: AiOrganizer;
+  aiTimeoutMs?: number;
 }
 
 export function createApp({
@@ -73,6 +77,8 @@ export function createApp({
   admin,
   photos,
   appOrigins = [],
+  aiOrganizer,
+  aiTimeoutMs = 10_000,
 }: AppDeps): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -105,6 +111,13 @@ export function createApp({
     app.use('/api/v1', finishRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', locationRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', journalRouter(auth.pool, approvedParamedic));
+    app.use(
+      '/api/v1',
+      aiOrganizeRouter(auth.pool, approvedParamedic, logger, {
+        organizer: aiOrganizer,
+        timeoutMs: aiTimeoutMs,
+      }),
+    );
     app.use('/api/v1', syncRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', phoneCheckRouter(auth.pool, approvedParamedic, realtime));
     app.use('/api/v1', roundsRouter(auth.pool, approvedParamedic, realtime, eta));

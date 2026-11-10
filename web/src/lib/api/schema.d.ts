@@ -1914,7 +1914,7 @@ export interface paths {
         put?: never;
         /**
          * AI 일지 정리 (제안)
-         * @description 대원 메모·음성 입력 글을 일지 항목별로 나눈 제안을 돌려준다. 서버가 식별정보(이름·전화번호·주민번호 형태·주소)를 지운 뒤 AI로 보내고, 원문·응답은 저장하지 않는다(SER-017). 제한시간 10초(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED.
+         * @description 대원 메모 글을 일지 항목별로 나눈 제안을 돌려준다(음성 입력은 CR-007로 삭제). 서버가 식별정보(names로 받은 이름 칸 값·전화번호·주민번호 형태·주소 모양)를 [삭제]로 바꾼 뒤 AI(OpenAI)로 보내고, AI 답에서도 한 번 더 지운다. 원문·응답은 저장·로그하지 않는다(SER-017). 제한시간 AI_TIMEOUT_MS(기본 10초) 넘거나 제공사 오류·키 없음이면 503 AI_UNAVAILABLE(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED. 응답은 Cache-Control no-store. 앱은 제안만 보여 주고 '적용'을 눌러야 초안에 넣는다.
          *
          *     **요구사항**: SFR-167, SER-017, INR-006, QUR-013
          *     **화면**: S-13
@@ -5749,7 +5749,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description 대원 메모 (앞뒤 공백 빼고 1자 이상) */
                     text: string;
+                    /** @description 단말에만 있는 이름 칸 값(환자·보호자). 메모에서 지우려고만 쓰고 저장하지 않는다 */
+                    names?: string[];
                 };
             };
         };

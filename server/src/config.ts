@@ -49,6 +49,10 @@ const schema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  // AI 일지 정리 (SFR-167, OpenAI — 기술정의서 T-12). 키·모델이 둘 다 있어야 켠다. 제한시간은 INR-006 10초
+  AI_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
+  AI_MODEL: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
   // Firebase 서비스 계정 JSON을 base64 한 줄로. 없으면 푸시만 꺼진다 (SFR-130)
   FIREBASE_SERVICE_ACCOUNT_BASE64: z.preprocess(
     (v) => (v === '' ? undefined : v),

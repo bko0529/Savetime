@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import pg from 'pg';
 import { pino } from 'pino';
 import { createApp } from './app.js';
+import { createOpenAiOrganizer } from './modules/journal/aiOrganize.js';
 import { loadConfig } from './config.js';
 import { signingKey } from './modules/auth/tokens.js';
 import {
@@ -137,8 +138,19 @@ const photos =
     : undefined;
 if (!photos) logger.warn('S3_*·PHOTO_ENC_KEY가 없어 가입 신청(사진 저장)이 503이 됩니다');
 
+// AI 일지 정리 (SFR-167). 키·모델이 없으면 정리 요청만 503 이 된다. 서버는 켜진다
+const aiOrganizer =
+  config.AI_API_KEY && config.AI_MODEL
+    ? createOpenAiOrganizer(config.AI_API_KEY, config.AI_MODEL)
+    : undefined;
+if (config.APP_ROLE === 'main' && !aiOrganizer) {
+  logger.warn('AI_API_KEY·AI_MODEL이 없어 AI 일지 정리를 쓸 수 없습니다');
+}
+
 const app = createApp({
   logger,
+  aiOrganizer,
+  aiTimeoutMs: config.AI_TIMEOUT_MS,
   // 대원 앱은 대원·병원 서버(main)만 부른다 (T-11)
   appOrigins: config.APP_ROLE === 'main' ? config.APP_ORIGINS : [],
   photos,
