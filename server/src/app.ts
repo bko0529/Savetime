@@ -11,6 +11,7 @@ import type { AuthContext } from './modules/auth/session.js';
 import { auditRouter } from './modules/admin/audit.js';
 import { adminAuthRouter, requireAdmin, type AdminContext } from './modules/admin/auth.js';
 import { adminIpGuard } from './modules/admin/ipGuard.js';
+import { adminFeatureFlagRouter } from './modules/admin/featureFlags.js';
 import { adminHospitalRouter } from './modules/admin/hospitals.js';
 import { adminNotificationRouter } from './modules/admin/notifications.js';
 import { adminParamedicRouter } from './modules/admin/paramedics.js';
@@ -123,6 +124,7 @@ export function createApp({
     const adminOnly = requireAdmin(admin);
     app.use('/api/v1', adminHospitalRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', auditRouter(admin.pool, adminOnly));
+    app.use('/api/v1', adminFeatureFlagRouter(admin.pool, adminOnly));
     app.use('/api/v1', adminPcRouter(admin.pool, adminOnly, realtime));
     app.use('/api/v1', adminNotificationRouter(admin.pool, adminOnly));
     app.use('/api/v1', adminParamedicRouter(admin.pool, admin.redis, adminOnly, realtime));

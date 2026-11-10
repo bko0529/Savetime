@@ -63,6 +63,22 @@ function locked(seconds: number): AppError {
   });
 }
 
+// 비밀번호를 틀렸다: 실패 횟수를 1 올리고, 5번째면 10분 잠근다. 잠갔으면 남은 초, 아니면 null.
+// 로그인과 비밀번호 변경(PUT /me/password)이 같은 횟수를 쓴다. 둘 중 어디로든 비밀번호를 맞혀 보지 못하게 (SER-011)
+async function recordPasswordFailure(client: pg.PoolClient, paramedicId: string) {
+  const { rows } = await client.query<{ lock_seconds: number | null }>(
+    `UPDATE paramedic
+        SET failed_count = CASE WHEN failed_count + 1 >= $2 THEN 0 ELSE failed_count + 1 END,
+            locked_until = CASE WHEN failed_count + 1 >= $2
+                                THEN now() + make_interval(mins => $3) END
+      WHERE id = $1
+     RETURNING CASE WHEN locked_until IS NOT NULL
+                    THEN ceil(extract(epoch FROM locked_until - now()))::int END AS lock_seconds`,
+    [paramedicId, MAX_FAILURES, LOCK_MINUTES],
+  );
+  return rows[0].lock_seconds;
+}
+
 // 로그인 때는 지금부터 근무 시간만큼, 재발급 때는 바꾸는 토큰(previousId)의 만료 시각을 그대로 쓴다.
 async function issueRefreshToken(
   client: pg.PoolClient,
@@ -113,17 +129,7 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
       if (row.lock_seconds !== null) return { kind: 'locked', seconds: row.lock_seconds };
 
       if (!(await verifyPassword(row.password_hash, input.password))) {
-        const { rows: after } = await client.query<{ lock_seconds: number | null }>(
-          `UPDATE paramedic
-              SET failed_count = CASE WHEN failed_count + 1 >= $2 THEN 0 ELSE failed_count + 1 END,
-                  locked_until = CASE WHEN failed_count + 1 >= $2
-                                      THEN now() + make_interval(mins => $3) END
-            WHERE id = $1
-           RETURNING CASE WHEN locked_until IS NOT NULL
-                          THEN ceil(extract(epoch FROM locked_until - now()))::int END AS lock_seconds`,
-          [row.id, MAX_FAILURES, LOCK_MINUTES],
-        );
-        const seconds = after[0].lock_seconds;
+        const seconds = await recordPasswordFailure(client, row.id);
         return seconds === null ? { kind: 'invalid' } : { kind: 'locked', seconds };
       }
 
@@ -247,19 +253,37 @@ export function authRouter(ctx: AuthContext, realtime?: Realtime): Router {
     }
     // 새 비밀번호는 잠금 밖에서 미리 계산한다 (argon2 는 일부러 느려서 잠근 채 오래 붙잡지 않게)
     const newHash = await hashPassword(input.newPassword);
-    const changed = await withTransaction(ctx.pool, async (client) => {
-      const { rows } = await client.query<{ password_hash: string }>(
-        'SELECT password_hash FROM paramedic WHERE id = $1 FOR UPDATE',
-        [paramedicId],
-      );
-      if (!(await verifyPassword(rows[0]?.password_hash, input.currentPassword))) return false;
-      await client.query(
-        'UPDATE paramedic SET password_hash = $2, must_change_pw = false WHERE id = $1',
-        [paramedicId, newHash],
-      );
-      return true;
-    });
-    if (!changed) throw invalidCredentials();
+    // 로그인과 같은 이유로 오류를 트랜잭션 밖에서 던진다 (안에서 던지면 실패 횟수가 롤백된다)
+    const outcome = await withTransaction(
+      ctx.pool,
+      async (
+        client,
+      ): Promise<{ kind: 'ok' } | { kind: 'invalid' } | { kind: 'locked'; seconds: number }> => {
+        const { rows } = await client.query<{ password_hash: string; lock_seconds: number | null }>(
+          `SELECT password_hash,
+                  CASE WHEN locked_until > now()
+                       THEN ceil(extract(epoch FROM locked_until - now()))::int END AS lock_seconds
+             FROM paramedic WHERE id = $1 FOR UPDATE`,
+          [paramedicId],
+        );
+        const row = rows[0];
+        // 잠긴 동안은 맞는 비밀번호여도 바꾸지 않는다 (DB 시각 기준)
+        if (row?.lock_seconds != null) return { kind: 'locked', seconds: row.lock_seconds };
+        if (!(await verifyPassword(row?.password_hash, input.currentPassword))) {
+          if (!row) return { kind: 'invalid' };
+          const seconds = await recordPasswordFailure(client, paramedicId);
+          return seconds === null ? { kind: 'invalid' } : { kind: 'locked', seconds };
+        }
+        await client.query(
+          `UPDATE paramedic SET password_hash = $2, must_change_pw = false, failed_count = 0, locked_until = NULL
+            WHERE id = $1`,
+          [paramedicId, newHash],
+        );
+        return { kind: 'ok' };
+      },
+    );
+    if (outcome.kind === 'locked') throw locked(outcome.seconds);
+    if (outcome.kind === 'invalid') throw invalidCredentials();
     // 계정 상태 캐시를 지워 다음 요청부터 '변경 필요'가 풀린 상태로 본다
     await forgetSessionState(ctx, paramedicId);
     res.status(204).end();
