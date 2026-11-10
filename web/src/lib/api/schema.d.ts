@@ -1333,11 +1333,11 @@ export interface paths {
         put?: never;
         /**
          * 도착 후 수용 불가 (10분 안)
-         * @description 대원 앱에 경보 transport.unacceptable. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev).
+         * @description 대원 앱에 경보 transport.unacceptable {transportId, hospitalName, reason 코드} + 푸시('A병원 수용 불가 · 해당 전문의 부재'). 기타 글(etcText)은 병원 요청에만 저장하고 이벤트·푸시에는 넣지 않는다. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev). 거절 원장에 출처 unacceptable 1줄(SFR-126·106). version은 병원 요청 version. 근무 중인 PC만(SHIFT_REQUIRED).
          *
          *     **요구사항**: SFR-158
          *     **화면**: H-03 도착 예정
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED, SHIFT_REQUIRED
          *     **상태 전이 사건**: UNACCEPTABLE
          */
         post: operations["post_hw_requests__requestId__unacceptable"];
