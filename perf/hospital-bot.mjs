@@ -10,10 +10,15 @@
 // 지연 = 받은 시각 − 요청 회차를 보낸 DB 시각. 회차의 응답 마감(respondUntil)은 보낸 시각 + 2분으로 DB 에서 정해지므로
 // (requestTargets.ts insertRound) 받은 값에서 2분을 빼면 보낸 시각이 된다. 이송 만들기 트랜잭션 → 커밋 → 전송까지 모두 들어간다.
 // 같은 컴퓨터면 시계가 같고, S8 클라우드에서는 두 서버가 NTP 로 맞춘 시계를 쓴다(오차 수 ms).
+import console from 'node:console';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import process from 'node:process';
+import { setTimeout } from 'node:timers';
 import { URL, fileURLToPath } from 'node:url';
+
+// fetch 는 Node 18+ 에 들어 있지만 import 할 모듈이 없어 globalThis 에서 꺼낸다 (perf/ 는 lint 에 Node 전역이 없다)
+const { fetch } = globalThis;
 
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { io } = require('socket.io-client');

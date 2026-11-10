@@ -1,10 +1,15 @@
 // Artillery 시나리오가 부르는 함수 (부하 테스트 연습, PER-005).
 // 가상 사용자 1명 = 병원 PC 1대. 사용자마다 .pcs.csv 의 다른 쿠키로 /hospital 실시간 연결을 맺고 유지한다.
 // Artillery 내장 Socket.IO 엔진은 사용자마다 다른 쿠키 헤더를 붙이기 어려워서, 프로젝트의 socket.io-client 로 직접 붙는다.
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import process from 'node:process';
+import { setTimeout } from 'node:timers';
 import { URL, fileURLToPath } from 'node:url';
+
+// fetch 는 Node 18+ 에 들어 있지만 import 할 모듈이 없어 globalThis 에서 꺼낸다 (perf/ 는 lint 에 Node 전역이 없다)
+const { fetch } = globalThis;
 
 // 저장소 루트의 node_modules 에서 찾는다 (서버가 쓰는 것과 같은 4.x)
 const require = createRequire(new URL('../package.json', import.meta.url));
@@ -199,7 +204,7 @@ export function runTransport(context, events, done) {
       socket.once('connect', resolve);
       socket.once('connect_error', reject);
     });
-    transportId = crypto.randomUUID();
+    transportId = randomUUID();
     const created = await appApi(context, 'POST', '/transports', {
       id: transportId,
       radiusKm: 10,
@@ -231,7 +236,7 @@ export function runTransport(context, events, done) {
       'POST',
       `/transports/${transportId}/confirm`,
       { hospitalRequestId: firstApproval.hospitalRequestId, version: before.json?.version },
-      { 'Idempotency-Key': crypto.randomUUID() },
+      { 'Idempotency-Key': randomUUID() },
     );
     events.emit('histogram', 'transport.confirm_ms', confirmed.ms);
     if (confirmed.status !== 200) {
