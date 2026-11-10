@@ -19,6 +19,7 @@ import {
 } from './pcAuth.js';
 import { confirmArrival, confirmArrivalSchema } from './confirmArrival.js';
 import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
+import { listIncoming } from './incoming.js';
 import { detectOddPc } from './oddPc.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
@@ -296,6 +297,11 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     // 실시간 알림은 커밋된 뒤에만
     ctx.realtime?.publish(outcome.events);
     res.status(204).end();
+  });
+
+  // 도착 예정 환자 (SFR-121, H-03). 구급차 위치는 주지 않고 도착 예상 시간만
+  router.get('/hw/incoming', pcOnly, async (_req, res) => {
+    res.json(await listIncoming(ctx.pool, hospitalPc(res).hospitalId));
   });
 
   router.get('/hw/requests', pcOnly, async (req, res) => {

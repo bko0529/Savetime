@@ -85,7 +85,7 @@ export async function arriveLockedTransport(
   transport: Pick<LockedTransport, 'status' | 'version' | 'team_id'>,
   method: ArriveInput['method'],
   clientVersion: number | undefined,
-  // 통신 두절 중 누른 도착의 단말 시각 (SFR-099). 병원 웹 도착 확인처럼 지금 일어난 도착이면 비운다
+  // 통신 두절 중 누른 도착의 단말 시각 (SFR-099). 병원 웹 도착 확인은 넘기지 않는다
   occurredAt?: Date,
 ) {
   const input = { method, clientVersion, occurredAt };

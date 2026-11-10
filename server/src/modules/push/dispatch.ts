@@ -64,6 +64,7 @@ function subjectParticle(word: string): string {
 
 // 푸시 대상 (요구사항 SFR-130 트리거별 구현 시점): 첫 승인 · 전부 거절 · 2분 만료 (S3)
 // · 승인 취소 (SFR-128) · 승인 해제 1분 전·해제 (SFR-127) · 확정 병원 추가 메모 (SFR-140) (S4)
+// · 병원 도착 확인 요청 (SFR-144) (S7)
 export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<PushMessage | null> {
   const p = event.payload;
   const data = (extra: Record<string, string> = {}) => ({
@@ -138,6 +139,14 @@ export async function messageFor(pool: pg.Pool, event: LoggedEvent): Promise<Pus
     return {
       title: TITLE,
       body: `${name}${subjectParticle(name)} 추가 메모를 보냈어요`,
+      data: data(),
+    };
+  }
+  // 위치 미동의 건에 병원 웹이 '도착 확인'을 눌렀다 (SFR-144, 실시간 설계 표). 대원이 앱을 열어 '도착 처리'를 눌러야 끝난다
+  if (event.name === 'transport.arrive_requested' && typeof p.hospitalName === 'string') {
+    return {
+      title: TITLE,
+      body: `${p.hospitalName}에서 도착을 확인했어요 · 도착 처리할까요?`,
       data: data(),
     };
   }

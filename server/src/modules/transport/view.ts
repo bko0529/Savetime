@@ -3,6 +3,7 @@
 import type pg from 'pg';
 import { ACTIVE, type HreqStatus } from '../../domain/stateMachine.js';
 import { draftAndLastSent, pendingCount } from './assessment.js';
+import { DISPLAY_ETA_SQL } from './navEta.js';
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -124,6 +125,17 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
 
   const approvedLike = requests.filter((r) => r.status === 'approved' || r.status === 'confirmed');
   const closestEta = Math.min(...approvedLike.map((r) => r.eta_min ?? Infinity));
+  // 이동 중 남은 시간: 담당 단말의 내비 값(없으면 확정 때 값)에서 지난 분을 뺀다. 팀원 모두 같은 값 (SFR-121·132)
+  const { rows: etaRows } = await db.query<{ eta: number | null }>(
+    `SELECT ${DISPLAY_ETA_SQL} AS eta
+       FROM transport t
+       JOIN request_round r ON r.transport_id = t.id
+       JOIN hospital_request hr ON hr.round_id = r.id AND hr.status = 'confirmed'
+      WHERE t.id = $1 AND t.status = 'moving'`,
+    [transportId],
+  );
+  const movingEta = etaRows[0]?.eta ?? null;
+
   const confirmed = requests.find(
     (r) =>
       r.status === 'confirmed' ||
@@ -203,8 +215,8 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
       confirmed.closed_reason === 'approval_cancelled',
     destinationChangeUsed: t.dest_changed_at !== null,
     navDeviceId: t.nav_device_id,
-    // 이동 중 남은 시간은 위치 기록(S5)이 생기면 1분마다 다시 계산한다
-    etaMin: null,
+    // 이동 중 남은 시간 (분). 이동 중이 아니거나 확정 병원이 없으면 null
+    etaMin: movingEta,
     departedAt: t.departed_at,
     lastSentAssessmentSeq: t.last_seq ?? 0,
     // 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 센다. 팀원 모두 같은 n (SFR-105). 끝난 건은 보낼 수 없어 0
