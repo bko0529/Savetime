@@ -28,7 +28,7 @@ export const REJECT_REASONS: { value: RejectReason; label: string }[] = [
 ];
 export const ETC_TEXT_MAX = 20;
 
-// 거절(SFR-119)과 승인 취소(SFR-128)는 같은 사유 7가지를 쓴다. 창 글자만 다르다
+// 거절(SFR-119)·승인 취소(SFR-128)·수용 불가(SFR-158)는 같은 사유 7가지를 쓴다. 창 글자만 다르다
 const TEXT = {
   reject: {
     title: '거절 사유',
@@ -42,6 +42,14 @@ const TEXT = {
       '대원 앱에 경보와 함께 이 사유가 보여요. 이 병원은 이번 이송에서 다시 요청받지 않아요.',
     missing: '사유를 골라 주세요',
     submit: '승인 취소 보내기',
+  },
+  // 도착 후 10분 안 수용 불가 (SFR-158). 같은 사유 7가지
+  unacceptable: {
+    title: '수용 불가 사유',
+    description:
+      '대원 앱에 경보와 함께 이 사유가 보여요. 대원이 다른 병원에 다시 요청하고, 그때 이 병원은 빠져요.',
+    missing: '사유를 골라 주세요',
+    submit: '수용 불가 보내기',
   },
 };
 

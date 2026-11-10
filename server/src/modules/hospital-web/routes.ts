@@ -20,6 +20,8 @@ import {
 import { confirmArrival, confirmArrivalSchema } from './confirmArrival.js';
 import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { listIncoming } from './incoming.js';
+import { detectOddPc } from './oddPc.js';
+import { markUnacceptable, unacceptableSchema } from './unacceptable.js';
 import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
 import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
@@ -156,6 +158,8 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       );
       // PC 가 바뀌면 관리자가 알 수 있게 한다 (모르는 PC 등록 감시)
       await notifyAdmin(client, 'pc_change', hospital.id);
+      // 새벽 등록·1시간 안 2대 이상이면 '이상 PC 등록' 알림도 (SFR-148). 등록은 그대로 진행한다
+      await detectOddPc(client, inserted[0].id);
       return {
         kind: 'ok',
         hospital: { id: Number(hospital.id), name: hospital.name },
@@ -365,6 +369,17 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
     // 커밋된 뒤에만 보낸다 (도착이면 대원 앱 transport.arrived·병원 incoming.arrived, 아니면 transport.arrive_requested)
     ctx.realtime?.publish(outcome.events);
     res.json({ result: outcome.result });
+  });
+
+  // 수용 불가: 도착 후 10분 안, 사유 필수. 대원 앱에 경보 + 다음 이송에서 이 병원 제외 (SFR-158)
+  router.post('/hw/requests/:requestId/unacceptable', pcOnly, async (req, res) => {
+    const { requestId } = parseBody(requestIdParams, req.params);
+    const input = parseBody(unacceptableSchema, req.body);
+    const events = await withTransaction(ctx.pool, (client) =>
+      markUnacceptable(client, hospitalPc(res), requestId, input),
+    );
+    ctx.realtime?.publish(events);
+    res.status(204).end();
   });
 
   return router;

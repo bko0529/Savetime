@@ -207,9 +207,11 @@ export interface paths {
         get?: never;
         /**
          * 비밀번호 변경 (임시 비밀번호 후 필수)
-         * @description **요구사항**: SFR-021
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
+         *
+         *     **요구사항**: SFR-021, SER-011
          *     **화면**: (비밀번호 변경)
-         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED
+         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED, ACCOUNT_LOCKED
          */
         put: operations["put_me_password"];
         post?: never;
@@ -257,7 +259,7 @@ export interface paths {
          *
          *     **요구사항**: SFR-113
          *     **화면**: S-03 근무 시작
-         *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED
+         *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED, PASSWORD_CHANGE_REQUIRED
          */
         post: operations["post_teams"];
         delete?: never;
@@ -464,9 +466,11 @@ export interface paths {
         get?: never;
         /**
          * 나만 보는 한 줄 메모
-         * @description **요구사항**: SFR-143
+         * @description 쓴 대원만 본다(GET /paramedics/on-duty 의 myMemo). 같은 대원에게 다시 쓰면 덮어쓰고, 빈 글(공백만)이면 지운다. 앞뒤 공백은 뺀다. 같은 소방서의 승인된 다른 대원에게만 쓸 수 있고, 그 밖(나 자신·없는 대원·다른 소방서)은 404.
+         *
+         *     **요구사항**: SFR-143
          *     **화면**: S-03 팀원 목록 초대
-         *     **오류 코드**: NOT_FOUND
+         *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
          */
         put: operations["put_memos__paramedicId"];
         post?: never;
@@ -1333,11 +1337,11 @@ export interface paths {
         put?: never;
         /**
          * 도착 후 수용 불가 (10분 안)
-         * @description 대원 앱에 경보 transport.unacceptable. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev).
+         * @description 대원 앱에 경보 transport.unacceptable {transportId, hospitalName, reason 코드} + 푸시('A병원 수용 불가 · 해당 전문의 부재'). 기타 글(etcText)은 병원 요청에만 저장하고 이벤트·푸시에는 넣지 않는다. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev). 거절 원장에 출처 unacceptable 1줄(SFR-126·106). version은 병원 요청 version. 근무 중인 PC만(SHIFT_REQUIRED).
          *
          *     **요구사항**: SFR-158
          *     **화면**: H-03 도착 예정
-         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED, SHIFT_REQUIRED
          *     **상태 전이 사건**: UNACCEPTABLE
          */
         post: operations["post_hw_requests__requestId__unacceptable"];
@@ -1567,7 +1571,9 @@ export interface paths {
         put?: never;
         /**
          * 비밀번호 초기화
-         * @description **요구사항**: SFR-021
+         * @description 임시 비밀번호(10자)를 이 응답에서 한 번만 준다(Cache-Control: no-store). mustChangePassword를 켜고, 로그인 잠금을 풀고, 다른 기기의 로그인을 모두 끝낸다. 작업 이력 1건(임시 비밀번호는 남기지 않음). 탈퇴·없는 계정은 404.
+         *
+         *     **요구사항**: SFR-021
          *     **화면**: A-01 대원 계정
          *     **오류 코드**: NOT_FOUND
          */
@@ -1838,7 +1844,9 @@ export interface paths {
         };
         /**
          * 병원 응답 통계
-         * @description **요구사항**: SFR-106, SFR-126
+         * @description 기간 안에 요청이 간 병원만, 이름순. 응답률·응답 시간은 병원 웹에서 직접 누른 응답만(요청 중지 자동 거절·전달 실패·아직 2분이 안 끝난 대기는 뺌). 요청 10건 미만이면 sampleTooSmall=true 이고 수치 칸은 null. 거절률 급등(rejectSpike)은 고른 기간과 상관없이 7일 vs 30일, 둘 다 10건 이상일 때만. 대원·이송 건 정보는 없음(DAR-004).
+         *
+         *     **요구사항**: SFR-106, SFR-126
          *     **화면**: A-02 모니터링
          */
         get: operations["get_admin_stats_hospitals"];
@@ -1908,7 +1916,7 @@ export interface paths {
         put?: never;
         /**
          * AI 일지 정리 (제안)
-         * @description 대원 메모·음성 입력 글을 일지 항목별로 나눈 제안을 돌려준다. 서버가 식별정보(이름·전화번호·주민번호 형태·주소)를 지운 뒤 AI로 보내고, 원문·응답은 저장하지 않는다(SER-017). 제한시간 10초(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED.
+         * @description 대원 메모 글을 일지 항목별로 나눈 제안을 돌려준다(음성 입력은 CR-007로 삭제). 서버가 식별정보(names로 받은 이름 칸 값·전화번호·주민번호 형태·주소 모양)를 [삭제]로 바꾼 뒤 AI(OpenAI)로 보내고, AI 답에서도 한 번 더 지운다. 원문·응답은 저장·로그하지 않는다(SER-017). 제한시간 AI_TIMEOUT_MS(기본 10초) 넘거나 제공사 오류·키 없음이면 503 AI_UNAVAILABLE(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED. 응답은 Cache-Control no-store. 앱은 제안만 보여 주고 '적용'을 눌러야 초안에 넣는다.
          *
          *     **요구사항**: SFR-167, SER-017, INR-006, QUR-013
          *     **화면**: S-13
@@ -1930,7 +1938,7 @@ export interface paths {
         };
         /**
          * 앱·웹 설정 (기능 토글)
-         * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013).
+         * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013). featureFlags 는 feature_flag 표(없는 키는 false), minAppVersion 은 서버 환경 변수 MIN_APP_VERSION(숫자 3개, 기본 1.0.0). 앱은 자기 버전이 더 낮으면 기능을 막고 '업데이트가 필요해요'만 보여 준다 (SFR-142). 대원·병원 서버(main)에만 있다.
          *
          *     **요구사항**: QUR-013, SFR-142
          */
@@ -1958,10 +1966,11 @@ export interface paths {
         get: operations["get_admin_feature_flags"];
         /**
          * 기능 토글 바꾸기
-         * @description 작업 이력에 남김(SFR-091). 1분 안 반영.
+         * @description 바꿀 칸만 보낸다(둘 다 없거나 모르는 칸이면 400). 값이 실제로 바뀐 기능만 작업 이력에 1줄씩 (기능 켜기·기능 끄기). 앱·웹은 GET /config 를 1분마다 읽어 1분 안 반영. 응답은 바꾼 뒤 전체 값.
          *
          *     **요구사항**: QUR-013, SFR-091
          *     **화면**: A-02
+         *     **오류 코드**: VALIDATION_FAILED
          */
         put: operations["put_admin_feature_flags"];
         post?: never;
@@ -2458,13 +2467,19 @@ export interface components {
         HospitalStat: {
             hospitalId?: number;
             name?: string;
-            responseRate?: number;
-            avgResponseSec?: number;
+            /** @description 기간 안에 이 병원에 닿은 요청 수 (표본 크기) */
+            requests?: number;
+            /** @description 0~1. 표본 부족이면 null */
+            responseRate?: number | null;
+            avgResponseSec?: number | null;
+            /** @description 이 병원으로 출발한 건의 평균 '요청→출발' */
+            avgRequestToDepartSec?: number | null;
             /** @enum {string|null} */
             topRejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
-            approvalCancelRate?: number;
+            /** @description (승인 취소 + 수용 불가) ÷ 승인. 표본 부족·승인 0건이면 null */
+            approvalCancelRate?: number | null;
             unacceptableCount?: number;
-            avgRequestToFirstApprovalSec?: number;
+            avgRequestToFirstApprovalSec?: number | null;
             /** @description 요청 10건 미만 */
             sampleTooSmall?: boolean;
             /** @description 최근 7일 거절률이 30일보다 20%p 이상 높음 */
@@ -5631,8 +5646,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @description 핵심 지표 */
-                        avgRequestToDepartSec?: number;
+                        /** @enum {integer} */
+                        days?: 7 | 30;
+                        /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
+                        avgRequestToDepartSec?: number | null;
                         hospitals?: components["schemas"]["HospitalStat"][];
                     };
                 };
@@ -5735,7 +5752,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description 대원 메모 (앞뒤 공백 빼고 1자 이상) */
                     text: string;
+                    /** @description 단말에만 있는 이름 칸 값(환자·보호자). 메모에서 지우려고만 쓰고 저장하지 않는다 */
+                    names?: string[];
                 };
             };
         };

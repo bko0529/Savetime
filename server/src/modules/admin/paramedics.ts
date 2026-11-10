@@ -1,6 +1,7 @@
-// 관리자 대원 계정 관리 (SFR-151, A-01): 대원 검색 · 정지(즉시 로그아웃) · 정지 해제.
+// 관리자 대원 계정 관리 (SFR-151·021, A-01): 대원 검색 · 정지(즉시 로그아웃) · 정지 해제 · 비밀번호 초기화.
 // 팀에서 빼고 마지막 1명이면 진행 중 이송을 취소하는 일은 근무 끝내기(endDuty)가 맡는다.
 // 이송 상태 변경은 그 안에서 stateMachine.ts 를 거친다 (절대 규칙 4)
+import { randomInt } from 'node:crypto';
 import { Router, type RequestHandler } from 'express';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
@@ -9,7 +10,8 @@ import { withTransaction } from '../../db/transaction.js';
 import { ACTIVE } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
-import { forgetSessionState } from '../auth/session.js';
+import { hashPassword } from '../auth/password.js';
+import { endSessions, forgetSessionState } from '../auth/session.js';
 import type { Realtime } from '../realtime/server.js';
 import { endDuty } from '../team/endDuty.js';
 import { adminId } from './auth.js';
@@ -34,6 +36,16 @@ const suspendSchema = z.object({
   etcText: z.string().trim().max(50).nullish(),
   confirmCancelActive: z.boolean().optional(),
 });
+
+// 임시 비밀번호: 전화로 불러 주기 쉽게 헷갈리는 글자(0·O·1·l·I)를 뺀 10자. 약 58비트라 추측할 수 없다
+const TEMP_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+const TEMP_LENGTH = 10;
+export function newTempPassword(): string {
+  return Array.from(
+    { length: TEMP_LENGTH },
+    () => TEMP_ALPHABET[randomInt(TEMP_ALPHABET.length)],
+  ).join('');
+}
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 const notFound = () => new AppError(404, 'NOT_FOUND', '대원 계정을 찾을 수 없어요');
@@ -173,6 +185,39 @@ export function adminParamedicRouter(
     });
     if (changed) await forgetSessionState({ redis }, changed);
     res.status(204).end();
+  });
+
+  // 비밀번호 초기화 (SFR-021): 임시 비밀번호를 만들어 이 응답에서 한 번만 보여 준다.
+  // 관리자가 소속 기관 전화로 본인을 확인한 뒤 전달한다. 대원은 임시 비밀번호로 들어오면 바꾸기 전에는 다른 기능을 못 쓴다
+  router.post('/admin/paramedics/:id/reset-password', adminOnly, async (req, res) => {
+    const { id } = parseBody(idParams, req.params);
+    const tempPassword = newTempPassword();
+    // argon2 는 일부러 느리다. 잠금 밖에서 미리 계산한다
+    const hash = await hashPassword(tempPassword);
+    const paramedicId = await withTransaction(pool, async (client) => {
+      const p = await lockParamedic(client, id);
+      // 비밀번호를 바꾸고 '변경 필요'를 켠다. 잠금(5번 틀림)도 풀어 바로 들어올 수 있게 한다
+      await client.query(
+        `UPDATE paramedic SET password_hash = $2, must_change_pw = true, failed_count = 0, locked_until = NULL
+          WHERE id = $1`,
+        [p.id, hash],
+      );
+      // 다른 폰에 남은 로그인도 끝낸다 (옛 비밀번호로 들어온 세션이 계속 쓰이지 않게, SER-016)
+      await endSessions({ redis }, client, p.id);
+      // 임시 비밀번호 자체는 이력에 남기지 않는다
+      await recordAudit(client, {
+        adminId: adminId(res),
+        action: 'reset_password',
+        targetType: 'paramedic',
+        targetId: p.id,
+        targetName: p.name,
+      });
+      return p.id;
+    });
+    await forgetSessionState({ redis }, paramedicId);
+    // 비밀번호가 담긴 응답은 브라우저·프록시가 저장하지 않게 한다
+    res.set('Cache-Control', 'no-store');
+    res.json({ tempPassword });
   });
 
   return router;

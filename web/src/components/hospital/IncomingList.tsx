@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import type { HwIncoming, RemovedNotice, RemovedReason } from '@/app/hospital/useIncoming';
 import { ConfirmArrivalButton } from './ConfirmArrivalButton';
 import { ExtraMemoButton } from './ExtraMemoButton';
+import { UnacceptableButton } from './UnacceptableButton';
 
 const STATUS_TEXT: Record<string, string> = {
   confirmed: '이동 중',
@@ -94,6 +95,10 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
                         className="h-12 border-2 text-lg"
                       />
                     </div>
+                  )}
+                  {/* 도착한 지 10분 안의 환자에게만 수용 불가 (SFR-158). 10분 판정은 서버가 한다 */}
+                  {item.status === 'arrived' && item.canMarkUnacceptable && item.id != null && (
+                    <UnacceptableButton requestId={item.id} version={item.version ?? 1} />
                   )}
                 </td>
               </tr>
