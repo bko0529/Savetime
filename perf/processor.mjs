@@ -2,7 +2,7 @@
 // 가상 사용자 1명 = 병원 PC 1대. 사용자마다 .pcs.csv 의 다른 쿠키로 /hospital 실시간 연결을 맺고 유지한다.
 // Artillery 내장 Socket.IO 엔진은 사용자마다 다른 쿠키 헤더를 붙이기 어려워서, 프로젝트의 socket.io-client 로 직접 붙는다.
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import process from 'node:process';
 import { setTimeout } from 'node:timers';
@@ -25,10 +25,27 @@ const CLAIMS = fileURLToPath(new URL('./results/claims/', import.meta.url));
 const rowsCache = new Map();
 const cursors = new Map();
 
-// before 단계(작업자를 나누기 전 1번): 이번 실행의 찜 폴더를 새로 만든다
+// 찜 기록을 지우는 기준. 시나리오 하나가 이보다 오래 돌지 않는다
+const CLAIM_KEEP_MS = 6 * 60 * 60 * 1000;
+
+// before 단계(작업자를 나누기 전 1번): 이번 실행의 번호를 정하고 오래된 실행의 찜 기록만 지운다.
+// 전부 지우면 동시에 돌고 있는 다른 시나리오(run-s8.sh 는 연결 시나리오 둘과 이송을 함께 돌린다)의 찜이 사라져 같은 줄을 두 번 쓴다
 export function newRun(context, _events, done) {
-  rmSync(CLAIMS, { recursive: true, force: true });
-  context.vars.runId = String(Date.now());
+  const runId = Date.now();
+  mkdirSync(CLAIMS, { recursive: true });
+  for (const dir of readdirSync(CLAIMS)) {
+    // 폴더 이름 = '시작 시각-프로세스 번호'. 시작 시각이 6시간 넘게 지난 것만 지운다
+    if (runId - Number.parseInt(dir, 10) > CLAIM_KEEP_MS) {
+      // 동시에 시작한 다른 실행이 같은 폴더를 지우는 중이면 실패할 수 있다(Windows EPERM). 지우기는 정리일 뿐이라 넘어간다
+      try {
+        rmSync(`${CLAIMS}${dir}`, { recursive: true, force: true });
+      } catch {
+        // 다음 실행이 다시 지운다
+      }
+    }
+  }
+  // 같은 밀리초에 두 실행이 시작돼도 겹치지 않게 프로세스 번호를 붙인다
+  context.vars.runId = `${runId}-${process.pid}`;
   done();
 }
 
