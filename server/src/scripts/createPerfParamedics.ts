@@ -5,6 +5,8 @@
 // - 로그인 API 는 비밀번호 확인(argon2)이 일부러 느려서 수천 명이 실제로 로그인하면 로그인 부하만 재게 된다.
 //   그래서 서버 설정의 서명 키로 접근 토큰을 바로 만든다. 토큰은 15분이면 끝나니 만든 뒤 15분 안에 돌린다
 // - 위치 기록용 이송 건은 '이동 중'(출발함·위치 동의)으로 바로 넣는다. 상태를 '바꾸는' 것이 아니라 처음 만드는 것이다
+//   확정된 병원 요청(회차 1 + 요청 1건 confirmed)까지 만든다. 없으면 위치 저장 때 실제로 도는
+//   남은 시간 저장·입구 200m 판정(navEta.ts afterLocations)이 건너뛰어져 실제보다 가볍게 잰다 (PER-008)
 // - 다시 돌리면 앞서 만든 부하 테스트 대원의 팀을 끝내고 새 팀을 만든다. 남은 이동 중 건은 2시간 자동 종료가 정리한다
 // - 운영 DB 에서는 실행하지 않는다
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -120,6 +122,16 @@ try {
                                 confirmed_at, departed_at, nav_device_id)
          VALUES ($1, $2, 'moving', true, $3, now(), now() - interval '1 minute', $4)`,
         [transportId, team[0].id, dest[0].id, deviceId],
+      );
+      await pool.query(
+        `WITH r AS (
+           INSERT INTO request_round (transport_id, round_no, radius_km, sent_at, respond_until, approval_valid_until)
+           VALUES ($1, 1, 10, now() - interval '2 minutes', now(), now() + interval '3 minutes')
+           RETURNING id
+         )
+         INSERT INTO hospital_request (round_id, hospital_id, status, eta_min, eta_source, delivered_at, responded_at)
+         SELECT r.id, $2, 'confirmed', 15, 'straight', now() - interval '2 minutes', now() - interval '1 minute' FROM r`,
+        [transportId, dest[0].id],
       );
       movingRows.push(`${token},${transportId},${deviceId}`);
     }
