@@ -6,7 +6,7 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
-import { isInKorea } from '../../domain/geo.js';
+import { distanceM, isInKorea } from '../../domain/geo.js';
 import { ACTIVE, type TransportStatus } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
@@ -15,6 +15,7 @@ import { appendEvents, type LoggedEvent } from '../realtime/eventLog.js';
 import type { Realtime } from '../realtime/server.js';
 import { lockMyTransport, transportIdParam } from './access.js';
 import { afterLocations } from './navEta.js';
+import { markOutliers } from './outlier.js';
 
 interface PointRow {
   lat: number;
@@ -23,24 +24,16 @@ interface PointRow {
   recorded_at: Date;
 }
 
-// 두 좌표 사이 직선거리(m). 5초 간격이라 구간마다 직선으로 이어도 실제 거리와 거의 같다
-function meters(a: PointRow, b: PointRow): number {
-  const rad = (d: number) => (d * Math.PI) / 180;
-  const dLat = rad(b.lat - a.lat);
-  const dLng = rad(b.lng - a.lng);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
-}
-
 export function routeDistanceM(points: PointRow[]): number {
   let total = 0;
-  for (let i = 1; i < points.length; i += 1) total += meters(points[i - 1], points[i]);
+  for (let i = 1; i < points.length; i += 1) total += distanceM(points[i - 1], points[i]);
   return Math.round(total);
 }
 
 // 이송이 끝날 때 부른다. 이송 건 행은 부르는 쪽이 이미 잠갔다 (stateMachine.ts 규칙 5).
-// 위치 기록이 없으면(위치 미동의·출발 전 종료) 익명 경로를 만들지 않고 null (SFR-041)
+// 위치 기록이 없으면(위치 미동의·출발 전 종료) 익명 경로를 만들지 않고 null (SFR-041).
+// 튄 좌표(outlier)는 거리·익명 경로에 넣지 않는다 (SFR-040). 원본 삭제는 튄 좌표까지 전부
+
 export async function closeRoute(
   client: pg.PoolClient,
   transportId: string,
@@ -48,7 +41,7 @@ export async function closeRoute(
 ): Promise<{ distanceM: number } | null> {
   const { rows: points } = await client.query<PointRow>(
     `SELECT lat::float8 AS lat, lng::float8 AS lng, speed_kmh::float8 AS speed_kmh, recorded_at
-       FROM location_point WHERE transport_id = $1 ORDER BY recorded_at`,
+       FROM location_point WHERE transport_id = $1 AND NOT outlier ORDER BY recorded_at`,
     [transportId],
   );
   if (points.length === 0) return null;
@@ -144,12 +137,13 @@ export async function recordLocations(
   }
   // 출발 1분 전 ~ 지금+1분(DB 시각) 밖의 기록은 단말 시계가 틀린 것으로 보고 버린다.
   // 같은 시각을 다시 보내면(재전송) 한 번만 저장한다
-  const { rowCount } = await client.query(
+  const { rows: inserted } = await client.query<{ recorded_at: Date }>(
     `INSERT INTO location_point (transport_id, device_id, lat, lng, speed_kmh, recorded_at)
      SELECT $1, $2, p.lat, p.lng, p.speed_kmh, p.recorded_at
        FROM jsonb_to_recordset($3::jsonb) AS p(lat numeric, lng numeric, speed_kmh numeric, recorded_at timestamptz)
       WHERE p.recorded_at BETWEEN $4::timestamptz - interval '1 minute' AND now() + interval '1 minute'
-     ON CONFLICT (transport_id, recorded_at) DO NOTHING`,
+     ON CONFLICT (transport_id, recorded_at) DO NOTHING
+     RETURNING recorded_at`,
     [
       transportId,
       input.deviceId,
@@ -164,13 +158,18 @@ export async function recordLocations(
       t.departed_at,
     ],
   );
+  // 튄 좌표 표시 (SFR-040). 이번에 새로 들어온 가장 이른 시각부터 다시 판정한다. 아래 입구 판정보다 먼저 해야 한다
+  if (inserted.length > 0) {
+    const fromAt = new Date(Math.min(...inserted.map((r) => r.recorded_at.getTime())));
+    await markOutliers(client, transportId, fromAt);
+  }
   // 위치 기록은 '활동'에 넣지 않는다 (SFR-086 2시간 자동 종료는 위치 기록 제외)
   // 남은 시간 저장·입구 200m 안 알림 (SFR-121·144). 커밋된 뒤에만 보낸다
   const events = await appendEvents(
     client,
     await afterLocations(client, transportId, input.etaMin),
   );
-  return { saved: rowCount ?? 0, events };
+  return { saved: inserted.length, events };
 }
 
 export function locationRouter(

@@ -20,6 +20,8 @@ const locations = (ctx: AuthContext, s: Scene, body: object, token = s.kim) =>
 
 // B병원으로 확정해 이동 중(출발 시각 기록)으로 만든다
 async function moving(ctx: AuthContext, s: Scene): Promise<number> {
+  clock.base = Date.now() - 55_000;
+  clock.n = 0;
   const res = await post(ctx, s.kim, `/transports/${s.transportId}/confirm`, {
     hospitalRequestId: s.req['B병원'],
     version: 1,
@@ -28,14 +30,16 @@ async function moving(ctx: AuthContext, s: Scene): Promise<number> {
   return res.body.version;
 }
 
-// 출발 위치에서 북쪽으로 dLat씩, 1초 간격 (0.01도 ≈ 1.1km)
+// 출발 위치에서 북쪽으로 dLat씩. 시각은 테스트마다 출발 55초 전부터 20초씩 늘어난다.
+// 서버는 출발 1분 전 ~ 지금+1분 기록만 받으므로 한 테스트에서 6점까지 쓸 수 있다.
+// 20초 간격이면 0.01도(≈1.1km)를 가도 초속 56m라 이상치(초속 60m 초과, SFR-040)가 아니다
+const clock = { base: Date.now(), n: 0 };
 function track(...dLats: number[]) {
-  const start = Date.now();
-  return dLats.map((d, i) => ({
+  return dLats.map((d) => ({
     lat: ORIGIN.lat + d,
     lng: ORIGIN.lng,
     speedKmh: 40,
-    recordedAt: new Date(start + i * 1000).toISOString(),
+    recordedAt: new Date(clock.base + clock.n++ * 20_000).toISOString(),
   }));
 }
 
@@ -73,7 +77,7 @@ test('이동 중 담당 단말 위치를 쌓고, 도착하면 익명 경로로 �
     });
     const more = await locations(ctx, s, {
       deviceId: 'device-kim01',
-      points: [{ ...track(0, 0, 0.02)[2] }],
+      points: track(0.02),
     });
     assert.equal(more.status, 204);
 
@@ -162,7 +166,7 @@ test('위치 올리기: 담당 단말만 · 출발 전·미동의·끝난 건은
     ]);
     const reRequest = await locations(ctx, s, {
       deviceId: 'device-kim01',
-      points: [{ ...track(0, 0, 0.002)[2] }],
+      points: track(0.002),
     });
     assert.equal(reRequest.status, 204);
 
@@ -372,5 +376,58 @@ test('구급차가 확정 병원 입구 200m 안에 처음 들어오면 병원 �
     // 계속 입구 근처에 있어도 다시 보내지 않는다
     await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.02) });
     assert.equal((await nearOnes()).length, 1);
+  });
+});
+
+test('튄 좌표(초속 60m 초과)는 입구 판정·이동 거리에서 빼고, 늦게 온 좌표가 끼면 다시 판정한다 (SFR-040)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const version = await moving(ctx, s);
+    const at = (sec: number) => new Date(clock.base + sec * 1000).toISOString();
+    const point = (dLat: number, sec: number) => ({
+      lat: ORIGIN.lat + dLat,
+      lng: ORIGIN.lng,
+      speedKmh: 40,
+      recordedAt: at(sec),
+    });
+    const outliers = async () =>
+      (
+        await ctx.pool.query(
+          `SELECT (lat::float8 - $2)::numeric(9,4)::float8 AS d FROM location_point
+            WHERE transport_id = $1 AND outlier ORDER BY recorded_at`,
+          [s.transportId, ORIGIN.lat],
+        )
+      ).rows.map((r) => r.d);
+    const nearCount = async () =>
+      (await eventNames(ctx.pool, 0)).filter((e) => e.name === 'incoming.near').length;
+
+    // 인수 기준: 입구(0.02도) 800m 전을 가다가 1초 뒤 입구 50m 지점이 찍힘(초속 약 750m) → 판정에 쓰지 않는다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: [point(0.0128, 0)] });
+    await locations(ctx, s, { deviceId: 'device-kim01', points: [point(0.01955, 1)] });
+    assert.deepEqual(await outliers(), [0.0196]);
+    assert.equal(await nearCount(), 0);
+    // 그다음 정상 좌표는 튄 좌표가 아니라 직전 정상 좌표(800m 전)와 비교한다 → 정상
+    await locations(ctx, s, { deviceId: 'device-kim01', points: [point(0.0129, 6)] });
+    assert.deepEqual(await outliers(), [0.0196]);
+
+    // 끊겼다 붙어서 늦게 온 좌표: 튄 좌표 앞에 끼어도 판정을 다시 해 결과가 맞다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: [point(0.01285, 0.5)] });
+    assert.deepEqual(await outliers(), [0.0196]);
+
+    // 실제로 입구에 다가오면(초속 60m 이하) 알림이 간다
+    await locations(ctx, s, { deviceId: 'device-kim01', points: [point(0.0198, 30)] });
+    assert.equal(await nearCount(), 1);
+
+    // 이동 거리에도 튄 좌표는 넣지 않는다: 0.0128 → 0.01285 → 0.0129 → 0.0198 = 0.007도 ≈ 778m
+    const arrived = await post(ctx, s.kim, `/transports/${s.transportId}/arrive`, {
+      method: 'button',
+      version,
+    });
+    assert.equal(arrived.status, 200);
+    const { rows } = await ctx.pool.query('SELECT points FROM anonymous_route');
+    assert.equal(rows[0].points.length, 4);
+    const after = await counts(ctx.pool, s.transportId);
+    assert.ok(Math.abs(after.distance_m - (0.0198 - 0.0128) * 111_195) < 5, `${after.distance_m}`);
+    assert.equal(after.points, 0);
   });
 });

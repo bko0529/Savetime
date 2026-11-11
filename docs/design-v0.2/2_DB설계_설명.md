@@ -38,7 +38,7 @@ npm run migrate
 | | hospital_request | 병원 요청: 회차 하나에서 병원 한 곳에 보낸 요청 | 부록 A-2 |
 | | excluded_hospital | 이번 이송의 제외 병원 (규칙 하나로 계산) | SFR-086 |
 | | phone_check | 예비 흐름 전화 확인 결과 | SFR-032~034 |
-| | location_point | 이송 중 위치. 이송이 끝나면 anonymous_route로 옮기고 바로 삭제 | SFR-037, SER-002 |
+| | location_point | 이송 중 위치. 이송이 끝나면 anonymous_route로 옮기고 바로 삭제. 튄 좌표는 outlier 표시 후 판정·거리에서 제외 | SFR-037, SFR-040, SER-002 |
 | | anonymous_route | 익명 이송 경로 (대원·팀·이송 건 연결 없음, 3년 초안) | SFR-041, DAR-014 |
 | | idempotency_key | 같은 확정을 여러 번 보내도 한 번만 처리 | SFR-111 |
 | E 기록·통계 | request_view_log | 병원 열람 기록 | SFR-137 |

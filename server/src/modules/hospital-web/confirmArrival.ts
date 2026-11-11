@@ -20,7 +20,7 @@ export type ConfirmArrivalInput = z.infer<typeof confirmArrivalSchema>;
 
 export type ConfirmArrivalResult = 'arrived' | 'asked_paramedic';
 
-// 구급차 마지막 위치가 이 병원 응급실 입구(없으면 병원 좌표) 200m 안인가.
+// 구급차 마지막 위치가 이 병원 응급실 입구(없으면 병원 좌표) 200m 안인가. 튄 좌표(outlier)는 빼고 본다 (SFR-040).
 // 위치 기록이 하나도 없으면 null (아직 판단할 수 없음). 거리 계산은 DB 에서 (병원 웹으로 좌표가 나가지 않게)
 // 도착 예정 목록(GET /hw/incoming, SFR-121)의 canConfirmArrival 도 이 함수를 쓰면 된다
 export async function ambulanceNearEntrance(
@@ -34,7 +34,7 @@ export async function ambulanceNearEntrance(
                 power(sin(radians(lp.lat - e.lat) / 2), 2) +
                 cos(radians(e.lat)) * cos(radians(lp.lat)) * power(sin(radians(lp.lng - e.lng) / 2), 2)))
          FROM location_point lp
-        WHERE lp.transport_id = $1
+        WHERE lp.transport_id = $1 AND NOT lp.outlier
         ORDER BY lp.recorded_at DESC
         LIMIT 1
      )::float8 AS distance_m
