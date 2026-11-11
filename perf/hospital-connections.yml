@@ -7,11 +7,7 @@
 config:
   target: "{{ $env.PERF_TARGET }}"
   processor: "./processor.mjs"
-  payload:
-    path: "./.pcs.csv"
-    fields: ["cookie"]
-    order: sequence
-    skipHeader: true
+  # PC 쿠키(.pcs.csv)는 processor.mjs 의 pickPc 가 PC 마다 한 줄씩 나눠 준다 (config.payload 는 작업자마다 겹친다)
   phases:
     - name: 연결 늘리기
       duration: 20
@@ -20,8 +16,13 @@ config:
     # 연결 유지 시간(초). S8 에서는 늘린다
     holdSeconds: 60
 
+before:
+  flow:
+    - function: newRun
+
 scenarios:
   - name: 병원 PC 1대가 붙어서 유지
+    beforeScenario: pickPc
     flow:
       - function: connectHospital
       - think: "{{ holdSeconds }}"

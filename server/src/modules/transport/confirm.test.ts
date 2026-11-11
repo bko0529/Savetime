@@ -23,6 +23,7 @@ function confirm(
 test('승인 병원을 확정하면 이동 중이 되고, 나머지 승인·대기 병원 요청은 다른 병원으로 이송으로 닫힌다', async () => {
   await withAuthContext(async (ctx) => {
     const s = await scene(ctx);
+    await ctx.pool.query("UPDATE hospital SET er_phone = '041-550-7000' WHERE name = 'B병원'");
     const res = await confirm(ctx, s.lee, s.transportId, {
       hospitalRequestId: s.req['B병원'],
       version: 1,
@@ -31,6 +32,8 @@ test('승인 병원을 확정하면 이동 중이 되고, 나머지 승인·대�
     assert.equal(res.body.status, 'moving');
     assert.equal(res.body.version, 2);
     assert.equal(res.body.confirmedHospital.name, 'B병원');
+    // 경로 안내 중 '병원 전화' 버튼용 (SFR-097)
+    assert.equal(res.body.confirmedHospital.erPhone, '041-550-7000');
     assert.equal(res.body.confirmedHospital.requestStatus, 'confirmed');
     assert.ok(res.body.departedAt);
 

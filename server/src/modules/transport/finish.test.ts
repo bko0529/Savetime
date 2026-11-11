@@ -44,7 +44,8 @@ async function lastSeq(pool: pg.Pool): Promise<number> {
 
 async function origin(pool: pg.Pool, id: string) {
   const { rows } = await pool.query(
-    'SELECT origin_lat IS NULL AND origin_lng IS NULL AS cleared FROM transport WHERE id = $1',
+    `SELECT origin_lat IS NULL AND origin_lng IS NULL AND address IS NULL AS cleared
+       FROM transport WHERE id = $1`,
     [id],
   );
   return rows[0].cleared;
@@ -53,6 +54,11 @@ async function origin(pool: pg.Pool, id: string) {
 test('요청 중에 취소하면 모든 병원 요청이 이송 취소로 닫히고, 병원 웹과 팀원에게 알린다', async () => {
   await withAuthContext(async (ctx) => {
     const s = await scene(ctx);
+    // 위치 미동의 때처럼 현장 주소가 있는 건 (SFR-009). 끝나면 출발 좌표와 같이 지워져야 한다 (SER-012)
+    await ctx.pool.query(
+      "UPDATE transport SET address = '천안시 동남구 신부동 123-4' WHERE id = $1",
+      [s.transportId],
+    );
     assert.equal(await origin(ctx.pool, s.transportId), false);
     const since = await lastSeq(ctx.pool);
 
@@ -65,7 +71,7 @@ test('요청 중에 취소하면 모든 병원 요청이 이송 취소로 닫히
       ['C병원', 'closed', 'cancelled'],
       ['D병원', 'closed', 'cancelled'],
     ]);
-    // 이송이 끝나면 원본 출발 좌표를 지운다 (SER-002)
+    // 이송이 끝나면 출발 좌표·현장 주소 원본을 지운다 (SER-002·012)
     assert.equal(await origin(ctx.pool, s.transportId), true);
 
     const sent = await events(ctx.pool, since);
@@ -289,5 +295,28 @@ test('요청 중에 취소해도 통계 1줄: 출발·도착·병원은 비고, 
     assert.equal(rows[0].arrived, false);
     // scene 이 B·C 를 승인해 둬서 첫 승인 시간은 남는다
     assert.equal(typeof rows[0].approve, 'number');
+  });
+});
+
+test('끝난 이송의 출발 위치는 통계에 약 100m 격자로만 남고, 원본 좌표·현장 주소는 지운다 (SER-012)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    await ctx.pool.query(
+      `UPDATE transport SET origin_lat = 36.81549, origin_lng = 127.11391,
+              address = '천안시 동남구 신부동 123-4' WHERE id = $1`,
+      [s.transportId],
+    );
+    assert.equal((await cancel(ctx, s.lee, s.transportId, { version: 1 })).status, 200);
+
+    assert.equal(await origin(ctx.pool, s.transportId), true);
+    const { rows } = await ctx.pool.query(
+      'SELECT origin_grid_lat::float8 AS lat, origin_grid_lng::float8 AS lng FROM transport_stat',
+    );
+    assert.deepEqual(rows, [{ lat: 36.815, lng: 127.114 }]);
+    // 주소 글은 통계 어디에도 없다
+    const { rows: dump } = await ctx.pool.query(
+      'SELECT row_to_json(s)::text AS j FROM transport_stat s',
+    );
+    assert.doesNotMatch(dump[0].j, /신부동|천안/);
   });
 });

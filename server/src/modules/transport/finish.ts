@@ -25,7 +25,7 @@ import {
 } from './access.js';
 import { cancelTransport } from './cancel.js';
 import { closeRoute } from './route.js';
-import { recordTransportStat } from '../stats/records.js';
+import { forgetScene, recordTransportStat } from '../stats/records.js';
 import { loadTransport } from './view.js';
 
 // version이 빠지면 상태 전이 함수가 VERSION_REQUIRED로 거절한다 (SFR-160)
@@ -100,7 +100,7 @@ export async function arriveLockedTransport(
     arrivalMethod: input.method,
   });
 
-  // 이송이 끝나면 원본 출발 좌표를 지운다 (SER-002)
+  // 출발 좌표·현장 주소 원본은 아래 통계를 남긴 뒤 forgetScene 이 지운다 (SER-002·012)
   const { rows: moved } = await client.query<{
     version: number;
     arrived_at: Date;
@@ -110,7 +110,7 @@ export async function arriveLockedTransport(
         SET status = $2, arrival_method = $3, version = version + 1,
             -- 보통은 지금. 통신 두절 중 누른 도착이면 단말 시각을 출발(없으면 생성)~지금 사이로 맞춘다 (단말 시계 오차)
             arrived_at = LEAST(now(), GREATEST(coalesce(departed_at, created_at), coalesce($4::timestamptz, now()))),
-            last_activity_at = now(), origin_lat = NULL, origin_lng = NULL
+            last_activity_at = now()
       WHERE id = $1
      RETURNING version, arrived_at, departed_at`,
     [transportId, to, input.method, input.occurredAt ?? null],
@@ -177,6 +177,8 @@ export async function arriveLockedTransport(
   const route = await closeRoute(client, transportId, { cancelled: false });
   // 익명 소요시간 통계 1줄 (SFR-126). 이동 거리는 바로 위 closeRoute 가 채운 값을 쓴다
   await recordTransportStat(client, transportId);
+  // 통계를 남긴 뒤 출발 좌표·현장 주소 원본을 지운다 (SER-002·012)
+  await forgetScene(client, transportId);
 
   const { arrived_at: arrivedAt, departed_at: departedAt } = moved[0];
   const durationSec =

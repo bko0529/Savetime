@@ -1,0 +1,36 @@
+# PER-007 동시 이송 300건 + PER-006 병원 응답 → 대원 앱 3초.
+# 대원 300명이 30초에 걸쳐 각자 이송을 요청하고, 병원 봇(hospital-bot.mjs)이 승인하면 확정해 holdSeconds 동안 '이동 중'으로 머문다.
+# → 가장 많을 때 300건이 동시에 진행 중. 요청 → 병원 알림(PER-006 앞쪽 절반)은 병원 봇이 잰다.
+#
+# 준비: npm run perf:medics -w server -- 300 0   (대원 300명, 진행 중 이송 없음, 토큰 15분)
+#       npm run perf:dispatch -w server -- 10    (요청 받는 병원 10곳)
+# 실행: 병원 봇을 먼저 켜고 → 이 시나리오 (perf/README.md 참고)
+config:
+  target: "{{ $env.PERF_TARGET }}"
+  processor: "./processor.mjs"
+  # 토큰(.medics.csv)은 processor.mjs 의 pickMedic 이 대원마다 한 줄씩 나눠 준다 (config.payload 는 작업자마다 겹친다)
+  phases:
+    - name: 이송 요청 몰림
+      duration: 30
+      arrivalRate: 10
+  variables:
+    # 이동 중으로 머무는 시간(초). 30초 동안 300건이 들어오고 각 60초 머무니 한동안 300건이 겹친다
+    holdSeconds: 60
+  plugins:
+    # 아래 ensure 를 실제로 판정하려면 플러그인을 켜야 한다 (켜지 않으면 기준을 넘어도 exit 0)
+    ensure: {}
+  ensure:
+    # 목표(PER-006 3초)를 넘으면 실행 결과가 실패(exit 1)가 된다
+    thresholds:
+      - transport.approved_notify_ms.p95: 3000
+      - transport.create_ms.p95: 3000
+
+before:
+  flow:
+    - function: newRun
+
+scenarios:
+  - name: 대원 1명이 이송 한 건을 요청부터 도착까지
+    beforeScenario: pickMedic
+    flow:
+      - function: runTransport

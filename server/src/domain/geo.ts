@@ -11,3 +11,16 @@ export function isInKorea(lat: number | undefined, lng: number | undefined): boo
 export const RADIUS_KM = [10, 20, 30, 40] as const;
 export type RadiusKm = (typeof RADIUS_KM)[number];
 export const MAX_RADIUS_KM: RadiusKm = 40;
+
+// 두 좌표 사이 직선거리(m, 하버사인). 위치 기록은 5초 간격이라 구간을 직선으로 이어도 실제 거리와 거의 같다
+export function distanceM(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}

@@ -17,6 +17,7 @@
     "license:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevLicense.js",
     "perf:pcs": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createPerfPcs.js",
     "perf:medics": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createPerfParamedics.js",
+    "perf:dispatch": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createPerfDispatch.js",
     "request:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevRequest.js",
     "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
   },
