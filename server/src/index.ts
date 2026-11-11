@@ -16,6 +16,7 @@ import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
 import { notifyExpiringKeys } from './modules/admin/notifications.js';
 import { HOUSEKEEPING_EVERY_MS, releaseUnusedPcs } from './modules/admin/pcs.js';
+import { RETENTION_EVERY_MS, runRetention } from './modules/privacy/retention.js';
 import { startScheduledJob, type JobRunner, type ScheduledJob } from './modules/ops/queue.js';
 import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
@@ -264,6 +265,17 @@ scheduledJobs.push({
     const released = await releaseUnusedPcs(pool);
     const expiring = await notifyExpiringKeys(pool);
     if (released || expiring) logger.info({ released, expiring }, '병원 PC·키 정리');
+  },
+});
+
+// 개인정보 자동 파기 (DAR-003·010·012·014): 환자 평가 30일, 미처리 가입 사진 30일, 반려 신청 30일, 익명 경로 3년.
+// 하루 단위 기준이라 1시간마다 돌아도 충분하다. 사진 만료 반려는 신청자에게 알린다 (커밋 뒤)
+scheduledJobs.push({
+  name: 'privacy-retention',
+  everyMs: RETENTION_EVERY_MS,
+  run: async () => {
+    const events = await runRetention({ pool, redis, photos, logger });
+    realtime?.publish(events);
   },
 });
 
