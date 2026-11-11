@@ -50,6 +50,7 @@ interface RequestRow {
   lng: number;
   entrance_lat: number | null;
   entrance_lng: number | null;
+  er_phone: string | null;
   status: HreqStatus;
   closed_reason: string | null;
   eta_min: number | null;
@@ -105,7 +106,7 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
   // 현재 회차 요청 + (앞 회차에서) 확정된 요청. 승인은 승인 시각 순 (SFR-110)
   const { rows: requests } = await db.query<RequestRow>(
     `SELECT hr.id, hr.hospital_id, h.name, h.lat::float8 AS lat, h.lng::float8 AS lng,
-            h.entrance_lat::float8 AS entrance_lat, h.entrance_lng::float8 AS entrance_lng,
+            h.entrance_lat::float8 AS entrance_lat, h.entrance_lng::float8 AS entrance_lng, h.er_phone,
             hr.status, hr.closed_reason, hr.eta_min, hr.eta_source, b.er_avail, b.er_total,
             hr.memo, hr.extra_memo, hr.reason, hr.reason_text, hr.responded_at, hr.delivered_at,
             hr.prev_approved_recheck, hr.version, hr.round_id
@@ -199,6 +200,8 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
       ? {
           id: Number(confirmed.hospital_id),
           name: confirmed.name,
+          // 경로 안내 중에도 계속 보이는 '병원 전화' 버튼용 응급실 전화번호 (SFR-097). 병원 공개 정보
+          erPhone: confirmed.er_phone,
           memo: confirmed.memo,
           extraMemo: confirmed.extra_memo,
           entrance: {
