@@ -2202,6 +2202,8 @@ export interface components {
             confirmedHospital?: {
                 id?: number;
                 name?: string;
+                /** @description 응급실 전화번호. 경로 안내 중 '병원 전화' 버튼 (SFR-097) */
+                erPhone?: string | null;
                 memo?: string | null;
                 extraMemo?: string | null;
                 entrance?: components["schemas"]["LatLng"];

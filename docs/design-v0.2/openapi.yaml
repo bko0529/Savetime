@@ -4587,6 +4587,10 @@ components:
               type: integer
             name:
               type: string
+            erPhone:
+              type: string
+              nullable: true
+              description: 응급실 전화번호. 경로 안내 중 '병원 전화' 버튼 (SFR-097)
             memo:
               type: string
               nullable: true
