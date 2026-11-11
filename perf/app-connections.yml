@@ -8,11 +8,7 @@
 config:
   target: "{{ $env.PERF_TARGET }}"
   processor: "./processor.mjs"
-  payload:
-    path: "./.medics.csv"
-    fields: ["token"]
-    order: sequence
-    skipHeader: true
+  # 토큰(.medics.csv)은 processor.mjs 의 pickMedic 이 대원마다 한 줄씩 나눠 준다 (config.payload 는 작업자마다 겹친다)
   phases:
     - name: 연결 늘리기
       duration: 20
@@ -21,8 +17,13 @@ config:
     # 연결 유지 시간(초). S8 에서는 늘린다 (토큰 15분 안에서)
     holdSeconds: 60
 
+before:
+  flow:
+    - function: newRun
+
 scenarios:
   - name: 대원 앱 1대가 붙어서 유지
+    beforeScenario: pickMedic
     flow:
       - function: connectParamedic
       - think: "{{ holdSeconds }}"
