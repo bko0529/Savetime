@@ -26,7 +26,7 @@ import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
-import { recordTransportStat } from '../stats/records.js';
+import { forgetScene, recordTransportStat } from '../stats/records.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
@@ -65,8 +65,7 @@ async function finishPrevious(
   });
   const { rows } = await client.query<{ version: number }>(
     `UPDATE transport
-        SET status = $2, arrived_at = now(), arrival_method = 'finish_previous', version = version + 1,
-            origin_lat = NULL, origin_lng = NULL
+        SET status = $2, arrived_at = now(), arrival_method = 'finish_previous', version = version + 1
       WHERE id = $1 RETURNING version`,
     [previous.id, to],
   );
@@ -79,6 +78,8 @@ async function finishPrevious(
   await closeRoute(client, previous.id, { cancelled: false });
   // 익명 소요시간 통계 1줄 (SFR-126). 이동 거리는 바로 위 closeRoute 가 채운 값을 쓴다
   await recordTransportStat(client, previous.id);
+  // 통계를 남긴 뒤 출발 좌표·현장 주소 원본을 지운다 (SER-002·012)
+  await forgetScene(client, previous.id);
   // 연쇄: 확정 병원 요청 → 도착 (부록 A-2 46)
   for (const { target, event } of CASCADE.FINISH_PREVIOUS ?? []) {
     const { rows: requests } = await client.query<{

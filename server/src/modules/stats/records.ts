@@ -25,6 +25,7 @@ export async function recordRejection(client: pg.PoolClient, input: RejectionInp
 
 // 이송이 끝날 때(도착·취소·이전 건 마무리) 소요시간 1줄. 요청을 한 번도 안 보낸 건은 남기지 않는다.
 // 기준 시각은 '첫 회차 요청 시각': 다시 요청해도 대원이 처음 요청한 때부터 잰다 (SFR-126 인수 기준)
+// 출발 위치는 소수 셋째 자리(약 100m 격자)로 뭉개서 남긴다. 바로 뒤 forgetScene 이 원본을 지운다 (SER-012)
 export async function recordTransportStat(client: pg.PoolClient, transportId: string) {
   await client.query(
     `WITH first_round AS (
@@ -36,16 +37,27 @@ export async function recordTransportStat(client: pg.PoolClient, transportId: st
         WHERE r.transport_id = $1 AND hr.responded_at IS NOT NULL AND hr.status <> 'rejected'
      )
      INSERT INTO transport_stat (hospital_id, request_to_approve_sec, request_to_depart_sec,
-                                 departed_at, arrived_at, duration_sec, distance_m)
+                                 departed_at, arrived_at, duration_sec, distance_m,
+                                 origin_grid_lat, origin_grid_lng)
      SELECT t.confirmed_hospital_id,
             round(extract(epoch FROM a.at - f.sent_at))::int,
             -- 출발 = 처음 병원을 확정하고 출발한 시각. 다시 요청·목적지 변경 뒤에도 바뀌지 않는다 (SFR-036)
             round(extract(epoch FROM t.departed_at - f.sent_at))::int,
             t.departed_at, t.arrived_at,
             round(extract(epoch FROM t.arrived_at - t.departed_at))::int,
-            t.distance_m
+            t.distance_m,
+            round(t.origin_lat, 3), round(t.origin_lng, 3)
        FROM transport t, first_round f, first_approval a
       WHERE t.id = $1 AND f.sent_at IS NOT NULL`,
+    [transportId],
+  );
+}
+
+// 이송이 끝나면 현장 위치 원본을 지운다: 출발 좌표(SER-002)와 위치 미동의 때 입력한 현장 주소(SFR-009).
+// 현장 주소는 환자 집 주소일 수 있다 (절대 규칙 2, SER-012). 통계(위 recordTransportStat)를 남긴 뒤 같은 트랜잭션에서 부른다
+export async function forgetScene(client: pg.PoolClient, transportId: string) {
+  await client.query(
+    'UPDATE transport SET origin_lat = NULL, origin_lng = NULL, address = NULL WHERE id = $1',
     [transportId],
   );
 }
