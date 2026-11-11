@@ -42,7 +42,7 @@ npm run migrate
 | | anonymous_route | 익명 이송 경로 (대원·팀·이송 건 연결 없음, 3년 초안) | SFR-041, DAR-014 |
 | | idempotency_key | 같은 확정을 여러 번 보내도 한 번만 처리 | SFR-111 |
 | E 기록·통계 | request_view_log | 병원 열람 기록 | SFR-137 |
-| | response_stat / transport_stat | 응답·거절·소요시간·이동 거리 통계 (대원 계정과 연결 안 함) | SFR-106, 126, DAR-004 |
+| | response_stat / transport_stat | 응답·거절·소요시간·이동 거리 통계 (대원 계정과 연결 안 함). 출발 위치는 약 100m 격자로만 | SFR-106, 126, DAR-004, SER-012 |
 | | rejection_record | 모든 출처의 거절 기록 (병원 웹·요청 중지·전화 확인·승인 취소·수용 불가) | SFR-126, D-115 |
 | F 관리자 | admin | 관리자 계정 (OTP) | SFR-082, 152 |
 | | admin_audit_log | 작업 이력. DB 규칙으로 수정·삭제 불가 | SFR-091 |
@@ -87,7 +87,7 @@ npm run migrate
 
 - 2분 만료, 5분 승인 해제: `request_round`의 시각과 서버 타이머로 처리
 - 두 PC 동시 응답, 동시 확정: `version` 값을 비교해서 먼저 온 것만 반영
-- 위치 익명화: 도착·취소 때 같은 트랜잭션에서 `location_point` → `anonymous_route` 1행(좌표 열·거리)으로 옮기고 삭제, `transport.distance_m` 기록, `transport.origin_*`은 NULL로 (SER-002)
+- 위치 익명화: 도착·취소 때 같은 트랜잭션에서 `location_point` → `anonymous_route` 1행(좌표 열·거리)으로 옮기고 삭제, `transport.distance_m` 기록, `transport.origin_*`·`transport.address`(현장 주소)는 통계에 100m 격자로 남긴 뒤 NULL로 (SER-002·012)
 - 거절 기록: 병원 웹 거절·요청 중지·전화 확인 거절·승인 취소·수용 불가 때마다 `rejection_record` 1행 (D-115)
 - 환자 평가 보관 기간이 지나면 `assessment` 항목 삭제 (통계 행은 남김)
 - 개인정보 자동 파기: 주기 작업 `privacy-retention`(1시간마다, `server/src/modules/privacy/retention.ts`)

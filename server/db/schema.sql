@@ -276,7 +276,7 @@ CREATE TABLE transport (                               -- 이송 건
   origin_lat            numeric(9,6),                   -- 원본 위치: 이송 끝나면 NULL
   origin_lng            numeric(9,6),
   location_consent      boolean          NOT NULL,
-  address               varchar(120),                   -- 위치 미동의 시 주소 (SFR-009)
+  address               varchar(120),                   -- 위치 미동의 시 주소 (SFR-009). 이송 끝나면 NULL (SER-012)
   offline_created       boolean          NOT NULL DEFAULT false, -- 통신 두절 중 만든 건 (SFR-099)
   phone_target_hospital_id bigint        REFERENCES hospital(id), -- 전화 확인 대상 병원 (부록 A13·A16)
   fallback_reason       varchar(24),                    -- 예비 추천 전환 사유 (마지막)
@@ -468,7 +468,9 @@ CREATE TABLE transport_stat (                          -- 익명 소요시간 (�
   departed_at        timestamptz,
   arrived_at         timestamptz,
   duration_sec       int,
-  distance_m         int
+  distance_m         int,
+  origin_grid_lat    numeric(6,3),                     -- 출발 위치를 약 100m 격자로 뭉갠 값 (현장 주소 대신, SER-012)
+  origin_grid_lng    numeric(6,3)
 );
 
 -- =====================================================================
