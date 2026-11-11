@@ -43,3 +43,59 @@ export function disconnectHospital(context, _events, done) {
   context.vars.socket?.disconnect();
   done();
 }
+
+// ---- 대원 앱 (PER-005 대원 앱 쪽) ----
+// 가상 사용자 1명 = 대원 앱 1대. .medics.csv 의 접근 토큰으로 /app 실시간 연결을 맺고 유지한다
+export function connectParamedic(context, events, done) {
+  const started = Date.now();
+  const socket = io(`${context.vars.target}/app`, {
+    transports: ['websocket'],
+    forceNew: true,
+    reconnection: false,
+    timeout: 10_000,
+    auth: { token: context.vars.token },
+  });
+  context.vars.socket = socket;
+
+  socket.once('connect', () => {
+    events.emit('histogram', 'app.connect_ms', Date.now() - started);
+    events.emit('counter', 'app.connected', 1);
+    done();
+  });
+  socket.once('connect_error', (err) => {
+    // TOKEN_EXPIRED 가 많으면 perf:medics 를 다시 돌린다 (토큰 15분)
+    events.emit('counter', `app.connect_error.${err.message}`, 1);
+    done();
+  });
+  socket.on('disconnect', (reason) => {
+    if (reason !== 'io client disconnect') events.emit('counter', `app.dropped.${reason}`, 1);
+  });
+}
+
+export function disconnectParamedic(context, _events, done) {
+  context.vars.socket?.disconnect();
+  done();
+}
+
+// ---- 위치 기록 (PER-008) ----
+// 요청 직전에 '지금' 위치 1점을 만든다. 서버는 출발 1분 전 ~ 지금+1분 밖의 시각을 버리고,
+// 같은 시각을 다시 보내면 한 번만 저장하므로 매번 지금 시각을 쓴다. 좌표는 천안 근처에서 조금씩 움직인다
+export function locationBody(requestParams, context, _events, next) {
+  const step = (context.vars.$loopCount ?? 0) + 1;
+  requestParams.json = {
+    deviceId: context.vars.deviceId,
+    points: [
+      {
+        lat: 36.815 + step * 0.0003,
+        lng: 127.1139 + step * 0.0002,
+        speedKmh: 40,
+        recordedAt: new Date().toISOString(),
+      },
+    ],
+  };
+  requestParams.headers = {
+    ...requestParams.headers,
+    Authorization: `Bearer ${context.vars.token}`,
+  };
+  return next();
+}

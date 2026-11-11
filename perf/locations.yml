@@ -1,0 +1,43 @@
+# PER-008 위치 기록 처리량: 이동 중 이송 건마다 담당 단말이 5초마다 위치를 올린다.
+# 목표(S8, 클라우드): 동시 이송 300건 × 5초 간격 = 초당 60건, 95%를 1초 안에 저장
+#   → 결과의 http.response_time p95 가 1000ms 안, http.codes.204 만 있어야 한다
+# 연습(S7, 내 컴퓨터): 아래 기본값 그대로 300건 (내 PC 가 버거우면 --overrides 로 줄인다)
+#
+# 준비: npm run perf:medics -w server -- 300 300   (이동 중 이송 300건, 토큰 15분)
+# 실행: perf/README.md 참고
+#   npx artillery@2.0.34 run perf/locations.yml
+config:
+  target: "{{ $env.PERF_TARGET }}"
+  processor: "./processor.mjs"
+  payload:
+    path: "./.moving.csv"
+    fields: ["token", "transportId", "deviceId"]
+    order: sequence
+    skipHeader: true
+  phases:
+    # 300건이 5초에 걸쳐 모두 이동을 시작하고, 각자 5초마다 보낸다 → 초당 약 60건
+    - name: 이동 시작
+      duration: 5
+      arrivalRate: 60
+  variables:
+    # 한 건이 보내는 횟수 (5초 × 24 = 2분)
+    sends: 24
+  plugins:
+    # 응답이 204 가 아니면 실패로 센다 (Artillery 2 에 들어 있는 플러그인)
+    expect: {}
+  ensure:
+    # 목표를 넘으면 실행 결과가 실패(exit 1)가 된다
+    thresholds:
+      - http.response_time.p95: 1000
+
+scenarios:
+  - name: 이동 중 담당 단말 1대가 5초마다 위치 기록
+    flow:
+      - loop:
+          - post:
+              url: "/api/v1/transports/{{ transportId }}/locations"
+              beforeRequest: locationBody
+              expect:
+                - statusCode: 204
+          - think: 5
+        count: "{{ sends }}"

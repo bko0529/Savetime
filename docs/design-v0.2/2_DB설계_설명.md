@@ -90,3 +90,8 @@ npm run migrate
 - 위치 익명화: 도착·취소 때 같은 트랜잭션에서 `location_point` → `anonymous_route` 1행(좌표 열·거리)으로 옮기고 삭제, `transport.distance_m` 기록, `transport.origin_*`은 NULL로 (SER-002)
 - 거절 기록: 병원 웹 거절·요청 중지·전화 확인 거절·승인 취소·수용 불가 때마다 `rejection_record` 1행 (D-115)
 - 환자 평가 보관 기간이 지나면 `assessment` 항목 삭제 (통계 행은 남김)
+- 개인정보 자동 파기: 주기 작업 `privacy-retention`(1시간마다, `server/src/modules/privacy/retention.ts`)
+  - DAR-010: 보낸 지 30일 지난 `assessment`의 환자 평가 항목을 NULL로, `purged_at` 기록 (행·이송 건·응답 기록은 남김)
+  - DAR-012: 30일 동안 처리되지 않은 `signup_request`는 사진 삭제 + `result='rejected'`·`reject_reason='photo_expired'`, 신청자에게 `account.signup_result`
+  - DAR-003: 마지막 신청이 반려된 지 30일 지나도 다시 신청하지 않은 계정은 `signup_request`·`push_device` 삭제, `paramedic` 개인 정보를 탈퇴와 같은 방식으로 비움(`status='withdrawn'`)
+  - DAR-014: 끝난 지 3년 지난 `anonymous_route` 삭제

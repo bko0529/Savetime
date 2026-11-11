@@ -1,0 +1,29 @@
+# PER-005 대원 앱 쪽: 대원 앱 실시간 연결(/app)을 동시에 많이 맺고 유지한다.
+# 목표(S8, 클라우드): 동시 연결 5,000개 중 대원 앱 약 3,300 (병원 PC 쪽은 hospital-connections.yml)
+# 연습(S7, 내 컴퓨터): 대원 200명이 20초에 걸쳐 붙고 각각 60초 유지 → 최대 동시 연결 약 200개
+#
+# 준비: npm run perf:medics -w server -- 200   (토큰 15분 — 만든 뒤 15분 안에 돌린다)
+# 실행: perf/README.md 참고
+#   npx artillery@2.0.34 run perf/app-connections.yml
+config:
+  target: "{{ $env.PERF_TARGET }}"
+  processor: "./processor.mjs"
+  payload:
+    path: "./.medics.csv"
+    fields: ["token"]
+    order: sequence
+    skipHeader: true
+  phases:
+    - name: 연결 늘리기
+      duration: 20
+      arrivalRate: 10
+  variables:
+    # 연결 유지 시간(초). S8 에서는 늘린다 (토큰 15분 안에서)
+    holdSeconds: 60
+
+scenarios:
+  - name: 대원 앱 1대가 붙어서 유지
+    flow:
+      - function: connectParamedic
+      - think: "{{ holdSeconds }}"
+      - function: disconnectParamedic
