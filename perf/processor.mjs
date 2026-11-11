@@ -284,6 +284,8 @@ export function locationBody(requestParams, context, _events, next) {
         recordedAt: new Date().toISOString(),
       },
     ],
+    // 앱 안 내비가 계산한 남은 분은 1분(12번)에 한 번 같이 보낸다 (SFR-121). 값이 바뀌면 팀·병원에 이벤트가 나간다
+    ...(step % 12 === 1 ? { etaMin: Math.max(0, 15 - Math.floor(step / 12)) } : {}),
   };
   requestParams.headers = {
     ...requestParams.headers,
