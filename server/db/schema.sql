@@ -405,6 +405,7 @@ CREATE TABLE location_point (                          -- 이송 중 위치 (담
   lng          numeric(9,6) NOT NULL,
   speed_kmh    numeric(5,1),
   recorded_at  timestamptz  NOT NULL,
+  outlier      boolean      NOT NULL DEFAULT false,  -- 직전 정상 좌표 대비 초속 60m 초과 (SFR-040). 판정·거리 계산에서 뺀다
   PRIMARY KEY (transport_id, recorded_at)
 );
 
