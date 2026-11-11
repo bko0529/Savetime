@@ -79,7 +79,19 @@ const schema = z.object({
 
 export type Config = z.infer<typeof schema>;
 
+// docker compose env_file 은 '키=   # 설명' 처럼 빈 값 뒤 설명을 값으로 읽는다 (배포 리허설에서 발견).
+// 그러면 JWT_SECRET 에 설명 글(32자 이상)이 그대로 서명 키로 들어갈 수 있어, '#'로 시작하는 값은 받지 않는다
+function commentLikeValues(env: NodeJS.ProcessEnv): string[] {
+  return Object.keys(schema.shape).filter((name) => env[name]?.trimStart().startsWith('#'));
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const commented = commentLikeValues(env);
+  if (commented.length > 0) {
+    throw new Error(
+      `환경 변수 값이 '#'로 시작해요(빈 값 뒤 설명이 값으로 들어간 것 같아요). 설명은 윗줄로: ${commented.join(', ')}`,
+    );
+  }
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
     // 값은 비밀일 수 있으니 이름만 보여 준다 (SER-001)

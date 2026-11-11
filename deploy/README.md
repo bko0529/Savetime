@@ -23,6 +23,27 @@
 - 실시간은 **보내기 전용**: 앱·병원 웹 연결을 받지 않고, 대원 정지·PC 해제·가입 결과를 Redis 를 거쳐 앱 서버에 붙은 연결로 보낸다. 2분 타이머 같은 작업은 돌리지 않는다.
 - 그래서 두 서버의 `JWT_SECRET`·`REDIS_URL` 은 같아야 한다.
 
+## 채울 값 체크리스트 (실제 값은 서버의 파일에만, 여기·채팅에 적지 않는다)
+| 서버 | 파일 | 채울 것 | 메모 |
+|---|---|---|---|
+| 데이터 | `deploy/data/.env` | `PRIVATE_IP` | 데이터 서버 **사설** IP |
+| | | `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | `openssl rand -hex 16` |
+| 앱 | `deploy/app/.env` | `APP_DOMAIN` | 예: `savetime.example.kr` (DNS 가 이 서버 고정 IP 를 가리킨 뒤 켜야 인증서가 나온다) |
+| | `deploy/app/server.env` | `DATABASE_URL`, `REDIS_URL` | 위 비밀번호 + 데이터 서버 사설 IP |
+| | | `JWT_SECRET` | `openssl rand -base64 32`. **관리자 서버와 같은 값** |
+| | | `ALLOWED_ORIGINS` | `https://앱 도메인,https://admin.앱 도메인` |
+| | | `APP_ORIGINS` | Lovable 구급대원 웹앱 주소 (CR-010) |
+| | | `PUBLIC_DATA_API_KEY`, `KAKAO_REST_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_BASE64` | 운영 키 |
+| | | `S3_*`, `PHOTO_ENC_KEY` | 가입 사진 저장. 비우면 가입 신청이 503 |
+| | | `AI_API_KEY`, `AI_MODEL` | AI 일지 정리. 시연 전 관리자 화면에서 `journal_ai` 켜기 |
+| | | `ADMIN_ALLOWED_IPS` | **비워 둔다** (앱 서버) |
+| 관리자 | `deploy/admin/.env` | `ADMIN_DOMAIN` | `admin.앱 도메인` |
+| | | `CADDY_ALLOWED_IPS` | 관리자 접속 IP. 띄어쓰기로 여러 개, CIDR(`1.2.3.0/24`)도 됨 |
+| | `deploy/admin/server.env` | 앱 서버 `server.env` 를 복사한 뒤 `ADMIN_ALLOWED_IPS` | 쉼표로 여러 개. **서버 쪽은 CIDR 을 모르고 정확한 IP 만** 받는다 |
+
+- `server.env` 에서 **빈 값 뒤에 설명(`키=   # 설명`)을 붙이지 않는다.** docker compose 는 그 설명 글을 값으로 읽는다(배포 리허설에서 발견). 서버는 `#`로 시작하는 값이 있으면 이름을 알려 주고 켜지지 않는다
+- 서버 로그의 `…가 없어 …` 경고(level 40)는 비워 둔 키 목록이다. 켜자마자 `docker compose logs server` 로 확인한다
+
 ## 처음 한 번 (강욱)
 1. Lightsail 서울 리전에 인스턴스 3개 (Ubuntu, Docker·Docker Compose 설치). 고정 IP 를 앱·관리자 서버에 붙인다.
 2. 도메인 DNS: `앱 도메인` → 앱 서버 고정 IP, `admin.앱 도메인` → 관리자 서버 고정 IP.
