@@ -19,7 +19,8 @@
     "perf:medics": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createPerfParamedics.js",
     "perf:dispatch": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createPerfDispatch.js",
     "request:dev": "tsc -p . && node --env-file-if-exists=.env dist/scripts/createDevRequest.js",
-    "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\""
+    "test": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node --test \"dist/**/*.test.js\"",
+    "demo": "tsc -p . && node --env-file-if-exists=.env dist/scripts/demo.js"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

@@ -56,6 +56,8 @@ test('확인 요청(OPTIONS)에는 204 로 허락할 방식·헤더를 알려 �
     assert.match(res.headers['access-control-allow-methods'], /POST/);
     assert.match(res.headers['access-control-allow-headers'], /Authorization/);
     assert.match(res.headers['access-control-allow-headers'], /Content-Type/);
+    // 이송 확정은 Idempotency-Key 헤더를 보낸다 (SFR-111). 허락하지 않으면 브라우저가 확정 요청을 막는다
+    assert.match(res.headers['access-control-allow-headers'], /Idempotency-Key/);
     assert.equal(res.headers['access-control-max-age'], '600');
   });
 });
