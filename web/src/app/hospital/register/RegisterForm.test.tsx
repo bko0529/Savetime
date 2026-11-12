@@ -58,6 +58,17 @@ describe('RegisterForm', () => {
     });
   });
 
+  it('성공하면 입력한 라이선스 키를 화면에서 지운다 (숨겨진 화면에 키가 남지 않게)', async () => {
+    mockFetch({ status: 201, body: { hospital: { id: 1, name: 'A병원' }, pcId: 7 } });
+    renderWithQuery(<RegisterForm />);
+    fill('KEY-123');
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/hospital'));
+    expect((screen.getByLabelText('라이선스 키', { exact: false }) as HTMLInputElement).value).toBe(
+      '',
+    );
+  });
+
   it.each([
     ['INVALID_LICENSE', '라이선스 키가 맞지 않아요'],
     ['LICENSE_EXPIRED', '관리자에게 새 키를 요청'],

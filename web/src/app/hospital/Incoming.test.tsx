@@ -67,6 +67,10 @@ async function incomingTable() {
 }
 
 describe('도착 예정 목록 (SFR-121)', () => {
+  it("근무 중이면 화면 제목이 '근무 시작'이 아니라 '이송 요청'", async () => {
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('이송 요청');
+  });
+
   it("우리 병원으로 확정된 환자를 '요약 · 이동 중 · 도착 예상 N분'으로 보여 준다", async () => {
     const section = await incomingTable();
     const row = (await within(section).findByText('R-102')).closest('tr')!;

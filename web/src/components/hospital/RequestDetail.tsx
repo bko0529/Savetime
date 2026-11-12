@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { INCOMING_KEY, type HwIncoming } from '@/app/hospital/useIncoming';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
@@ -13,10 +14,13 @@ import {
 } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
 import { ExtraMemoButton } from './ExtraMemoButton';
+import { etaText } from './IncomingList';
 import { RequestActions } from './RequestActions';
 
 type Detail =
   ApiPaths['/hw/requests/{requestId}']['get']['responses'][200]['content']['application/json'];
+type IncomingList =
+  ApiPaths['/hw/incoming']['get']['responses'][200]['content']['application/json'];
 
 const STATUS_TEXT: Record<string, string> = {
   waiting: '응답 대기',
@@ -48,6 +52,15 @@ export function RequestDetail({
     refetchOnWindowFocus: false,
     retry: false,
   });
+  // 확정 뒤 도착 예상(내비 남은 시간)·도착 시각은 도착 예정 목록이 이벤트마다 새로 받는다.
+  // 상세는 열람 기록 때문에 다시 받지 않으므로(위) 그 목록 값을 같이 읽어 같은 시간을 보여 준다.
+  // 여기서는 받지 않고(enabled: false) 도착 예정 목록이 받아 둔 값만 읽는다
+  const incoming = useQuery({
+    queryKey: INCOMING_KEY,
+    queryFn: () => apiFetch<IncomingList>('/hw/incoming'),
+    enabled: false,
+  });
+  const incomingItem = incoming.data?.items?.find((i) => i.id === requestId);
 
   return (
     <section
@@ -65,7 +78,7 @@ export function RequestDetail({
       {detail.isError ? (
         <DetailError error={detail.error} />
       ) : (
-        detail.data && <DetailBody detail={detail.data} nowMs={nowMs} />
+        detail.data && <DetailBody detail={detail.data} incomingItem={incomingItem} nowMs={nowMs} />
       )}
       {/* 응답 결과 문구(다른 PC 가 먼저 응답 등)는 요청이 끝나 상세가 닫혀도 남아 있어야 해서 본문 밖에 둔다 */}
       {detail.data && (
@@ -114,7 +127,27 @@ function DetailError({ error }: { error: unknown }) {
   );
 }
 
-function DetailBody({ detail, nowMs }: { detail: Detail; nowMs: number }) {
+// 요청 단계(대기·승인)에는 요청 때 계산한 값(직선거리면 '약 n분 (추정)'),
+// 우리 병원으로 확정된 뒤에는 도착 예정 목록의 최신 값(내비 남은 시간·도착 시각)을 쓴다
+function etaLine(detail: Detail, incomingItem: HwIncoming | undefined): string | null {
+  if (incomingItem) return etaText(incomingItem);
+  // 목록을 아직 못 받았는데 이미 도착한 건이면 예전 예상 시간을 보여 주지 않는다
+  if (detail.status === 'arrived') return null;
+  if (detail.etaMin == null) return null;
+  const estimated = detail.etaSource === 'straight';
+  return `도착 예상 ${estimated ? '약 ' : ''}${detail.etaMin}분${estimated ? ' (추정)' : ''}`;
+}
+
+function DetailBody({
+  detail,
+  incomingItem,
+  nowMs,
+}: {
+  detail: Detail;
+  incomingItem: HwIncoming | undefined;
+  nowMs: number;
+}) {
+  const eta = etaLine(detail, incomingItem);
   const a = (detail.assessment ?? {}) as Assessment;
   const abnormal = new Set(detail.abnormalFields ?? []);
   const waiting = detail.status === 'waiting';
@@ -133,12 +166,7 @@ function DetailBody({ detail, nowMs }: { detail: Detail; nowMs: number }) {
             남은 시간 {remainingText(detail.respondUntil, nowMs)}
           </span>
         )}
-        {detail.etaMin != null && (
-          <span>
-            도착 예상 {detail.etaSource === 'straight' ? '약 ' : ''}
-            {detail.etaMin}분{detail.etaSource === 'straight' ? ' (추정)' : ''}
-          </span>
-        )}
+        {eta && <span>{eta}</span>}
       </div>
 
       <p className="text-3xl font-extrabold">{a.chiefComplaint}</p>
