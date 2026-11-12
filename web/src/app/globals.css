@@ -40,6 +40,17 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-deep: var(--brand-deep);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-surface: var(--surface);
+  --color-border-strong: var(--border-strong);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,32 +60,45 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 색·그림자는 대원 앱(Lovable) 디자인에 맞춘다: 푸른 기 도는 연회색 바탕 + 흰 카드 + 빨강 강조.
+   병원 PC 는 멀리서 흘끗 보므로 글자·보조 글자·입력칸 테두리는 앱보다 조금 더 진하게 둔다 */
 :root {
-  --background: oklch(1 0 0);
-  /* 병원 화면: 멀리서 흘끗 봐도 읽히도록 글자는 거의 검정, 보조 글자도 진하게, 빨강은 선명하게 */
-  --foreground: oklch(0.13 0 0);
+  --background: oklch(0.975 0.006 240);
+  --foreground: oklch(0.18 0.03 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.19 0.028 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.4 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.53 0.22 27);
-  --border: oklch(0.75 0 0);
-  --input: oklch(0.75 0 0);
-  --ring: oklch(0.45 0.2 260);
+  --popover-foreground: oklch(0.19 0.028 262);
+  --primary: oklch(0.245 0.008 260);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.945 0.008 252);
+  --secondary-foreground: oklch(0.3 0.03 260);
+  --muted: oklch(0.945 0.006 252);
+  --muted-foreground: oklch(0.44 0.025 260);
+  /* shadcn 의 accent 는 '마우스를 올렸을 때 배경'이라 연한 회색 그대로 둔다. 빨강 강조는 brand 로 따로 */
+  --accent: oklch(0.945 0.008 252);
+  --accent-foreground: oklch(0.245 0.008 260);
+  --brand: oklch(0.565 0.215 27);
+  --brand-foreground: oklch(0.99 0 0);
+  --brand-soft: oklch(0.955 0.03 27);
+  --brand-deep: oklch(0.47 0.18 27);
+  --success: oklch(0.52 0.11 175);
+  --success-foreground: oklch(0.99 0 0);
+  --success-soft: oklch(0.95 0.035 175);
+  --warning: oklch(0.55 0.12 70);
+  --warning-soft: oklch(0.955 0.045 85);
+  --destructive: oklch(0.505 0.19 27);
+  --border: oklch(0.89 0.008 250);
+  --border-strong: oklch(0.8 0.012 250);
+  --input: oklch(0.8 0.012 250);
+  --ring: oklch(0.565 0.215 27);
+  --surface: oklch(0.968 0.007 245);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 1.05rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -83,6 +107,23 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  --gradient-header: linear-gradient(
+    155deg,
+    oklch(1 0 0) 0%,
+    oklch(0.975 0.008 245) 55%,
+    oklch(0.955 0.016 240) 82%,
+    oklch(0.945 0.03 27) 135%
+  );
+  --gradient-primary: linear-gradient(140deg, oklch(0.28 0.01 260) 0%, oklch(0.19 0.008 260) 100%);
+  --gradient-brand: linear-gradient(140deg, oklch(0.62 0.225 29) 0%, oklch(0.5 0.2 24) 100%);
+  --gradient-success: linear-gradient(140deg, oklch(0.56 0.12 175) 0%, oklch(0.46 0.105 175) 100%);
+  --shadow-card: 0 1px 2px oklch(0.3 0.03 262 / 0.04), 0 12px 32px -20px oklch(0.3 0.03 262 / 0.14);
+  --shadow-lift: 0 2px 6px oklch(0.3 0.03 262 / 0.06), 0 24px 48px -24px oklch(0.3 0.03 262 / 0.22);
+  --shadow-header: 0 12px 26px -20px oklch(0.4 0.05 260 / 0.22);
+  --shadow-primary: 0 12px 26px -14px oklch(0.2 0.01 260 / 0.5);
+  --shadow-brand: 0 12px 26px -14px oklch(0.5 0.2 24 / 0.5);
+  --shadow-success: 0 12px 26px -14px oklch(0.46 0.105 175 / 0.45);
 }
 
 .dark {
@@ -130,5 +171,75 @@
     @apply font-sans;
     /* 기본 글자 18px (rem 단위가 모두 같이 커짐) */
     font-size: 112.5%;
+  }
+}
+
+/* 대원 앱과 같은 모양의 공통 조각. 화면마다 같은 class 를 쓰면 모양이 한곳에서 바뀐다 */
+@layer components {
+  /* 흰 카드: 얇은 테두리 + 부드러운 그림자 */
+  .tile {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    box-shadow: var(--shadow-card);
+  }
+  /* 화면 위쪽 띠: 흰색에서 오른쪽 아래로 살짝 붉게 번진다 */
+  .surface-header {
+    background: var(--gradient-header);
+    box-shadow: var(--shadow-header);
+  }
+  /* 섹션 제목 왼쪽의 짧은 빨간 막대 */
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 1em;
+    border-radius: 2px;
+    background: var(--color-brand);
+  }
+  /* 둥근 칩(메뉴·상태 표시) */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-muted-foreground);
+    padding: 0.35rem 0.9rem;
+    font-weight: 700;
+    transition:
+      border-color 0.15s,
+      background 0.15s,
+      color 0.15s;
+  }
+  .chip-on {
+    border-color: color-mix(in oklab, var(--color-brand) 55%, transparent);
+    background: var(--color-brand-soft);
+    color: var(--color-brand-deep);
+  }
+  .btn-solid-primary {
+    background: var(--gradient-primary);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.12),
+      var(--shadow-primary);
+  }
+  .btn-solid-brand {
+    background: var(--gradient-brand);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.18),
+      var(--shadow-brand);
+  }
+  .btn-solid-success {
+    background: var(--gradient-success);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.15),
+      var(--shadow-success);
   }
 }

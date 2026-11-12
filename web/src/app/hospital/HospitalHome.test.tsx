@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, mockFetch, renderWithQuery } from '@/testing/render';
-import { HospitalHome } from './HospitalHome';
+import { HospitalHome, StatusChip } from './HospitalHome';
 
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
@@ -41,5 +41,16 @@ describe('HospitalHome', () => {
     renderWithQuery(<HospitalHome />);
     expect((await screen.findByRole('alert')).textContent).toContain('새 키를 요청');
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('StatusChip (위쪽 띠의 상태 표시)', () => {
+  it.each([
+    [false, false, '근무 전'],
+    [true, false, '근무 중'],
+    [true, true, '요청 잠시 멈춤'],
+  ])('근무 %s · 멈춤 %s → %s (색만이 아니라 글자로도)', (shift, paused, text) => {
+    render(<StatusChip shift={shift} paused={paused} />);
+    expect(screen.getByText(text)).toBeDefined();
   });
 });

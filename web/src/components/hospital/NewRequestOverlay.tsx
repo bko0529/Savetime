@@ -57,7 +57,7 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
           <Button
             size="lg"
             autoFocus
-            className="h-20 min-w-64 bg-white text-3xl text-destructive hover:bg-white/90"
+            className="h-20 min-w-64 bg-white bg-none text-3xl text-destructive hover:bg-white/90"
             onClick={() => onConfirm(request.id)}
           >
             확인

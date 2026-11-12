@@ -39,9 +39,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <RequireAdmin>
       <div className="flex flex-1 flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-foreground px-8 py-4">
-          <Link href="/admin" className="text-2xl font-bold">
-            세이브타임 관리자
+        {/* 병원 웹·대원 앱과 같은 위쪽 띠 */}
+        <header className="surface-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 px-8 py-4">
+          <Link
+            href="/admin"
+            className="flex items-baseline gap-2 text-2xl font-extrabold tracking-tight"
+          >
+            세이브타임
+            <span className="text-base font-bold text-brand">관리자</span>
           </Link>
           <nav aria-label="관리자 메뉴" className="flex gap-2">
             {ADMIN_MENUS.map((m) => {
@@ -52,8 +57,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   href={m.href}
                   aria-current={current ? 'page' : undefined}
                   className={cn(
-                    'rounded-lg px-4 py-2 text-lg font-semibold hover:bg-muted',
-                    current && 'bg-foreground text-background hover:bg-foreground',
+                    'chip text-lg hover:border-border-strong hover:text-foreground',
+                    current && 'chip-on hover:text-brand-deep',
                   )}
                 >
                   {m.label}
