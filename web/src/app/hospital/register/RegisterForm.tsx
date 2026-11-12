@@ -34,8 +34,16 @@ export function RegisterForm() {
   const register = useMutation({
     mutationFn: (body: RegisterBody) =>
       apiFetch<RegisterResult>('/hw/pc/register', { method: 'POST', body: JSON.stringify(body) }),
-    // 성공하면 서버가 st_pc 쿠키를 심어 주므로, 이후에는 키 입력 없이 근무 시작 화면으로 간다
-    onSuccess: () => router.replace('/hospital'),
+    // 성공하면 서버가 st_pc 쿠키를 심어 주므로, 이후에는 키 입력 없이 근무 시작 화면으로 간다.
+    // 키는 다 쓴 값이라 바로 지운다. Next 16 은 지나온 화면을 숨겨 둔 채 남겨서(cacheComponents),
+    // 지우지 않으면 숨은 입력칸에 키가 남고 다시 이 화면에 오면 그대로 채워져 있다
+    onSuccess: () => {
+      setLicenseKey('');
+      setPcName('');
+      setFullPcs(null);
+      setReplacePcId(null);
+      router.replace('/hospital');
+    },
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'PC_LIMIT_REACHED') {
         setFullPcs((error.details?.pcs as RegisteredPc[] | undefined) ?? []);

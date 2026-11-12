@@ -43,6 +43,8 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
   const { hospital, pc, shift, licenseDaysLeft } = session.data;
   return (
     <div className="flex flex-col gap-6">
+      {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
+      <h1 className="text-3xl font-bold">{shift ? '이송 요청' : '근무 시작'}</h1>
       {/* 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168) */}
       {shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
       <p className="text-xl">
