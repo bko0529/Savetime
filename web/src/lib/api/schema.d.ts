@@ -2207,8 +2207,11 @@ export interface components {
                 memo?: string | null;
                 extraMemo?: string | null;
                 entrance?: components["schemas"]["LatLng"];
-                /** @enum {string} */
-                requestStatus?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable";
+                /**
+                 * @description 전화 확인으로 출발한 병원은 병원 요청이 없어 null (SFR-034)
+                 * @enum {string|null}
+                 */
+                requestStatus?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable" | null;
                 /** @enum {string|null} */
                 closeReason?: "other_hospital" | "fallback" | "cancelled" | "expired_approval" | "approval_cancelled" | "dest_changed" | null;
             } | null;
