@@ -10,7 +10,7 @@ import { withTransaction } from '../../db/transaction.js';
 import { ACTIVE } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
-import { hashPassword } from '../auth/password.js';
+import { hashPassword, meetsPasswordRule } from '../auth/password.js';
 import { endSessions, forgetSessionState } from '../auth/session.js';
 import type { Realtime } from '../realtime/server.js';
 import { endDuty } from '../team/endDuty.js';
@@ -37,14 +37,18 @@ const suspendSchema = z.object({
   confirmCancelActive: z.boolean().optional(),
 });
 
-// 임시 비밀번호: 전화로 불러 주기 쉽게 헷갈리는 글자(0·O·1·l·I)를 뺀 10자. 약 58비트라 추측할 수 없다
+// 임시 비밀번호: 전화로 불러 주기 쉽게 헷갈리는 글자(0·O·1·l·I)를 뺀 10자. 약 58비트라 추측할 수 없다.
+// 비밀번호 규칙(SER-006)도 맞추게 영문과 숫자가 다 들어갈 때까지 다시 뽑는다 (한쪽만 나올 확률은 약 0.3%)
 const TEMP_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const TEMP_LENGTH = 10;
 export function newTempPassword(): string {
-  return Array.from(
-    { length: TEMP_LENGTH },
-    () => TEMP_ALPHABET[randomInt(TEMP_ALPHABET.length)],
-  ).join('');
+  for (;;) {
+    const candidate = Array.from(
+      { length: TEMP_LENGTH },
+      () => TEMP_ALPHABET[randomInt(TEMP_ALPHABET.length)],
+    ).join('');
+    if (meetsPasswordRule(candidate)) return candidate;
+  }
 }
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
