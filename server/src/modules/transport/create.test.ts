@@ -334,3 +334,43 @@ test('진행 중 이송 불러오기: 없으면 404, 있으면 팀원 누구나 
     assert.equal((await current(ctx, other)).status, 404);
   });
 });
+
+// SFR-110: 이벤트를 받은 앱이 이송 건을 다시 읽는다. 우리 팀 것만 보이고, 'current' 경로와 섞이지 않는다
+test('이송 건 보기: 우리 팀 건은 보이고, 다른 팀·없는 id·잘못된 id 는 404', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    const [park] = await team(ctx, 'park01');
+    const created = await post(ctx, kim, body());
+    const get = (token: string, id: string) =>
+      request(appFor(ctx)).get(`/api/v1/transports/${id}`).set('Authorization', `Bearer ${token}`);
+
+    const mine = await get(kim, created.body.id);
+    assert.equal(mine.status, 200);
+    assert.equal(mine.body.id, created.body.id);
+    assert.equal(mine.body.status, created.body.status);
+
+    assert.equal((await get(park, created.body.id)).status, 404);
+    assert.equal((await get(kim, randomUUID())).status, 404);
+    assert.equal((await get(kim, 'not-a-uuid')).status, 404);
+    // /current 는 그대로 진행 중 건을 준다
+    assert.equal((await current(ctx, kim)).body.id, created.body.id);
+  });
+});
+
+test('끝난 건(취소)도 이송 건 보기로 상태를 읽을 수 있다', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    const created = await post(ctx, kim, body());
+    const cancel = await request(appFor(ctx))
+      .post(`/api/v1/transports/${created.body.id}/cancel`)
+      .set('Authorization', `Bearer ${kim}`)
+      .send({ version: created.body.version });
+    assert.equal(cancel.status, 200);
+    assert.equal((await current(ctx, kim)).status, 404);
+    const res = await request(appFor(ctx))
+      .get(`/api/v1/transports/${created.body.id}`)
+      .set('Authorization', `Bearer ${kim}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'cancelled');
+  });
+});

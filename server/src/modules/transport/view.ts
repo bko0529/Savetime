@@ -27,6 +27,13 @@ interface TransportRow {
   phone_target_hospital_id: string | null;
   phone_target_name: string | null;
   phone_target_er_phone: string | null;
+  confirmed_hospital_id: string | null;
+  ch_name: string | null;
+  ch_er_phone: string | null;
+  ch_lat: number | null;
+  ch_lng: number | null;
+  ch_entrance_lat: number | null;
+  ch_entrance_lng: number | null;
   last_seq: number | null;
   team_id: string;
 }
@@ -75,11 +82,15 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
             t.fallback_reason, t.requested_grade, t.location_consent, t.address, t.offline_created,
             t.nav_device_id, t.departed_at, t.dest_changed_at, t.distance_m, t.created_at,
             t.phone_target_hospital_id, ph.name AS phone_target_name, ph.er_phone AS phone_target_er_phone,
+            t.confirmed_hospital_id, ch.name AS ch_name, ch.er_phone AS ch_er_phone,
+            ch.lat::float8 AS ch_lat, ch.lng::float8 AS ch_lng,
+            ch.entrance_lat::float8 AS ch_entrance_lat, ch.entrance_lng::float8 AS ch_entrance_lng,
             t.team_id,
             (SELECT max(seq) FROM assessment a WHERE a.transport_id = t.id) AS last_seq
        FROM transport t
        JOIN team_member tm ON tm.team_id = t.team_id AND tm.left_at IS NULL AND tm.paramedic_id = $2
        LEFT JOIN hospital ph ON ph.id = t.phone_target_hospital_id
+       LEFT JOIN hospital ch ON ch.id = t.confirmed_hospital_id
       WHERE t.id = $1`,
     [transportId, paramedicId],
   );
@@ -211,7 +222,22 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
           requestStatus: confirmed.status,
           closeReason: confirmed.closed_reason,
         }
-      : null,
+      : // 전화 확인으로 출발한 병원(SFR-034)은 병원 요청이 없다. 이송 건에 적힌 목적지 병원으로 채운다
+        t.confirmed_hospital_id && t.ch_name
+        ? {
+            id: Number(t.confirmed_hospital_id),
+            name: t.ch_name,
+            erPhone: t.ch_er_phone,
+            memo: null,
+            extraMemo: null,
+            entrance: {
+              lat: t.ch_entrance_lat ?? t.ch_lat,
+              lng: t.ch_entrance_lng ?? t.ch_lng,
+            },
+            requestStatus: null,
+            closeReason: null,
+          }
+        : null,
     canReRequest:
       t.status === 'moving' &&
       confirmed?.status === 'closed' &&

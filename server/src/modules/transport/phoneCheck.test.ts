@@ -143,6 +143,11 @@ test('수용 확정하면 이동 중이 되고 열려 있던 요청은 요청 �
     const res = await result(ctx, s, { hospitalId: e, result: 'accepted', version: 2 });
     assert.equal(res.status, 201);
     assert.equal(res.body.status, 'moving');
+    // 병원 요청이 없어도 목적지(확정 병원)가 보여야 이송 중 화면·병원 전화 버튼이 그려진다 (SFR-097)
+    assert.equal(res.body.confirmedHospital.id, e);
+    assert.equal(res.body.confirmedHospital.name, 'E병원');
+    assert.equal(res.body.confirmedHospital.requestStatus, null);
+    assert.equal(typeof res.body.confirmedHospital.entrance.lat, 'number');
 
     const t = await transportRow(ctx.pool, s.transportId);
     assert.deepEqual(
