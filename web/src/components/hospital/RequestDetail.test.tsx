@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { RequestDetail } from './RequestDetail';
@@ -62,6 +63,55 @@ describe('요청 상세 (SFR-118)', () => {
     });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
     expect(await screen.findByText('도착 예상 약 9분 (추정)')).toBeTruthy();
+  });
+
+  // 상세는 열람 기록 때문에 다시 받지 않는다. 확정 뒤 시간은 도착 예정 목록(이미 받아 둔 값)을 따른다
+  function renderWithIncoming(items: object[]) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['hw', 'incoming'], { items });
+    return render(
+      <QueryClientProvider client={client}>
+        <RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('확정 뒤에는 요청 때 추정값 대신 도착 예정 목록의 내비 남은 시간을 보여 준다', async () => {
+    // 도착 예정 목록은 여기서 다시 받지 않는다 (가짜 서버에 /hw/incoming 이 없어 부르면 실패)
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({ status: 'confirmed', etaSource: 'straight', etaMin: 3 }),
+      },
+    });
+    renderWithIncoming([{ id: 102, status: 'confirmed', etaMin: 4 }]);
+    expect(await screen.findByText('도착 예상 4분')).toBeTruthy();
+    expect(screen.queryByText(/추정/)).toBeNull();
+  });
+
+  it('도착한 뒤에는 예상 시간 대신 도착 시각', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({ status: 'arrived', etaSource: 'straight', etaMin: 3 }),
+      },
+    });
+    const arrivedAt = new Date(2026, 10, 12, 9, 34).toISOString();
+    renderWithIncoming([{ id: 102, status: 'arrived', etaMin: 1, arrivedAt }]);
+    expect(await screen.findByText('09:34 도착')).toBeTruthy();
+    expect(screen.queryByText(/도착 예상/)).toBeNull();
+  });
+
+  it('도착 예정 목록을 아직 못 받았어도 도착한 건에 예전 예상 시간을 보여 주지 않는다', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({ status: 'arrived', etaSource: 'straight', etaMin: 3 }),
+      },
+    });
+    renderWithIncoming([]);
+    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
+    expect(screen.queryByText(/도착 예상/)).toBeNull();
   });
 
   it('끝난 요청이면 환자 정보 없이 안내만', async () => {

@@ -33,6 +33,7 @@ describe('HospitalHome', () => {
     expect(screen.getByText(/응급실 접수대/)).toBeDefined();
     expect(fetchFn.mock.calls[0][0]).toBe('/api/v1/hw/session');
     expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('근무 시작');
   });
 
   it('키 기간이 끝났으면 안내 문구', async () => {

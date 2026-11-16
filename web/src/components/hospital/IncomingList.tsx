@@ -24,7 +24,8 @@ function arrivedText(arrivedAt: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 도착`;
 }
 
-function etaText(item: HwIncoming): string {
+// 도착 예정 목록과 요청 상세가 같은 문구를 쓴다 (확정 뒤에는 이 목록 값이 최신이다)
+export function etaText(item: HwIncoming): string {
   if (item.status === 'arrived' || item.status === 'unacceptable') {
     return item.arrivedAt ? arrivedText(item.arrivedAt) : '—';
   }
