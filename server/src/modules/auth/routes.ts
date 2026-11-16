@@ -8,7 +8,7 @@ import { parseBody } from '../../http/validate.js';
 import { endDuty } from '../team/endDuty.js';
 import { paramedicAuth, requireParamedic } from './guards.js';
 import { loadMe } from './me.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { hashPassword, newPasswordSchema, verifyPassword } from './password.js';
 import { forgetSessionState, type AuthContext, type ParamedicStatus } from './session.js';
 import { hashRefreshToken, newRefreshToken, signAccessToken } from './tokens.js';
 import type { Realtime } from '../realtime/server.js';
@@ -25,11 +25,10 @@ const loginSchema = z.object({
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1).max(100) });
 
-// 새 비밀번호 길이는 가입과 같다: 8자 이상 (signup.ts)
-export const PASSWORD_MIN = 8;
+// 새 비밀번호 규칙은 가입과 같다: 8자 이상, 영문+숫자 (SER-006)
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(200),
-  newPassword: z.string().min(PASSWORD_MIN).max(200),
+  newPassword: newPasswordSchema,
 });
 
 // FCM 토큰은 길이가 정해져 있지 않다. 넉넉히 받되 끝없이 받지는 않는다

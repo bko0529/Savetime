@@ -170,6 +170,14 @@ test('가입 신청 거절: 동의·사진·형식·크기·소속·아이디·�
       400,
       'VALIDATION_FAILED',
     ]);
+    // SER-006: 8자를 넘어도 영문만·숫자만이면 안 된다 (같은 IP 가입 횟수 제한에 걸리지 않게 먼저 비운다)
+    await ctx.redis.del('signup:ip:::ffff:127.0.0.1', 'signup:ip:127.0.0.1', 'signup:ip:::1');
+    for (const password of ['onlyletters', '1234567890']) {
+      assert.deepEqual(await code(signup(app, { ...FIELDS, password })), [
+        400,
+        'VALIDATION_FAILED',
+      ]);
+    }
     assert.deepEqual(await code(signup(appWith(ctx), FIELDS)), [503, 'PHOTO_STORAGE_UNAVAILABLE']);
 
     assert.deepEqual(storage.keys(), []);
