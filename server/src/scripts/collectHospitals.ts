@@ -15,7 +15,13 @@ if (!config.PUBLIC_DATA_API_KEY) throw new Error('PUBLIC_DATA_API_KEY가 필요�
 const logger = pino();
 const pool = new pg.Pool({ connectionString: config.DATABASE_URL });
 const redis = new Redis(config.REDIS_URL);
-const quota = createApiQuota({ redis, pool, logger, limit: config.PUBLIC_DATA_DAILY_LIMIT });
+const quota = createApiQuota({
+  redis,
+  pool,
+  logger,
+  limit: config.PUBLIC_DATA_DAILY_LIMIT,
+  notifyAdmin: true,
+});
 const deps = {
   pool,
   quota,

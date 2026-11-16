@@ -68,6 +68,7 @@ const idParams = z.object({ id: z.coerce.number().int().positive() });
 interface NotificationRow {
   id: string;
   kind: AdminNotificationKind;
+  ref_id: string | null;
   occurrences: number;
   last_at: Date;
   read: boolean;
@@ -83,7 +84,7 @@ const FIXED_TEXT: Partial<Record<AdminNotificationKind, string>> = {
   collect_fail: '병상 수집 3회 연속 실패',
   signup: '새 가입 신청',
   odd_pc: '이상 PC 등록 감지',
-  api_quota: '공공 데이터 호출 한도 임박',
+  api_quota: '공공 데이터 호출 80%',
   integrity: '정합성 점검 이상',
 };
 
@@ -100,6 +101,14 @@ function notificationText(r: NotificationRow): string {
     const why = [r.odd_night && '새벽', r.odd_burst && '1시간 안 2대 이상'].filter(Boolean);
     return `${r.hospital_name} 이상 PC 등록${why.length ? `(${why.join('·')})` : ''}`;
   }
+  // 호출 한도 (SFR-090): ref 100 = 한도 초과로 수집을 멈춤, 그 밖(80) = 80% 도달
+  if (r.kind === 'api_quota' && Number(r.ref_id) === 100) {
+    return '공공 데이터 호출 한도 초과 · 저장된 데이터로 서비스 중';
+  }
+  // 정합성 점검 (QUR-014): ref 는 발견 건수. 무엇이 어긋났는지는 서버 로그에 ID 로 남는다
+  if (r.kind === 'integrity' && r.ref_id !== null) {
+    return `정합성 점검 이상 ${r.ref_id}건 · 서버 로그 확인`;
+  }
   return FIXED_TEXT[r.kind] ?? r.kind;
 }
 
@@ -111,7 +120,7 @@ export function adminNotificationRouter(pool: pg.Pool, adminOnly: RequestHandler
     const q = parseBody(listSchema, req.query);
     const [cursorAt, cursorId] = q.cursor ? q.cursor.split('|') : [null, null];
     const { rows } = await pool.query<NotificationRow>(
-      `SELECT n.id, n.kind, n.occurrences, n.last_at, n.read_at IS NOT NULL AS read,
+      `SELECT n.id, n.kind, n.ref_id, n.occurrences, n.last_at, n.read_at IS NOT NULL AS read,
               COALESCE(h.name, kh.name) AS hospital_name,
               p.name AS pc_name, p.released AS pc_released,
               ceil(extract(epoch FROM lk.expires_at - n.last_at) / 86400)::int AS key_days_left,
