@@ -14,6 +14,7 @@ import { COLLECT_HOSPITALS_EVERY_MS, runHospitalCollect } from './modules/collec
 import { createFetchBeds, createFetchItems } from './modules/collector/publicApi.js';
 import { createApiQuota } from './modules/collector/quota.js';
 import { COLLECT_EVERY_MS, regionsFrom, runCollectRound } from './modules/collector/round.js';
+import { INTEGRITY_EVERY_MS, runIntegrityCheck } from './modules/admin/integrity.js';
 import { notifyExpiringKeys } from './modules/admin/notifications.js';
 import { HOUSEKEEPING_EVERY_MS, releaseUnusedPcs } from './modules/admin/pcs.js';
 import { RETENTION_EVERY_MS, runRetention } from './modules/privacy/retention.js';
@@ -196,6 +197,7 @@ if (config.PUBLIC_DATA_API_KEY) {
     pool,
     logger,
     limit: config.PUBLIC_DATA_DAILY_LIMIT,
+    notifyAdmin: true,
   });
   const fetchItems = createFetchItems(config.PUBLIC_DATA_API_KEY, quota);
   const fetchBeds = createFetchBeds(fetchItems, (region, count) => {
@@ -276,6 +278,15 @@ scheduledJobs.push({
   run: async () => {
     const events = await runRetention({ pool, redis, photos, logger });
     realtime?.publish(events);
+  },
+});
+
+// 하루 한 번 정합성 점검 (QUR-014): 어긋난 데이터를 찾으면 로그(ID)와 관리자 알림을 남긴다. 고치지는 않는다
+scheduledJobs.push({
+  name: 'integrity-check',
+  everyMs: INTEGRITY_EVERY_MS,
+  run: async () => {
+    await runIntegrityCheck(pool, logger);
   },
 });
 

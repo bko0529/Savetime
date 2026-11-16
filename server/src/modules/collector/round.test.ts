@@ -243,3 +243,54 @@ test('저장에 실패하면 병상은 그대로 두고 SAVE_FAILED로 기록한
     assert.equal(rows[0].error_code, 'SAVE_FAILED');
   });
 });
+
+// QUR-008: 같은 시·도가 3번 연속 실패하면 관리자 알림 1건. 4번째 실패는 새로 알리지 않는다
+test('충남이 3번 연속 실패하면 관리자 알림이 1건 생기고, 계속 실패해도 더 생기지 않는다', async () => {
+  await withPool(async (pool) => {
+    const ok: FetchBeds = async (region) => bedsFor(region, 3, '2026-11-02T14:00:00+09:00');
+    const broken: FetchBeds = async () => {
+      throw new CollectError('HTTP_500');
+    };
+    const run = (fetchBeds: FetchBeds) =>
+      runCollectRound({ pool, fetchBeds, regions: ['충청남도'], logger, quota });
+    const alerts = async () =>
+      (
+        await pool.query<{ occurrences: number }>(
+          "SELECT occurrences FROM admin_notification WHERE kind = 'collect_fail'",
+        )
+      ).rows;
+
+    await run(ok);
+    await run(broken);
+    await run(broken);
+    assert.equal((await alerts()).length, 0, '2번 실패까지는 알리지 않는다');
+
+    await run(broken);
+    assert.deepEqual(await alerts(), [{ occurrences: 1 }]);
+
+    await run(broken);
+    assert.deepEqual(await alerts(), [{ occurrences: 1 }], '이어지는 실패는 다시 세지 않는다');
+
+    // 회복했다가 다시 3번 실패하면 같은 알림의 횟수가 2가 된다 (30분 안)
+    await run(ok);
+    await run(broken);
+    await run(broken);
+    await run(broken);
+    assert.deepEqual(await alerts(), [{ occurrences: 2 }]);
+  });
+});
+
+test('호출 한도로 멈춘 실패는 연속 실패로 세지 않는다', async () => {
+  await withPool(async (pool) => {
+    const limited: FetchBeds = async () => {
+      throw new CollectError('QUOTA_EXCEEDED');
+    };
+    for (let i = 0; i < 4; i += 1) {
+      await runCollectRound({ pool, fetchBeds: limited, regions: ['충청남도'], logger, quota });
+    }
+    const { rows } = await pool.query(
+      "SELECT 1 FROM admin_notification WHERE kind = 'collect_fail'",
+    );
+    assert.equal(rows.length, 0);
+  });
+});

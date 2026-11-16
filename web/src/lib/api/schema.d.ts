@@ -1781,7 +1781,7 @@ export interface paths {
          * @description **요구사항**: SFR-100, SFR-148
          *     **화면**: A-02 모니터링
          *
-         *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota · integrity(일 단위 정합성 점검, QUR-014)
+         *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota(80% 도달·한도 초과를 따로, SFR-090) · integrity(일 단위 정합성 점검, 문구에 발견 건수, QUR-014)
          */
         get: operations["get_admin_notifications"];
         put?: never;
