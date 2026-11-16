@@ -27,7 +27,8 @@ export function appCors(allowed: string[]): RequestHandler {
     // 확인 요청(preflight): Authorization 헤더나 JSON 을 보내기 전에 브라우저가 먼저 OPTIONS 로 묻는다
     if (req.method === 'OPTIONS') {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      // Idempotency-Key: 이송 확정을 두 번 보내도 한 번만 되게 하는 헤더 (SFR-111). 빠지면 브라우저 앱의 확정이 막힌다
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key');
       res.setHeader('Access-Control-Max-Age', String(PREFLIGHT_MAX_AGE));
       res.status(204).end();
       return;

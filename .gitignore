@@ -9,3 +9,6 @@ server.env
 .DS_Store
 .idea/
 .vscode/
+
+# 시연 계정·라이선스 키 (npm run demo -- setup 결과, 내 컴퓨터에만)
+.demo-accounts.txt
