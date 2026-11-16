@@ -28,15 +28,22 @@ DATABASE_URL=postgres://savetime:savetime_local@localhost:5432/savetime_demo npm
 - `DATABASE_URL=…` 을 앞에 붙이면 `server/.env` 의 값보다 우선한다. 나머지 설정(키 등)은 `server/.env` 그대로 쓴다
 
 ## 2. 켜기 (찍을 때마다)
-터미널 2개:
+터미널 3개 (서버 · 병원 웹 · 구급대원 앱). 구급대원 앱은 진아 저장소(`savetime-life-canvas`)를 받아 둔 폴더에서 켠다:
 ```bash
-DATABASE_URL=postgres://savetime:savetime_local@localhost:5432/savetime_demo npm run dev -w server
+DATABASE_URL=postgres://savetime:savetime_local@localhost:5432/savetime_demo APP_ORIGINS=http://localhost:8080 npm run dev -w server
 ```
 ```bash
-npm run dev -w web
+NEXT_PUBLIC_SOCKET_ORIGIN=http://localhost:4000 npm run dev -w web
+```
+```bash
+VITE_API_BASE_URL=http://localhost:4000 VITE_FIXED_LAT=36.815 VITE_FIXED_LNG=127.1139 npx vite dev --port 8080
 ```
 - 병원 웹: `http://localhost:3000/hospital` → (처음 한 번) 라이선스 키로 **PC 등록** → **근무 시작** → **알림 켜기**
+- `NEXT_PUBLIC_SOCKET_ORIGIN` 이 없으면 병원 웹 실시간 연결이 안 붙어 **알림 켜기**가 눌리지 않는다
 - 서버를 껐다 켜면 병원 웹에서 **알림 켜기**를 다시 눌러야 요청이 온다
+- 구급대원 앱: `http://localhost:8080` (브라우저 개발자 도구에서 휴대폰 크기로 보면 영상에 좋다). `VITE_FIXED_*` 로 어디서 찍어도 천안 시연 병원 근처로 보이고, 이동 중에는 병원 입구까지 달리는 것을 흉내 낸다
+- 병원 PC 를 여러 곳 켜 두려면 병원마다 **다른 브라우저(또는 시크릿 창)** 에서 등록한다. 같은 브라우저는 PC 1대로 본다. 알림 켠 병원이 1곳뿐이면 그 병원이 거절한 뒤 '다시 요청'·'목적지 변경'은 "요청할 병원이 없어요"가 된다
+- 김구조·이구급 두 명을 동시에 보려면 브라우저 2개(또는 시크릿 창)나 휴대폰 2대. 같은 브라우저 탭 두 개는 로그인을 같이 쓴다
 
 ## 3. 찍기 직전: 초기화
 ```bash
@@ -45,17 +52,16 @@ DATABASE_URL=postgres://savetime:savetime_local@localhost:5432/savetime_demo npm
 - 이송 건과 그 기록·알림을 모두 지우고, 병상 값을 '방금 수집'으로 되돌린다 (10분이 지나면 앱에 '갱신 지연'이 뜨므로 찍기 직전에)
 - 계정·병원 PC 등록·대원 팀은 남는다. 마지막 줄에 **요청을 받을 수 있는 병원 PC 수**가 나온다. 0이면 병원 웹에서 알림 켜기
 
-## 4. 구급대원 앱을 노트북 서버에 붙이기
-Lovable 앱은 인터넷(https) 주소라서 노트북의 `localhost` 를 바로 부를 수 없다. 둘 중 하나:
+## 4. 휴대폰으로 찍고 싶을 때
+2번처럼 노트북에서 앱을 띄우면 추가 도구가 필요 없다. 휴대폰 실물로 찍으려면:
 
 | 방법 | 하는 일 | 메모 |
 |---|---|---|
-| **터널 (추천)** | 노트북 서버(4000)에 임시 https 주소를 붙인다 (예: Cloudflare Tunnel 무료 임시 주소) | 휴대폰 앱에서도 됨. **기술정의서에 없는 도구라 쓰기 전에 팀 확인** |
-| 같은 와이파이 | 휴대폰을 노트북과 같은 와이파이에 두고 `http://노트북IP:4000` | https 가 아니라 앱에서 막힐 수 있음 |
+| 터널 | 노트북 서버(4000)·앱(8080)에 임시 https 주소를 붙인다 (예: Cloudflare Tunnel) | **기술정의서에 없는 도구라 쓰기 전에 팀 확인** |
+| 같은 와이파이 | 휴대폰을 노트북과 같은 와이파이에 두고 `http://노트북IP:8080` | https 가 아니라 위치·알림 권한이 막힐 수 있음 |
 
-- 어느 쪽이든 앱의 **서버 주소 설정**을 그 주소로 바꾼다 (진아)
-- `server/.env` 의 `APP_ORIGINS` 에 **Lovable 앱 주소**를 넣어야 앱이 대원 API 를 부를 수 있다 (CORS). 바꾼 뒤 서버를 다시 켠다
-- 위치는 시연 장소와 상관없이 천안으로 보이게 앱의 위치를 `36.815, 127.1139` 근처로 둔다 (시연 병원이 이 근처 10km 안에 있다)
+- 어느 쪽이든 서버를 켤 때 `APP_ORIGINS` 에 그 앱 주소를, 앱을 켤 때 `VITE_API_BASE_URL` 에 그 서버 주소를 넣는다
+- Lovable 미리보기 주소(https)에서 노트북 `localhost` 를 부르면 브라우저가 막는다(로컬 네트워크 접근 차단)
 
 ## 5. 시연 대본 (약 3분)
 | # | 화면 | 하는 일 | 보여 줄 점 (요구사항) |
