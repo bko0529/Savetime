@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { cn } from '@/lib/utils';
 
 type RegisterOp = ApiPaths['/hw/pc/register']['post'];
 type RegisterBody = RegisterOp['requestBody']['content']['application/json'];
@@ -15,6 +16,9 @@ type RegisterResult = RegisterOp['responses'][201]['content']['application/json'
 export type RegisteredPc = { id: number; name: string; lastUsedAt: string | null };
 
 export const PC_NAME_MAX = 40;
+
+const inputClass =
+  'h-[56px] w-full rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 function formatLastUsed(iso: string | null): string {
   if (!iso) return '사용 기록 없음';
@@ -74,11 +78,11 @@ export function RegisterForm() {
     !(register.error instanceof ApiError && register.error.code === 'PC_LIMIT_REACHED');
 
   return (
-    <form onSubmit={submit} className="flex w-full max-w-xl flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex w-full flex-col gap-6" noValidate>
       <label className="flex flex-col gap-2">
         <span className="text-xl font-bold">라이선스 키</span>
         <input
-          className="h-14 rounded-lg border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40"
+          className={cn(inputClass, 'font-mono tracking-[0.06em]')}
           value={licenseKey}
           onChange={(e) => setLicenseKey(e.target.value)}
           autoComplete="off"
@@ -91,7 +95,7 @@ export function RegisterForm() {
       <label className="flex flex-col gap-2">
         <span className="text-xl font-bold">PC 이름</span>
         <input
-          className="h-14 rounded-lg border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40"
+          className={inputClass}
           value={pcName}
           onChange={(e) => setPcName(e.target.value)}
           maxLength={PC_NAME_MAX}
@@ -100,12 +104,15 @@ export function RegisterForm() {
       </label>
 
       {choosingReplacement && (
-        <fieldset className="flex flex-col gap-3 rounded-lg border-2 border-destructive p-4">
+        <fieldset className="flex flex-col gap-2 rounded-[12px] border-2 border-destructive bg-danger-soft p-4">
           <legend className="px-2 text-xl font-bold text-destructive">
             이 병원은 PC 3대가 모두 등록돼 있어요. 바꿀 PC를 골라 주세요.
           </legend>
           {fullPcs.map((pc) => (
-            <label key={pc.id} className="flex items-center gap-3 text-lg">
+            <label
+              key={pc.id}
+              className="flex min-h-[52px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border border-line bg-card px-4 py-2 text-lg"
+            >
               <input
                 type="radio"
                 name="replacePc"
@@ -114,7 +121,9 @@ export function RegisterForm() {
                 onChange={() => setReplacePcId(pc.id)}
               />
               <span className="font-bold">{pc.name}</span>
-              <span className="text-muted-foreground">{formatLastUsed(pc.lastUsedAt)}</span>
+              <span className="ml-auto text-[15px] text-muted-foreground">
+                {formatLastUsed(pc.lastUsedAt)}
+              </span>
             </label>
           ))}
         </fieldset>
@@ -126,7 +135,7 @@ export function RegisterForm() {
         </p>
       )}
 
-      <Button type="submit" size="lg" disabled={!canSubmit}>
+      <Button type="submit" size="lg" className="rounded-[12px]" disabled={!canSubmit}>
         {register.isPending ? '등록 중…' : choosingReplacement ? '이 PC로 바꿔 등록' : '이 PC 등록'}
       </Button>
     </form>

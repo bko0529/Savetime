@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { ApiPaths } from '@/lib/api/client';
+import { dialog } from './dialogStyles';
 
 export type RejectBody =
   ApiPaths['/hw/requests/{requestId}/reject']['post']['requestBody']['content']['application/json'];
@@ -92,14 +93,21 @@ export function RejectReasonDialog({
         if (!next) onCancel();
       }}
     >
-      <DialogContent showCloseButton={false} className="gap-6 p-6 sm:max-w-lg">
-        <DialogTitle className="text-2xl font-bold">{text.title}</DialogTitle>
-        <DialogDescription className="text-lg">{text.description}</DialogDescription>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName={dialog.overlay}
+        className={dialog.content}
+      >
+        <DialogTitle className={dialog.title}>{text.title}</DialogTitle>
+        <DialogDescription className={dialog.description}>{text.description}</DialogDescription>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="grid gap-2 sm:grid-cols-2">
             <legend className="sr-only">{text.title}</legend>
             {REJECT_REASONS.map((r) => (
-              <label key={r.value} className="flex min-h-11 items-center gap-3 text-xl">
+              <label
+                key={r.value}
+                className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-[12px] border-2 border-line px-4 text-[18px] font-semibold has-checked:border-destructive has-checked:bg-danger-soft has-checked:font-extrabold has-focus-visible:ring-4 has-focus-visible:ring-ring/40"
+              >
                 <input
                   type="radio"
                   name="reject-reason"
@@ -109,7 +117,7 @@ export function RejectReasonDialog({
                     setReason(r.value);
                     setProblem(null);
                   }}
-                  className="size-5"
+                  className="size-5 shrink-0 accent-destructive"
                 />
                 {r.label}
               </label>
@@ -127,7 +135,7 @@ export function RejectReasonDialog({
                 }}
                 maxLength={ETC_TEXT_MAX}
                 placeholder="환자 이름·연락처는 쓰지 마세요"
-                className="h-12 rounded-lg border-2 border-input px-3 text-xl"
+                className={dialog.input}
                 autoFocus
               />
             </label>
@@ -137,11 +145,24 @@ export function RejectReasonDialog({
               {problem ?? error}
             </p>
           )}
-          <DialogFooter className="-mx-6 -mb-6 p-6">
-            <Button type="button" variant="outline" size="lg" onClick={onCancel}>
+          <DialogFooter className={dialog.footer}>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className={dialog.button}
+              onClick={onCancel}
+            >
               취소
             </Button>
-            <Button type="submit" variant="destructive" size="lg" disabled={pending}>
+            <Button
+              type="submit"
+              variant="destructive"
+              size="lg"
+              // 사유를 고르기 전에는 흐리게만. 눌러야 '사유를 골라 주세요'가 나오므로 막지는 않는다
+              className={reason ? dialog.button : `${dialog.button} opacity-50`}
+              disabled={pending}
+            >
               {pending ? '보내는 중…' : text.submit}
             </Button>
           </DialogFooter>

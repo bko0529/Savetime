@@ -56,7 +56,7 @@ export function ConfirmArrivalButton({ requestId, version, enabled }: Props) {
     <div className="flex flex-col gap-2">
       <Button
         size="lg"
-        className="h-12 text-lg"
+        className="h-[52px] rounded-[10px] px-5 text-lg"
         disabled={!enabled || confirm.isPending}
         title={enabled ? undefined : '구급차가 응급실 입구 가까이 오면 누를 수 있어요'}
         onClick={() => {
