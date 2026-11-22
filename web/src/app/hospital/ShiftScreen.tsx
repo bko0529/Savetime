@@ -225,7 +225,7 @@ export function ShiftScreen({
                 />
               </section>
               {selectedId !== null && (
-                <div className="min-w-[min(100%,400px)] flex-1 lg:sticky lg:top-4">
+                <div className="min-w-[min(100%,400px)] flex-1">
                   <RequestDetail
                     key={selectedId}
                     requestId={selectedId}

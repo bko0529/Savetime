@@ -167,7 +167,7 @@ function DetailBody({
 
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-[10px]">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-[10px]">
         <span className={tileClass}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
         {waiting && detail.respondUntil && (
           <span
@@ -184,7 +184,7 @@ function DetailBody({
       </p>
 
       {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
+      <dl className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
         {rows.map(({ field, text }) => (
           <div
             key={field}

@@ -117,7 +117,8 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
     answer.error instanceof ApiError && answer.error.code === 'OVER_APPROVAL_CONFIRM_REQUIRED';
 
   return (
-    <div className="flex flex-col gap-3">
+    // 'contents': 아래 승인·거절 줄이 상세 카드 전체를 기준으로 화면 아래에 붙게 한다
+    <div className="contents">
       {answer.isError && (
         <p role="alert" className="text-xl font-bold text-destructive">
           {answerErrorText(answer.error)}
@@ -146,7 +147,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         </label>
       )}
       {canAnswer && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
             className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
