@@ -13,6 +13,7 @@ import {
 import { apiFetch } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { dialog } from './dialogStyles';
 
 // 'HH:MM' (PC 시각대로 보여 준다. 판정이 아니라 표시만)
 function clock(iso: string): string {
@@ -72,10 +73,10 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
     return (
       <div
         role="status"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-destructive bg-destructive/10 px-4 py-3"
+        className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4"
       >
         <div className="flex flex-col gap-1">
-          <p className="text-2xl font-extrabold text-destructive">
+          <p className="text-[24px] font-extrabold text-danger-strong">
             ⏸ 요청 중지 중{pausedAt ? ` (${clock(pausedAt)}부터)` : ''}
           </p>
           <p className="text-lg">새 이송 요청을 받지 않아요.</p>
@@ -92,7 +93,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
         </div>
         <Button
           size="lg"
-          className="h-14 text-xl"
+          className="h-[56px] rounded-[12px] text-xl"
           disabled={toggle.isPending}
           onClick={() => toggle.mutate(false)}
         >
@@ -107,7 +108,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
       <Button
         size="lg"
         variant="outline"
-        className="h-12 w-fit border-2 text-lg"
+        className="ml-auto h-[48px] w-fit rounded-[10px] border-2 bg-card px-5 text-lg"
         onClick={() => {
           toggle.reset();
           setConfirming(true);
@@ -121,9 +122,13 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
           if (!next) setConfirming(false);
         }}
       >
-        <DialogContent showCloseButton={false} className="gap-6 p-6 sm:max-w-lg">
-          <DialogTitle className="text-2xl font-bold">잠시 요청을 멈출까요?</DialogTitle>
-          <DialogDescription className="text-lg">
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName={dialog.overlay}
+          className={dialog.content}
+        >
+          <DialogTitle className={dialog.title}>잠시 요청을 멈출까요?</DialogTitle>
+          <DialogDescription className={dialog.description}>
             우리 병원 모든 PC에 적용돼요. &apos;요청 다시 받기&apos;를 누를 때까지 새 이송 요청을
             받지 않아요.
           </DialogDescription>
@@ -140,13 +145,19 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
               {errorText(toggle.error)}
             </p>
           )}
-          <DialogFooter className="-mx-6 -mb-6 p-6">
-            <Button variant="outline" size="lg" onClick={() => setConfirming(false)}>
+          <DialogFooter className={dialog.footer}>
+            <Button
+              variant="outline"
+              size="lg"
+              className={dialog.button}
+              onClick={() => setConfirming(false)}
+            >
               취소
             </Button>
             <Button
               variant="destructive"
               size="lg"
+              className={dialog.button}
               disabled={toggle.isPending}
               onClick={() => toggle.mutate(true)}
             >
