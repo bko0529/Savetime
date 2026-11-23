@@ -1399,6 +1399,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 관리자 토큰 재발급
+         * @description 15분짜리 관리자 accessToken 이 끝나면 refreshToken 으로 새 토큰을 받는다. 쓸 때마다 새 refreshToken 으로 바뀌고 예전 값은 못 쓴다. 만료 시각은 처음 로그인 기준(최대 14시간) 그대로.
+         *
+         *     **요구사항**: SFR-082, SER-016
+         *     **화면**: (관리자 모든 화면)
+         *     **오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED
+         */
+        post: operations["post_admin_auth_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/signups": {
         parameters: {
             query?: never;
@@ -4917,6 +4941,41 @@ export interface operations {
                     setupToken: string;
                     /** @description OTP 앱에 뜬 첫 코드 */
                     otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_auth_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    refreshToken: string;
                 };
             };
         };

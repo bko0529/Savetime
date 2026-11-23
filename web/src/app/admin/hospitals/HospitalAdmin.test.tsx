@@ -151,9 +151,10 @@ describe('병원 관리 (SFR-123)', () => {
     expect(screen.queryByRole('button', { name: '정지' })).toBeNull();
   });
 
-  it('관리자 토큰이 끝나면 로그아웃시켜 로그인 화면으로 보낸다', async () => {
+  it('관리자 토큰이 끝나고 갱신도 안 되면 로그아웃시켜 로그인 화면으로 보낸다', async () => {
     fakeServer({
       'GET /admin/hospitals': { status: 401, body: apiError('TOKEN_EXPIRED') },
+      'POST /admin/auth/refresh': { status: 401, body: apiError('TOKEN_EXPIRED') },
     });
     renderAdmin(<HospitalAdmin />);
     await waitFor(() => expect(screen.getByTestId('signed-in').textContent).toBe('no'));
