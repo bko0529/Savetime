@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as DutyRouteImport } from './routes/duty'
+import { Route as HospitalRouteImport } from './routes/hospital'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LogRouteImport } from './routes/log'
 import { Route as LoginRouteImport } from './routes/login'
@@ -23,16 +25,36 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TransportRouteImport } from './routes/transport'
 import { Route as UpdateRouteImport } from './routes/update'
 import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as AdminAccountsRouteImport } from './routes/admin_.accounts'
+import { Route as AdminHospitalsRouteImport } from './routes/admin_.hospitals'
+import { Route as AdminLoginRouteImport } from './routes/admin_.login'
+import { Route as AdminMonitoringRouteImport } from './routes/admin_.monitoring'
 import { Route as CallHospitalIdRouteImport } from './routes/call.$hospitalId'
+import { Route as HospitalDesignPreviewRouteImport } from './routes/hospital_.design-preview'
+import { Route as HospitalRegisterRouteImport } from './routes/hospital_.register'
+import { Route as WebHospitalRouteImport } from './routes/web.hospital'
+import { Route as WebAdminAccountsRouteImport } from './routes/web.admin.accounts'
+import { Route as WebAdminHospitalsRouteImport } from './routes/web.admin.hospitals'
+import { Route as WebAdminMonitoringRouteImport } from './routes/web.admin.monitoring'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DutyRoute = DutyRouteImport.update({
   id: '/duty',
   path: '/duty',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HospitalRoute = HospitalRouteImport.update({
+  id: '/hospital',
+  path: '/hospital',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -95,15 +117,67 @@ const WelcomeRoute = WelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/admin_/accounts',
+  path: '/admin/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminHospitalsRoute = AdminHospitalsRouteImport.update({
+  id: '/admin_/hospitals',
+  path: '/admin/hospitals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin_/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMonitoringRoute = AdminMonitoringRouteImport.update({
+  id: '/admin_/monitoring',
+  path: '/admin/monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CallHospitalIdRoute = CallHospitalIdRouteImport.update({
   id: '/call/$hospitalId',
   path: '/call/$hospitalId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HospitalDesignPreviewRoute = HospitalDesignPreviewRouteImport.update({
+  id: '/hospital_/design-preview',
+  path: '/hospital/design-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HospitalRegisterRoute = HospitalRegisterRouteImport.update({
+  id: '/hospital_/register',
+  path: '/hospital/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebHospitalRoute = WebHospitalRouteImport.update({
+  id: '/web/hospital',
+  path: '/web/hospital',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebAdminAccountsRoute = WebAdminAccountsRouteImport.update({
+  id: '/web/admin/accounts',
+  path: '/web/admin/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebAdminHospitalsRoute = WebAdminHospitalsRouteImport.update({
+  id: '/web/admin/hospitals',
+  path: '/web/admin/hospitals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebAdminMonitoringRoute = WebAdminMonitoringRouteImport.update({
+  id: '/web/admin/monitoring',
+  path: '/web/admin/monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/duty': typeof DutyRoute
+  '/hospital': typeof HospitalRoute
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
@@ -116,11 +190,23 @@ export interface FileRoutesByFullPath {
   '/transport': typeof TransportRoute
   '/update': typeof UpdateRoute
   '/welcome': typeof WelcomeRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/hospitals': typeof AdminHospitalsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/monitoring': typeof AdminMonitoringRoute
   '/call/$hospitalId': typeof CallHospitalIdRoute
+  '/hospital/design-preview': typeof HospitalDesignPreviewRoute
+  '/hospital/register': typeof HospitalRegisterRoute
+  '/web/hospital': typeof WebHospitalRoute
+  '/web/admin/accounts': typeof WebAdminAccountsRoute
+  '/web/admin/hospitals': typeof WebAdminHospitalsRoute
+  '/web/admin/monitoring': typeof WebAdminMonitoringRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/duty': typeof DutyRoute
+  '/hospital': typeof HospitalRoute
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
@@ -133,12 +219,24 @@ export interface FileRoutesByTo {
   '/transport': typeof TransportRoute
   '/update': typeof UpdateRoute
   '/welcome': typeof WelcomeRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/hospitals': typeof AdminHospitalsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/monitoring': typeof AdminMonitoringRoute
   '/call/$hospitalId': typeof CallHospitalIdRoute
+  '/hospital/design-preview': typeof HospitalDesignPreviewRoute
+  '/hospital/register': typeof HospitalRegisterRoute
+  '/web/hospital': typeof WebHospitalRoute
+  '/web/admin/accounts': typeof WebAdminAccountsRoute
+  '/web/admin/hospitals': typeof WebAdminHospitalsRoute
+  '/web/admin/monitoring': typeof WebAdminMonitoringRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/duty': typeof DutyRoute
+  '/hospital': typeof HospitalRoute
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
@@ -151,13 +249,25 @@ export interface FileRoutesById {
   '/transport': typeof TransportRoute
   '/update': typeof UpdateRoute
   '/welcome': typeof WelcomeRoute
+  '/admin_/accounts': typeof AdminAccountsRoute
+  '/admin_/hospitals': typeof AdminHospitalsRoute
+  '/admin_/login': typeof AdminLoginRoute
+  '/admin_/monitoring': typeof AdminMonitoringRoute
   '/call/$hospitalId': typeof CallHospitalIdRoute
+  '/hospital_/design-preview': typeof HospitalDesignPreviewRoute
+  '/hospital_/register': typeof HospitalRegisterRoute
+  '/web/hospital': typeof WebHospitalRoute
+  '/web/admin/accounts': typeof WebAdminAccountsRoute
+  '/web/admin/hospitals': typeof WebAdminHospitalsRoute
+  '/web/admin/monitoring': typeof WebAdminMonitoringRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/duty'
+    | '/hospital'
     | '/invite'
     | '/log'
     | '/login'
@@ -170,11 +280,23 @@ export interface FileRouteTypes {
     | '/transport'
     | '/update'
     | '/welcome'
+    | '/admin/accounts'
+    | '/admin/hospitals'
+    | '/admin/login'
+    | '/admin/monitoring'
     | '/call/$hospitalId'
+    | '/hospital/design-preview'
+    | '/hospital/register'
+    | '/web/hospital'
+    | '/web/admin/accounts'
+    | '/web/admin/hospitals'
+    | '/web/admin/monitoring'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/duty'
+    | '/hospital'
     | '/invite'
     | '/log'
     | '/login'
@@ -187,11 +309,23 @@ export interface FileRouteTypes {
     | '/transport'
     | '/update'
     | '/welcome'
+    | '/admin/accounts'
+    | '/admin/hospitals'
+    | '/admin/login'
+    | '/admin/monitoring'
     | '/call/$hospitalId'
+    | '/hospital/design-preview'
+    | '/hospital/register'
+    | '/web/hospital'
+    | '/web/admin/accounts'
+    | '/web/admin/hospitals'
+    | '/web/admin/monitoring'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/duty'
+    | '/hospital'
     | '/invite'
     | '/log'
     | '/login'
@@ -204,12 +338,24 @@ export interface FileRouteTypes {
     | '/transport'
     | '/update'
     | '/welcome'
+    | '/admin_/accounts'
+    | '/admin_/hospitals'
+    | '/admin_/login'
+    | '/admin_/monitoring'
     | '/call/$hospitalId'
+    | '/hospital_/design-preview'
+    | '/hospital_/register'
+    | '/web/hospital'
+    | '/web/admin/accounts'
+    | '/web/admin/hospitals'
+    | '/web/admin/monitoring'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   DutyRoute: typeof DutyRoute
+  HospitalRoute: typeof HospitalRoute
   InviteRoute: typeof InviteRoute
   LogRoute: typeof LogRoute
   LoginRoute: typeof LoginRoute
@@ -222,7 +368,17 @@ export interface RootRouteChildren {
   TransportRoute: typeof TransportRoute
   UpdateRoute: typeof UpdateRoute
   WelcomeRoute: typeof WelcomeRoute
+  AdminAccountsRoute: typeof AdminAccountsRoute
+  AdminHospitalsRoute: typeof AdminHospitalsRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  AdminMonitoringRoute: typeof AdminMonitoringRoute
   CallHospitalIdRoute: typeof CallHospitalIdRoute
+  HospitalDesignPreviewRoute: typeof HospitalDesignPreviewRoute
+  HospitalRegisterRoute: typeof HospitalRegisterRoute
+  WebHospitalRoute: typeof WebHospitalRoute
+  WebAdminAccountsRoute: typeof WebAdminAccountsRoute
+  WebAdminHospitalsRoute: typeof WebAdminHospitalsRoute
+  WebAdminMonitoringRoute: typeof WebAdminMonitoringRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -234,11 +390,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/duty': {
       id: '/duty'
       path: '/duty'
       fullPath: '/duty'
       preLoaderRoute: typeof DutyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hospital': {
+      id: '/hospital'
+      path: '/hospital'
+      fullPath: '/hospital'
+      preLoaderRoute: typeof HospitalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -325,6 +495,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/accounts': {
+      id: '/admin_/accounts'
+      path: '/admin/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/hospitals': {
+      id: '/admin_/hospitals'
+      path: '/admin/hospitals'
+      fullPath: '/admin/hospitals'
+      preLoaderRoute: typeof AdminHospitalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/login': {
+      id: '/admin_/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/monitoring': {
+      id: '/admin_/monitoring'
+      path: '/admin/monitoring'
+      fullPath: '/admin/monitoring'
+      preLoaderRoute: typeof AdminMonitoringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/call/$hospitalId': {
       id: '/call/$hospitalId'
       path: '/call/$hospitalId'
@@ -332,12 +530,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallHospitalIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hospital_/design-preview': {
+      id: '/hospital_/design-preview'
+      path: '/hospital/design-preview'
+      fullPath: '/hospital/design-preview'
+      preLoaderRoute: typeof HospitalDesignPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hospital_/register': {
+      id: '/hospital_/register'
+      path: '/hospital/register'
+      fullPath: '/hospital/register'
+      preLoaderRoute: typeof HospitalRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web/hospital': {
+      id: '/web/hospital'
+      path: '/web/hospital'
+      fullPath: '/web/hospital'
+      preLoaderRoute: typeof WebHospitalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web/admin/accounts': {
+      id: '/web/admin/accounts'
+      path: '/web/admin/accounts'
+      fullPath: '/web/admin/accounts'
+      preLoaderRoute: typeof WebAdminAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web/admin/hospitals': {
+      id: '/web/admin/hospitals'
+      path: '/web/admin/hospitals'
+      fullPath: '/web/admin/hospitals'
+      preLoaderRoute: typeof WebAdminHospitalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web/admin/monitoring': {
+      id: '/web/admin/monitoring'
+      path: '/web/admin/monitoring'
+      fullPath: '/web/admin/monitoring'
+      preLoaderRoute: typeof WebAdminMonitoringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   DutyRoute: DutyRoute,
+  HospitalRoute: HospitalRoute,
   InviteRoute: InviteRoute,
   LogRoute: LogRoute,
   LoginRoute: LoginRoute,
@@ -350,7 +592,17 @@ const rootRouteChildren: RootRouteChildren = {
   TransportRoute: TransportRoute,
   UpdateRoute: UpdateRoute,
   WelcomeRoute: WelcomeRoute,
+  AdminAccountsRoute: AdminAccountsRoute,
+  AdminHospitalsRoute: AdminHospitalsRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  AdminMonitoringRoute: AdminMonitoringRoute,
   CallHospitalIdRoute: CallHospitalIdRoute,
+  HospitalDesignPreviewRoute: HospitalDesignPreviewRoute,
+  HospitalRegisterRoute: HospitalRegisterRoute,
+  WebHospitalRoute: WebHospitalRoute,
+  WebAdminAccountsRoute: WebAdminAccountsRoute,
+  WebAdminHospitalsRoute: WebAdminHospitalsRoute,
+  WebAdminMonitoringRoute: WebAdminMonitoringRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

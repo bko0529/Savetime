@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
   type ErrorComponentProps,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -16,6 +17,8 @@ import { TransportProvider } from "../lib/transport-store";
 import { Toaster } from "../components/ui/sonner";
 import { AppGate } from "../components/app-gate";
 import { InvitePush } from "../components/invite-push";
+import { PreviewSwitcher } from "../components/preview-switcher";
+import { AdminAuthProvider } from "@/savetime-web/app/admin/AdminAuth";
 
 
 function NotFoundComponent() {
@@ -120,6 +123,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const isWebPreview = useRouterState({ select: s => /^\/(web|hospital|admin)(\/|$)/.test(s.location.pathname) });
   // 기기에 저장된 로그인 · 이송 상태로 그리는 앱이라 브라우저에서만 화면을 그림
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -129,10 +133,11 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <TransportProvider>
-        <AppGate />
-        <InvitePush />
+        {!isWebPreview && <AppGate />}
+        {!isWebPreview && <InvitePush />}
 
-        <Outlet />
+        <AdminAuthProvider><Outlet /></AdminAuthProvider>
+        <PreviewSwitcher />
         <Toaster position="top-center" />
       </TransportProvider>
     </QueryClientProvider>

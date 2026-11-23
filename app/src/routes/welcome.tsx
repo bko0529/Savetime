@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { MapPin, MapPinOff, ShieldCheck, Clock, Hospital, Navigation, Send } from "lucide-react";
 import { PhoneScreen, BigButton, IconTile } from "@/components/phone";
 import { useAuth, setAuth } from "@/lib/auth-store";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/welcome")({
   head: () => ({
@@ -79,6 +80,7 @@ function Welcome() {
         <Send className="mt-px size-3.5 shrink-0" />
         본 서비스는 참고용이며 의료 판단과 병원 수용을 보장하지 않습니다.
       </p>
+      <Button asChild variant="link" className="mt-3 w-full text-muted-foreground"><Link to="/hospital">병원·관리자 웹 →</Link></Button>
     </PhoneScreen>
   );
 }
