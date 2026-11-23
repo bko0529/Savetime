@@ -3,7 +3,7 @@
 import type pg from 'pg';
 import { ACTIVE, type HreqStatus } from '../../domain/stateMachine.js';
 import { draftAndLastSent, pendingCount } from './assessment.js';
-import { DISPLAY_ETA_SQL } from './navEta.js';
+import { DISPLAY_ETA_SQL, PHONE_DEPARTURE_SQL, PHONE_DISPLAY_ETA_SQL } from './navEta.js';
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -146,7 +146,15 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
       WHERE t.id = $1 AND t.status = 'moving'`,
     [transportId],
   );
-  const movingEta = etaRows[0]?.eta ?? null;
+  // 전화로 출발한 건은 병원 요청이 없어 위 조인에 안 걸린다. 내비 값으로 같은 계산을 한다 (SFR-034·121)
+  const { rows: phoneEta } = etaRows[0]
+    ? { rows: [] as { eta: number | null }[] }
+    : await db.query<{ eta: number | null }>(
+        `SELECT ${PHONE_DISPLAY_ETA_SQL} AS eta FROM transport t
+          WHERE t.id = $1 AND t.status = 'moving' AND ${PHONE_DEPARTURE_SQL}`,
+        [transportId],
+      );
+  const movingEta = etaRows[0]?.eta ?? phoneEta[0]?.eta ?? null;
 
   const confirmed = requests.find(
     (r) =>
