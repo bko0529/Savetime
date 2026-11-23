@@ -249,3 +249,13 @@ export function KeyVal({ label, value, tone = "default" }: { label: ReactNode; v
     </div>
   );
 }
+
+/** 골든타임즈 심볼: 스톱워치 선이 십자 가로획이 되고, 빨간 세로획이 십자를 완성 (로고 가이드 색 고정) */
+export function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" strokeLinecap="round" aria-label="골든타임즈" className={className}>
+      <path d="M24 14A14 14 0 1 1 10 28H31M20 7.5H28M24 7.5V14" stroke="#14284B" strokeWidth="4.5" />
+      <path d="M24 21V35" stroke="#E60012" strokeWidth="4.5" />
+    </svg>
+  );
+}

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Ambulance, UserPlus, ChevronRight } from "lucide-react";
-import { BigButton, Label, Notice, EcgLine } from "@/components/phone";
+import { UserPlus, ChevronRight } from "lucide-react";
+import { BigButton, Label, Notice, EcgLine, LogoMark } from "@/components/phone";
 import { useAuth } from "@/lib/auth-store";
 import { login } from "@/lib/auth-server";
 
@@ -41,7 +41,7 @@ function Login() {
       <EcgLine className="absolute right-0 top-24 w-52 text-accent/40" />
 
       <div className="relative flex flex-1 flex-col">
-        <span className="grid size-14 place-items-center rounded-2xl bg-accent shadow-[var(--shadow-accent)]"><Ambulance className="size-7 text-accent-foreground" /></span>
+        <span className="grid size-16 place-items-center rounded-2xl bg-card shadow-[var(--shadow-card)]"><LogoMark className="size-11" /></span>
         <p className="mt-6 text-[11px] font-bold tracking-[0.18em] text-accent-deep uppercase">119 구급대원 전용</p>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight">골든타임즈</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">병원 승인 후 출발하는 이송</p>
