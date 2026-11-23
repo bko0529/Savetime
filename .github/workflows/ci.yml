@@ -50,6 +50,22 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  app:
+    name: 구급대원 앱 테스트
+    runs-on: ubuntu-latest
+    # 앱은 Lovable 프로젝트라 루트 workspaces 밖에서 자기 설정으로 검사한다
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npx tsc --noEmit -p .
+      - run: npx vitest run
+
   crosscheck:
     name: 설계 대조
     runs-on: ubuntu-latest

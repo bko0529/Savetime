@@ -15,3 +15,5 @@ next-env.d.ts
 web/src/lib/api/schema.d.ts
 # 부하 테스트 결과 원본 (git 에 올리지 않음, perf/.gitignore)
 perf/results/
+# 구급대원 앱은 자기 설정(app/.prettierrc)으로 따로 정리한다 (Lovable 프로젝트)
+app/

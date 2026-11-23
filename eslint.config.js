@@ -11,6 +11,8 @@ export default tseslint.config(
       '**/next-env.d.ts',
       // 디자인 시안(참고 자료)의 자동 생성 실행 파일. 실제 화면은 web/ 의 .tsx 로 구현한다
       'docs/design-handoff-web-ui/**',
+      // 구급대원 앱은 자기 설정(app/eslint.config.js)으로 따로 검사한다 (Lovable 프로젝트)
+      'app/**',
     ],
   },
   js.configs.recommended,
