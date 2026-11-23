@@ -10,6 +10,7 @@ import { NewRequestOverlay } from '@/savetime-web/components/hospital/NewRequest
 import { NotificationPermissionGuide } from '@/savetime-web/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/savetime-web/components/hospital/IncomingList';
 import { PauseControl } from '@/savetime-web/components/hospital/PauseControl';
+import { EndShiftButton } from '@/savetime-web/components/hospital/EndShiftButton';
 import { RequestDetail } from '@/savetime-web/components/hospital/RequestDetail';
 import { RequestList } from '@/savetime-web/components/hospital/RequestList';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
@@ -99,6 +100,10 @@ export function ShiftScreen({
   // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
   // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // 아직 응답할 수 있는(2분이 안 지난) 대기 요청 수
+  const openWaiting = incoming.waiting.filter(
+    (r) => Date.parse(r.respondUntil) > incoming.nowMs,
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -158,15 +163,17 @@ export function ShiftScreen({
 
       {shift !== null && (
         <>
-          <PauseControl
-            paused={pause.paused}
-            pausedAt={pause.pausedAt}
-            // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
-            waitingCount={
-              incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
-            }
-            socket={socket}
-          />
+          <div className="flex flex-wrap items-start gap-3">
+            <PauseControl
+              paused={pause.paused}
+              pausedAt={pause.pausedAt}
+              // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
+              waitingCount={openWaiting}
+              socket={socket}
+            />
+            {/* 근무 종료 (SFR-117): 이 PC 만 요청 대상에서 빠진다 */}
+            <EndShiftButton waitingCount={openWaiting} />
+          </div>
           <h2 className="text-2xl font-bold">요청 목록</h2>
           <RequestList
             items={incoming.items}
@@ -193,6 +200,7 @@ export function ShiftScreen({
             items={arriving.items}
             notices={arriving.notices}
             onDismiss={arriving.dismiss}
+            onOpen={setSelectedId}
           />
         </>
       )}

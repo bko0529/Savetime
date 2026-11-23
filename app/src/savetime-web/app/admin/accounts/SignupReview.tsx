@@ -13,7 +13,7 @@ import {
 import { ApiError, NETWORK_ERROR, type ApiPaths } from '@/savetime-web/lib/api/client';
 import { errorText } from '@/savetime-web/lib/api/errorText';
 import type { components } from '@/savetime-web/lib/api/schema';
-import { bearer, useAdminAuth } from '../AdminAuth';
+import { bearer, useAdminAuth, withAdminToken } from '../AdminAuth';
 import { useAdminApi } from '../useAdminApi';
 
 type SignupList =
@@ -42,7 +42,7 @@ const timeText = (iso?: string) => (iso ? new Date(iso).toLocaleString('ko-KR') 
 // 키를 ['admin', …] 밖에 두어 승인·반려 뒤 관리자 화면 전체를 새로 받을 때 같이 다시 받지 않게 하고,
 // 다시 받기(창 포커스·재연결·재시도)를 모두 끈다. 창을 닫으면(gcTime 0) 받아 둔 사진도 캐시에서 바로 지운다
 function useSignupPhoto(signupId: number | undefined) {
-  const { tokens, signOut } = useAdminAuth();
+  const { current, refresh, signOut } = useAdminAuth();
   const photo = useQuery({
     queryKey: ['signup-photo', signupId],
     enabled: signupId !== undefined,
@@ -52,30 +52,30 @@ function useSignupPhoto(signupId: number | undefined) {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    queryFn: async () => {
-      let res: Response;
-      try {
-        res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
-          headers: bearer(tokens),
-          cache: 'no-store',
-        });
-      } catch {
-        throw new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요');
-      }
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as {
-          error?: { code?: string; message?: string };
-        } | null;
-        const err = new ApiError(
-          res.status,
-          body?.error?.code ?? 'UNKNOWN',
-          body?.error?.message ?? '사진을 불러오지 못했어요',
-        );
-        if (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_REVOKED') signOut();
-        throw err;
-      }
-      return res.blob();
-    },
+    // 사진은 JSON 이 아니라 apiFetch 대신 fetch 로 받는다. 토큰이 끝났으면 새로 받아 한 번 더 (SFR-082)
+    queryFn: () =>
+      withAdminToken({ current, refresh, signOut }, async (tokens) => {
+        let res: Response;
+        try {
+          res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
+            headers: bearer(tokens),
+            cache: 'no-store',
+          });
+        } catch {
+          throw new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요');
+        }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            error?: { code?: string; message?: string };
+          } | null;
+          throw new ApiError(
+            res.status,
+            body?.error?.code ?? 'UNKNOWN',
+            body?.error?.message ?? '사진을 불러오지 못했어요',
+          );
+        }
+        return res.blob();
+      }),
   });
 
   // 받은 사진(blob)을 이 탭에서만 쓰는 주소로 바꾼다. 창을 닫거나 바뀌면 바로 버린다

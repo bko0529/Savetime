@@ -1,7 +1,11 @@
 'use client';
 
 import { Button } from '@/savetime-web/components/ui/button';
-import type { HwIncoming, RemovedNotice, RemovedReason } from '@/savetime-web/app/hospital/useIncoming';
+import type {
+  HwIncoming,
+  RemovedNotice,
+  RemovedReason,
+} from '@/savetime-web/app/hospital/useIncoming';
 import { ConfirmArrivalButton } from './ConfirmArrivalButton';
 import { ExtraMemoButton } from './ExtraMemoButton';
 import { UnacceptableButton } from './UnacceptableButton';
@@ -35,10 +39,12 @@ type Props = {
   items: HwIncoming[];
   notices: RemovedNotice[];
   onDismiss: (requestId: number) => void;
+  // 번호를 누르면 요청 상세를 연다 (확정 뒤에는 요청 목록에서 빠져서 여기서만 열 수 있다)
+  onOpen?: (requestId: number) => void;
 };
 
 // 도착 예정 목록 (SFR-121, H-03). 구급차 위치·지도는 보여 주지 않고 도착 예상 시간만 (D-71)
-export function IncomingList({ items, notices, onDismiss }: Props) {
+export function IncomingList({ items, notices, onDismiss, onOpen }: Props) {
   return (
     <div className="flex flex-col gap-4">
       {notices.map((n) => (
@@ -73,7 +79,19 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
           <tbody>
             {items.map((item) => (
               <tr key={item.id} className="border-b">
-                <td className="p-3 font-bold">{item.label}</td>
+                <td className="p-3 font-bold">
+                  {onOpen && item.id != null ? (
+                    <button
+                      type="button"
+                      className="underline underline-offset-4"
+                      onClick={() => onOpen(item.id!)}
+                    >
+                      {item.label}
+                    </button>
+                  ) : (
+                    item.label
+                  )}
+                </td>
                 {/* 요약은 도착 후 1시간까지만 서버가 준다 (SER-014). 없으면 비워 둔다 */}
                 <td className="p-3">{item.summary ?? '—'}</td>
                 <td className="p-3">{STATUS_TEXT[item.status ?? ''] ?? item.status}</td>

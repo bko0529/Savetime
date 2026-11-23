@@ -1,28 +1,19 @@
 'use client';
 
 import { useCallback } from 'react';
-import { ApiError, apiFetch } from '@/savetime-web/lib/api/client';
-import { bearer, useAdminAuth } from './AdminAuth';
+import { apiFetch } from '@/savetime-web/lib/api/client';
+import { bearer, useAdminAuth, withAdminToken } from './AdminAuth';
 
-// 관리자 토큰이 끝났거나(15분) 쓸 수 없게 되면 서버가 이 코드로 답한다
-const SIGNED_OUT_CODES = new Set(['TOKEN_EXPIRED', 'TOKEN_REVOKED']);
-
-// 관리자 API 호출: Authorization 헤더를 붙이고, 토큰이 끝났으면 로그아웃시켜 로그인 화면으로 보낸다.
-// (토큰 자동 재발급은 관리자 refresh API 가 생기면 붙인다)
+// 관리자 API 호출: Authorization 헤더를 붙인다. 15분 토큰이 끝났으면 새 토큰을 받아 한 번 더 부르고,
+// 다시 로그인해야 하면 로그아웃시켜 로그인 화면으로 보낸다 (SFR-082)
 export function useAdminApi() {
-  const { tokens, signOut } = useAdminAuth();
+  const auth = useAdminAuth();
+  const { current, refresh, signOut } = auth;
   return useCallback(
-    async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-      try {
-        return await apiFetch<T>(path, {
-          ...init,
-          headers: { ...bearer(tokens), ...init.headers },
-        });
-      } catch (error) {
-        if (error instanceof ApiError && SIGNED_OUT_CODES.has(error.code)) signOut();
-        throw error;
-      }
-    },
-    [tokens, signOut],
+    <T>(path: string, init: RequestInit = {}): Promise<T> =>
+      withAdminToken({ current, refresh, signOut }, (tokens) =>
+        apiFetch<T>(path, { ...init, headers: { ...bearer(tokens), ...init.headers } }),
+      ),
+    [current, refresh, signOut],
   );
 }

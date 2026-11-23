@@ -57,7 +57,7 @@ export interface paths {
         put?: never;
         /**
          * 가입 신청 (공무원증 사진)
-         * @description 관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상, 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).
+         * @description 관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상·영문+숫자(SER-006), 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).
          *
          *     **요구사항**: SFR-017, SER-015, DAR-012
          *     **화면**: S-02 가입 신청
@@ -207,7 +207,7 @@ export interface paths {
         get?: never;
         /**
          * 비밀번호 변경 (임시 비밀번호 후 필수)
-         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·영문+숫자(SER-006)·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
          *
          *     **요구사항**: SFR-021, SER-011
          *     **화면**: (비밀번호 변경)
@@ -1399,6 +1399,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 관리자 토큰 재발급
+         * @description 15분짜리 관리자 accessToken 이 끝나면 refreshToken 으로 새 토큰을 받는다. 쓸 때마다 새 refreshToken 으로 바뀌고 예전 값은 못 쓴다. 만료 시각은 처음 로그인 기준(최대 14시간) 그대로.
+         *
+         *     **요구사항**: SFR-082, SER-016
+         *     **화면**: (관리자 모든 화면)
+         *     **오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED
+         */
+        post: operations["post_admin_auth_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/signups": {
         parameters: {
             query?: never;
@@ -1781,7 +1805,7 @@ export interface paths {
          * @description **요구사항**: SFR-100, SFR-148
          *     **화면**: A-02 모니터링
          *
-         *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota · integrity(일 단위 정합성 점검, QUR-014)
+         *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota(80% 도달·한도 초과를 따로, SFR-090) · integrity(일 단위 정합성 점검, 문구에 발견 건수, QUR-014)
          */
         get: operations["get_admin_notifications"];
         put?: never;
@@ -2207,8 +2231,11 @@ export interface components {
                 memo?: string | null;
                 extraMemo?: string | null;
                 entrance?: components["schemas"]["LatLng"];
-                /** @enum {string} */
-                requestStatus?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable";
+                /**
+                 * @description 전화 확인으로 출발한 병원은 병원 요청이 없어 null (SFR-034)
+                 * @enum {string|null}
+                 */
+                requestStatus?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable" | null;
                 /** @enum {string|null} */
                 closeReason?: "other_hospital" | "fallback" | "cancelled" | "expired_approval" | "approval_cancelled" | "dest_changed" | null;
             } | null;
@@ -4914,6 +4941,41 @@ export interface operations {
                     setupToken: string;
                     /** @description OTP 앱에 뜬 첫 코드 */
                     otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_auth_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    refreshToken: string;
                 };
             };
         };
