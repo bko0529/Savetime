@@ -299,6 +299,47 @@ test('담당 단말이 내비 남은 시간을 보내면 팀원 화면·병원 �
   });
 });
 
+test('전화 확인으로 출발한 건도 내비 남은 시간을 팀원 화면에 보여 준다. 병원 요청이 없어 병원으로는 안 보낸다 (SFR-034·121)', async () => {
+  await withAuthContext(async (ctx) => {
+    const s = await scene(ctx);
+    const { rows } = await ctx.pool.query<{ id: string }>(
+      `INSERT INTO hospital (public_id, name, lat, lng, er_phone) VALUES ('E병원', 'E병원', 36.9, 127.1, '041-000-0000') RETURNING id`,
+    );
+    const e = Number(rows[0].id);
+    const start = await post(ctx, s.kim, `/transports/${s.transportId}/phone-check/start`, {
+      hospitalId: e,
+      version: 1,
+    });
+    assert.equal(start.status, 200);
+    clock.base = Date.now() - 55_000;
+    clock.n = 0;
+    const accepted = await post(ctx, s.kim, `/transports/${s.transportId}/phone-checks`, {
+      hospitalId: e,
+      result: 'accepted',
+      version: 2,
+    });
+    assert.equal(accepted.status, 201);
+    // 내비 값이 오기 전에는 보여 줄 값이 없다 (확정 때 도착 예상이 없음)
+    assert.equal(await currentEta(ctx, s), null);
+
+    const since = await lastSeq(ctx.pool);
+    const res = await locations(ctx, s, { deviceId: 'device-kim01', points: track(0), etaMin: 4 });
+    assert.equal(res.status, 204);
+    assert.equal(await currentEta(ctx, s), 4);
+    const sent = await eventNames(ctx.pool, since);
+    assert.deepEqual(
+      sent.map((x) => x.name),
+      ['transport.eta'],
+    );
+    assert.deepEqual(sent[0].payload, { transportId: s.transportId, etaMin: 4 });
+
+    // 같은 값이면 다시 알리지 않는다
+    const again = await lastSeq(ctx.pool);
+    await locations(ctx, s, { deviceId: 'device-kim01', points: track(0.001), etaMin: 4 });
+    assert.deepEqual(await eventNames(ctx.pool, again), []);
+  });
+});
+
 test('남은 시간이 2분 넘게 안 오면 마지막 값에서 지난 분을 빼고, 한 번도 안 왔으면 확정 때 값에서 뺀다 (SFR-121)', async () => {
   await withAuthContext(async (ctx) => {
     const s = await scene(ctx);

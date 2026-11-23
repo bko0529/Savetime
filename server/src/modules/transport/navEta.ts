@@ -17,6 +17,17 @@ export const DISPLAY_ETA_SQL = `(CASE
       THEN GREATEST(0, hr.eta_min - floor(extract(epoch FROM now() - t.confirmed_at) / 60))
   END)::int`;
 
+// 전화 확인으로 출발한 건 (SFR-034): 병원 요청 없이 목적지(confirmed_hospital_id)만 있다.
+// 그 병원에 '수용 확정'이나 '사유 고르고 출발'로 기록한 전화 결과가 있으면 전화로 출발한 것으로 본다.
+// 이런 건은 병원 웹에 요청이 없어 도착 예정·입구 알림은 못 보내지만, 팀원 화면의 남은 시간은 같은 방식으로 보여 준다 (SFR-121)
+export const PHONE_DEPARTURE_SQL = `(t.confirmed_hospital_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM phone_check pc
+     WHERE pc.transport_id = t.id AND pc.hospital_id = t.confirmed_hospital_id
+       AND pc.result IN ('accepted', 'no_answer', 'skipped')))`;
+
+// 전화로 출발한 건의 보여 줄 남은 분. 확정 때 도착 예상 값이 없어 내비 값만 쓴다
+export const PHONE_DISPLAY_ETA_SQL = `(SELECT ${DISPLAY_ETA_SQL} FROM (SELECT NULL::int AS eta_min) hr)`;
+
 interface ConfirmedTarget {
   request_id: string;
   hospital_id: string;
@@ -45,8 +56,8 @@ export async function afterLocations(
     [transportId],
   );
   const target = rows[0];
-  // 다시 요청 중(확정 병원이 승인 취소)이면 남은 시간을 보여 줄 병원이 없다
-  if (!target) return [];
+  if (!target) return phoneDepartureEta(client, transportId, etaMin);
+  // (다시 요청 중이면 확정 병원 요청도 전화 출발 기록도 없어 남은 시간을 보여 줄 병원이 없다)
   const requestId = Number(target.request_id);
   const events: EventRecord[] = [];
 
@@ -90,4 +101,37 @@ export async function afterLocations(
     }
   }
   return events;
+}
+
+// 전화로 출발한 건: 남은 분을 저장하고, 바뀌었을 때만 팀에 transport.eta 를 보낸다.
+// 병원 웹에는 이 이송의 요청이 없어 incoming.updated·incoming.near 는 보내지 않는다
+async function phoneDepartureEta(
+  client: pg.PoolClient,
+  transportId: string,
+  etaMin: number | undefined,
+): Promise<EventRecord[]> {
+  if (etaMin === undefined) return [];
+  const { rows } = await client.query<{ team_id: string; old_eta: number | null }>(
+    `SELECT t.team_id,
+            CASE WHEN t.nav_eta_at >= t.confirmed_at THEN ${PHONE_DISPLAY_ETA_SQL} END AS old_eta
+       FROM transport t
+      WHERE t.id = $1 AND t.status = 'moving' AND ${PHONE_DEPARTURE_SQL}`,
+    [transportId],
+  );
+  const target = rows[0];
+  if (!target) return [];
+  await client.query('UPDATE transport SET nav_eta_min = $2, nav_eta_at = now() WHERE id = $1', [
+    transportId,
+    etaMin,
+  ]);
+  if (target.old_eta === etaMin) return [];
+  return [
+    {
+      room: `team:${target.team_id}`,
+      name: 'transport.eta',
+      entityType: 'transport',
+      entityId: transportId,
+      payload: { transportId, etaMin },
+    },
+  ];
 }
