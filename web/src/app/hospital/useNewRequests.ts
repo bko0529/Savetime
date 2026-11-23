@@ -52,12 +52,24 @@ export function useNewRequests(socket: HospitalSocket | null) {
       refetchList();
     };
     socket.on('request.new', onNew);
+    // 대기·승인 중에 대원이 환자 정보를 고쳐 보냄 (SFR-105): 목록 이상 수치와 열린 상세를 새로 받는다
+    const onUpdated: Parameters<typeof socket.on<'request.updated'>>[1] = (e) => {
+      refetchList();
+      void queryClient.invalidateQueries({
+        queryKey: ['hw', 'requests', 'detail', e.data.requestId],
+      });
+    };
+    socket.on('request.updated', onUpdated);
+    // 길찾기로 도착 예상이 바뀜 (SFR-129). 목록·덮개 창의 도착 예상만 바뀌므로 목록만 다시 받는다
+    socket.on('request.eta', refetchList);
     // 다른 PC 응답·만료·닫힘으로 요청이 끝나면 창과 소리를 멈추고, 열린 상세도 '끝난 요청'으로 바꾼다
     socket.on('request.changed', refetchAll);
     // 재연결 때는 놓친 게 있을 수 있어 항상 전체를 다시 받는다 (실시간 설계 B)
     socket.on('connect', refetchAll);
     return () => {
       socket.off('request.new', onNew);
+      socket.off('request.updated', onUpdated);
+      socket.off('request.eta', refetchList);
       socket.off('request.changed', refetchAll);
       socket.off('connect', refetchAll);
     };
