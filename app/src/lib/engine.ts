@@ -461,7 +461,15 @@ async function phoneResult(body: { result: string; reason?: string }) {
   });
 }
 
+// SFR-157·158: 수용 불가 뒤 '다시 요청하기'로 만드는 새 이송은 직전 건 ID 를 같이 보낸다.
+// 그러면 서버가 직전 건에서 수용 불가였던 병원을 이번 요청에서 뺀다 (10분 안, 같은 팀만)
+let prevTransportId: string | null = null;
+
 export const actions = {
+  /** 다음 '병원에 요청'이 이 이송 건을 이어받게 한다 */
+  continueFrom(transportId: string) {
+    prevTransportId = transportId;
+  },
   async create(grade: Grade, patient: Patient) {
     return guard(async () => {
       const location = await currentLocation();
@@ -476,8 +484,10 @@ export const actions = {
           locationConsent: true,
           assessment: toAssessment(patient),
           requestedGrade: grade ? GRADE_NO[grade] : null,
+          ...(prevTransportId ? { prevTransportId } : {}),
         },
       });
+      prevTransportId = null;
       apply(t);
       void loadNearby();
     });

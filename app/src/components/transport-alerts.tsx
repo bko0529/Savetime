@@ -46,6 +46,7 @@ export function TransportAlerts() {
       /* 초안을 못 받으면 이 폰에 남은 환자 정보로 */
     }
     actions.reset();
+    actions.continueFrom(unacceptable.transportId);
     hospitalAlerts.clearUnacceptable();
     setBusy(false);
     nav({ to: "/patient" });
