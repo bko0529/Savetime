@@ -98,6 +98,20 @@ export async function refreshMe() {
   }
 }
 
+/**
+ * SFR-021: 비밀번호 바꾸기. 관리자가 초기화한 임시 비밀번호로 들어오면 이것부터 해야 다른 기능이 열린다.
+ * 성공하면 내 정보를 다시 읽어 '변경 필요'가 풀린 것을 화면에 반영한다. 실패하면 서버 문구(틀림·5번 틀려 잠김)를 돌려준다
+ */
+export async function changePassword(current: string, next: string): Promise<string | null> {
+  try {
+    await api("PUT", "/me/password", { body: { currentPassword: current, newPassword: next } });
+    await refreshMe();
+    return null;
+  } catch (e) {
+    return e instanceof ApiError ? e.message : "비밀번호를 바꾸지 못했어요";
+  }
+}
+
 /** 앱이 켜질 때: 로그인돼 있으면 실시간을 붙이고 서버 상태로 맞춘다 */
 export async function resumeSession() {
   if (!getAuth().session) return;

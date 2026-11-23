@@ -72,6 +72,7 @@ function Settings() {
         <KeyVal label="아이디" value={acc?.loginId ?? "-"} />
         <KeyVal label="소속" value={acc ? `${acc.orgName} · ${acc.center}` : "-"} />
         <KeyVal label="상태" value={<Pill tone="ok">승인됨</Pill>} />
+        <button className="w-full px-4 py-3.5 text-left text-sm font-bold transition hover:bg-surface" onClick={() => nav({ to: "/password" })}>비밀번호 바꾸기</button>
         <button className="w-full px-4 py-3.5 text-left text-sm font-bold transition hover:bg-surface" onClick={() => setAsk("logout")}>로그아웃</button>
         <button className="w-full px-4 py-3.5 text-left text-sm font-bold text-destructive transition hover:bg-destructive/5" onClick={() => setAsk("withdrawal")}>회원 탈퇴</button>
       </div>

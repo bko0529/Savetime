@@ -14,6 +14,7 @@ import { Route as DutyRouteImport } from './routes/duty'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LogRouteImport } from './routes/log'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PasswordRouteImport } from './routes/password'
 import { Route as PatientRouteImport } from './routes/patient'
 import { Route as PendingRouteImport } from './routes/pending'
 import { Route as PermissionsRouteImport } from './routes/permissions'
@@ -48,6 +49,11 @@ const LogRoute = LogRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordRoute = PasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PatientRoute = PatientRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/patient': typeof PatientRoute
   '/pending': typeof PendingRoute
   '/permissions': typeof PermissionsRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/patient': typeof PatientRoute
   '/pending': typeof PendingRoute
   '/permissions': typeof PermissionsRoute
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/log': typeof LogRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/patient': typeof PatientRoute
   '/pending': typeof PendingRoute
   '/permissions': typeof PermissionsRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/log'
     | '/login'
+    | '/password'
     | '/patient'
     | '/pending'
     | '/permissions'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/log'
     | '/login'
+    | '/password'
     | '/patient'
     | '/pending'
     | '/permissions'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/log'
     | '/login'
+    | '/password'
     | '/patient'
     | '/pending'
     | '/permissions'
@@ -213,6 +225,7 @@ export interface RootRouteChildren {
   InviteRoute: typeof InviteRoute
   LogRoute: typeof LogRoute
   LoginRoute: typeof LoginRoute
+  PasswordRoute: typeof PasswordRoute
   PatientRoute: typeof PatientRoute
   PendingRoute: typeof PendingRoute
   PermissionsRoute: typeof PermissionsRoute
@@ -260,6 +273,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password': {
+      id: '/password'
+      path: '/password'
+      fullPath: '/password'
+      preLoaderRoute: typeof PasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/patient': {
@@ -341,6 +361,7 @@ const rootRouteChildren: RootRouteChildren = {
   InviteRoute: InviteRoute,
   LogRoute: LogRoute,
   LoginRoute: LoginRoute,
+  PasswordRoute: PasswordRoute,
   PatientRoute: PatientRoute,
   PendingRoute: PendingRoute,
   PermissionsRoute: PermissionsRoute,
@@ -355,13 +376,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

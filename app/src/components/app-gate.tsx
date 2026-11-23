@@ -22,6 +22,8 @@ export function gateTarget(a: AuthState, path: string): string | null {
   if (!permissionsDone(a)) return want("/permissions");
   const acc = currentAccount(a);
   if (!acc) return want("/login", ["/login", "/signup"]);
+  // 관리자가 초기화한 임시 비밀번호면 바꾸기 전에는 다른 화면으로 못 간다 (SFR-021, 서버도 403 으로 막음)
+  if (acc.mustChangePassword) return want("/password");
   // 반려되면 가입 화면에서 다시 신청할 수 있다
   if (acc.status !== "approved") return want("/pending", acc.status === "rejected" ? ["/pending", "/signup"] : ["/pending"]);
   if (!a.duty?.started) return want("/duty", ["/duty", "/invite"]);

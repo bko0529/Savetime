@@ -6,6 +6,7 @@ import {
   type Duty,
   type ServerTeam,
   passwordOk,
+  newPasswordError,
   signupError,
   driverTaken,
   dutyExpired,
@@ -90,6 +91,30 @@ describe("첫 사용 · 로그인 · 근무 순서 (요구사항 v1.4)", () => {
   });
   it("반려된 계정은 가입 화면에서 다시 신청할 수 있다", () => {
     expect(gateTarget(loggedIn("rejected"), "/signup")).toBeNull();
+  });
+  it("임시 비밀번호면 바꾸기 전에는 비밀번호 화면만 (SFR-021)", () => {
+    const a = loggedIn();
+    a.accounts["demo-kim"] = { ...a.accounts["demo-kim"]!, mustChangePassword: true };
+    const onDuty = { ...a, duty: duty() };
+    expect(gateTarget(onDuty, "/")).toBe("/password");
+    expect(gateTarget(onDuty, "/transport")).toBe("/password");
+    expect(gateTarget(onDuty, "/password")).toBeNull();
+    expect(gateTarget(a, "/duty")).toBe("/password");
+  });
+  it("평소에는 설정에서 비밀번호 화면에 들어갈 수 있다", () => {
+    expect(gateTarget({ ...loggedIn(), duty: duty() }, "/password")).toBeNull();
+  });
+  it("비밀번호 바꾸기 입력 검사 (SFR-021 · SER-006)", () => {
+    const f = { current: "temp1234", next: "newpass12", confirm: "newpass12" };
+    expect(newPasswordError(f)).toBeNull();
+    expect(newPasswordError({ ...f, current: "" })).toBe("지금 비밀번호를 넣어 주세요");
+    expect(newPasswordError({ ...f, next: "short1", confirm: "short1" })).toMatch(/8자 이상/);
+    expect(newPasswordError({ ...f, next: "temp1234", confirm: "temp1234" })).toMatch(
+      /다른 비밀번호/,
+    );
+    expect(newPasswordError({ ...f, confirm: "newpass13" })).toBe(
+      "새 비밀번호 두 칸이 서로 달라요",
+    );
   });
   it("비밀번호는 8자 이상 영문+숫자 (SER-006)", () => {
     expect(passwordOk("abcdefgh")).toBe(false);
