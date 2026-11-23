@@ -97,7 +97,8 @@ function TransportPage() {
         </div>
         <Pill tone="ok">병원 화면에 1분마다 전달</Pill>
       </div>
-      {(req?.note ?? e.confirmed?.memo) && <div className="mt-3"><Notice tone="info">병원 안내 · "{req?.note ?? e.confirmed?.memo}"</Notice></div>}
+      {(e.confirmed?.memo ?? req?.note) && <div className="mt-3"><Notice tone="info">병원 안내 · "{e.confirmed?.memo ?? req?.note}"</Notice></div>}
+      {e.confirmed?.extraMemo && <div className="mt-2"><Notice tone="warn">추가 메모 · "{e.confirmed.extraMemo}"</Notice></div>}
       {e.remainingM !== null && <p className="mt-2 text-xs text-muted-foreground">입구까지 약 {e.remainingM >= 1000 ? `${(e.remainingM / 1000).toFixed(1)}km` : `${e.remainingM}m`}</p>}
 
       <a href={`tel:${e.confirmed?.erPhone ?? h.erPhone}`} className="tile mt-3 flex h-12 w-full items-center justify-center gap-2 px-4 text-[15px] font-bold transition hover:bg-surface">

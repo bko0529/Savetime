@@ -9,6 +9,7 @@ import { useSyncExternalStore } from "react";
 import type { TransportStatus, HreqStatus, CloseReason, FallbackReason, PhoneProceedReason, DestChangeReason } from "./domain/stateMachine";
 import { api, ApiError, deviceId, errorText, serverNow } from "./api";
 import { onEvent } from "./realtime";
+import { hospitalAlerts } from "./hospital-alerts";
 import { retryOnVersionConflict } from "./versionRetry";
 import { getAuth } from "./auth-store";
 import { RADIUS_STEPS, START_RADIUS, type Hospital } from "./hospitals";
@@ -58,7 +59,7 @@ export type EngineState = {
   /** 병원이 '도착 확인'을 눌렀다 (SFR-144) */
   arriveRequested: boolean;
   /** 확정 병원 입구 좌표·메모 */
-  confirmed: { entrance: LatLng | null; memo: string | null; erPhone: string | null } | null;
+  confirmed: { entrance: LatLng | null; memo: string | null; extraMemo: string | null; erPhone: string | null } | null;
   lastSentSeq: number;
   /** 병원 목록 (거리순, 추천 API) */
   nearby: string[];
@@ -244,7 +245,7 @@ function apply(t: ServerTransport) {
   }));
   const c = t.confirmedHospital;
   s.confirmedId = c ? String(c.id) : null;
-  s.confirmed = c ? { entrance: c.entrance, memo: c.memo, erPhone: c.erPhone } : null;
+  s.confirmed = c ? { entrance: c.entrance, memo: c.memo, extraMemo: c.extraMemo, erPhone: c.erPhone } : null;
   if (c) upsertHospital(String(c.id), { name: c.name, ...(c.erPhone ? { erPhone: c.erPhone, phone: c.erPhone } : {}) });
   s.alert = t.canReRequest && c ? `${c.name}이(가) 승인을 취소했어요` : null;
   s.destChanged = t.destinationChangeUsed;
@@ -341,6 +342,17 @@ if (typeof window !== "undefined") {
       }, 120);
     });
   }
+  // SFR-140: 확정 병원 추가 메모. 이벤트에는 메모 글이 없어(규칙 5) 바로 다시 읽고 경보를 띄운다 (15초 기다리지 않음)
+  onEvent("hospital.extra_memo", (e) => {
+    const d = (e as { data?: { hospitalName?: string } }).data;
+    void refresh().then(() => hospitalAlerts.showMemo({ hospitalName: d?.hospitalName ?? "병원", memo: s.confirmed?.extraMemo ?? null }));
+  });
+  // SFR-158: 도착 후 수용 불가. 일지·홈 어디에 있든 경보 → '다시 요청하기' (transport-alerts.tsx)
+  onEvent("transport.unacceptable", (e) => {
+    const d = (e as { data?: { transportId?: string; hospitalName?: string; reason?: string } }).data;
+    if (!d?.transportId) return;
+    hospitalAlerts.showUnacceptable({ transportId: d.transportId, hospitalName: d.hospitalName ?? "병원", reason: d.reason ?? "" });
+  });
   onEvent("transport.arrive_requested", () => {
     s.arriveRequested = true;
     emit();

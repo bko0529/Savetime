@@ -16,6 +16,7 @@ import { TransportProvider } from "../lib/transport-store";
 import { Toaster } from "../components/ui/sonner";
 import { AppGate } from "../components/app-gate";
 import { InvitePush } from "../components/invite-push";
+import { TransportAlerts } from "../components/transport-alerts";
 
 
 function NotFoundComponent() {
@@ -131,6 +132,7 @@ function RootComponent() {
       <TransportProvider>
         <AppGate />
         <InvitePush />
+        <TransportAlerts />
 
         <Outlet />
         <Toaster position="top-center" />
