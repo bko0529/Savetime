@@ -95,7 +95,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const d = JSON.parse(localStorage.getItem(TKEY) ?? "null");
-      if (d) { setPatient({ ...emptyPatient, ...d.patient }); setTimeline(d.timeline ?? {}); setConfirmed(d.confirmed ?? null); setRejectedNames(d.rejectedNames ?? []); }
+      if (d) { setPatient({ ...emptyPatient, ...d.patient }); setTimeline(reviveTimeline(d.timeline)); setConfirmed(d.confirmed ?? null); setRejectedNames(d.rejectedNames ?? []); }
     } catch { /* ignore */ }
     setReady(true);
   }, []);
@@ -121,7 +121,20 @@ export function useTransport() {
   return c;
 }
 
-export function fmtTime(d?: Date) {
+/** 저장해 둔 시각(JSON 이라 글자로 돌아옴)을 날짜로. 이상한 값은 버린다 */
+export function reviveTimeline(raw: unknown): Timeline {
+  const out: Timeline = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const d = typeof v === "string" || v instanceof Date ? new Date(v) : null;
+    if (d && !Number.isNaN(d.getTime())) out[k as keyof Timeline] = d;
+  }
+  return out;
+}
+
+export function fmtTime(d?: Date | string) {
   if (!d) return "";
+  if (!(d instanceof Date)) d = new Date(d);
+  if (Number.isNaN(d.getTime())) return "";
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }

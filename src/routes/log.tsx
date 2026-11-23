@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pencil, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneScreen, BigButton, Label } from "@/components/phone";
 import { useTransport, fmtTime, UNKNOWN } from "@/lib/transport-store";
+import { mergePatient } from "@/lib/journal";
 import { cn } from "@/lib/utils";
-import { actions } from "@/lib/engine";
+import { actions, loadJournalDraft } from "@/lib/engine";
 import { getAuth, currentAccount } from "@/lib/auth-store";
 import { LogFormSheet, type LogData } from "@/components/log-form-sheet";
 
@@ -32,8 +33,39 @@ const SELECTOR = ["구급대", "119상황실", "구급상황센터", "환자/보
 const v = (s: string) => (s && s !== UNKNOWN ? s : "");
 
 function LogPage() {
-  const { ready } = useTransport();
-  return ready ? <LogBody /> : null;
+  const t = useTransport();
+  const [filled, setFilled] = useState(false);
+  // 병원이 '도착 확인'을 눌러 끝났거나 팀원 폰이면 이 폰에는 병원·시각·환자 정보가 없다. 서버 초안으로 빈칸을 채운 뒤 그린다
+  useEffect(() => {
+    if (!t.ready || filled) return;
+    let alive = true;
+    void loadJournalDraft().then((d) => {
+      if (!alive) return;
+      if (d) {
+        t.setPatient(mergePatient(t.patient, d));
+        t.setTimeline({
+          ...t.timeline,
+          ...(t.timeline.departAt || !d.departedAt ? {} : { departAt: new Date(d.departedAt) }),
+          ...(t.timeline.arriveAt || !d.arrivedAt ? {} : { arriveAt: new Date(d.arrivedAt) }),
+        });
+        // 이송 기관은 서버가 아는 실제 도착 병원, 거리는 위치 기록으로 잰 실제 거리를 쓴다 (없으면 이 폰 값)
+        if (d.hospitalName) {
+          t.setConfirmed({
+            id: t.confirmed?.id ?? "",
+            name: d.hospitalName,
+            km: d.distanceKm ?? t.confirmed?.km ?? 0,
+            min: t.confirmed?.min ?? 0,
+            ...(t.confirmed?.note ? { note: t.confirmed.note } : {}),
+          });
+        }
+      }
+      setFilled(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [t.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  return t.ready && filled ? <LogBody /> : null;
 }
 
 function LogBody() {

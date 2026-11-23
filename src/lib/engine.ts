@@ -655,3 +655,30 @@ async function stepDrive() {
     /* 끊기면 다음 5초에 다시 */
   }
 }
+
+// ---------------- 구급활동일지 초안 (SFR-164) ----------------
+// 이송이 끝난 뒤 10분 안에 팀원 누구나 받을 수 있다. 병원이 '도착 확인'을 눌러 끝났거나 팀원이 도착을 눌러서
+// 이 폰에 병원·시각·환자 정보가 없을 때 일지를 채우는 데 쓴다. 환자 이름·연락처는 서버에 없다 (SER-012)
+export type JournalDraft = {
+  departedAt: string | null;
+  arrivedAt: string | null;
+  distanceKm: number | null;
+  sex: "M" | "F" | null;
+  ageBand: string | null;
+  chiefComplaint: string | null;
+  onsetAt: string | null;
+  consciousness: "A" | "V" | "P" | "U" | null;
+  vitals: { sbp: number | null; dbp: number | null; pulse: number | null; resp: number | null; temp: number | null; spo2: number | null; glucose: number | null };
+  history: string | null;
+  ktas: number | null;
+  hospitalName: string | null;
+};
+
+export async function loadJournalDraft(): Promise<JournalDraft | null> {
+  if (!s.transportId || !s.status || !["arrived", "cancelled"].includes(s.status)) return null;
+  try {
+    return await api<JournalDraft>("GET", `/transports/${s.transportId}/journal-draft`);
+  } catch {
+    return null;
+  }
+}

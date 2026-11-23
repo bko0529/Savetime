@@ -38,11 +38,20 @@ export function onConnection(fn: (connected: boolean) => void): () => void {
   return () => statusSubs.delete(fn);
 }
 
+/**
+ * 받아서 처리할 이벤트인지. 이미 받은 번호(다시 보내기와 겹침)는 버린다.
+ * 번호가 0 인 이벤트(강제 로그아웃·PC 해제 등)는 기록 없이 바로 보내는 것이라 늘 받고, 마지막 번호도 바꾸지 않는다
+ */
+export function acceptSeq(last: number | null, seq: unknown): { accept: boolean; last: number | null } {
+  if (typeof seq !== "number" || seq <= 0) return { accept: true, last };
+  if (last !== null && seq <= last) return { accept: false, last };
+  return { accept: true, last: seq };
+}
+
 function dispatch(name: string, env: Envelope) {
-  if (typeof env?.seq === "number") {
-    if (lastSeq !== null && env.seq <= lastSeq) return; // 이미 받은 이벤트 (다시 보내기와 겹침)
-    lastSeq = env.seq;
-  }
+  const r = acceptSeq(lastSeq, env?.seq);
+  if (!r.accept) return;
+  lastSeq = r.last;
   noteServerTime(env?.serverNow);
   handlers.get(name)?.forEach((f) => f(env));
   handlers.get("*")?.forEach((f) => f({ ...env, room: `${env.room}#${name}` }));
