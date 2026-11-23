@@ -22,25 +22,25 @@ export type Patient = {
   ktas: string;
 };
 
-/** 시연 영상용 예시 — 모든 값은 바로 고칠 수 있고, 환자 식별정보는 포함하지 않아요. */
-export const demoPatient: Patient = {
-  grade: "대학병원급",
-  complaint: "갑작스러운 극심한 두통, 의식 저하",
-  sex: "여",
-  age: "60대",
-  consciousness: "말에 반응",
-  bp: "168/96",
-  pulse: "112",
-  resp: "22",
-  spo2: "93",
-  painSite: "머리",
-  painScore: "8",
-  onset: "30분 전",
-  trauma: "없음",
-  history: "고혈압, 당뇨",
-  temp: "36.8",
-  glucose: "126",
-  ktas: "2",
+/** 새 이송을 시작하면 모든 항목이 비어 있어요 (시연 예시 자동 입력 없음). */
+export const emptyPatient: Patient = {
+  grade: null,
+  complaint: "",
+  sex: "",
+  age: "",
+  consciousness: "",
+  bp: "",
+  pulse: "",
+  resp: "",
+  spo2: "",
+  painSite: "",
+  painScore: "",
+  onset: "",
+  trauma: "",
+  history: "",
+  temp: "",
+  glucose: "",
+  ktas: "",
 };
 
 /** 필수 12개 항목 (요구사항 CR-007) */
@@ -84,10 +84,10 @@ type Store = {
 
 const Ctx = createContext<Store | null>(null);
 
-const TKEY = "savetime-transport-v1";
+const TKEY = "savetime-transport-v2";
 
 export function TransportProvider({ children }: { children: ReactNode }) {
-  const [patient, setPatient] = useState<Patient>(demoPatient);
+  const [patient, setPatient] = useState<Patient>(emptyPatient);
   const [timeline, setTimeline] = useState<Timeline>({});
   const [confirmed, setConfirmed] = useState<ConfirmedHospital | null>(null);
   const [rejectedNames, setRejectedNames] = useState<string[]>([]);
@@ -99,8 +99,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       if (d) {
         const saved = d.patient as Partial<Patient> | undefined;
         const hasSavedPatient = !!saved && Object.values(saved).some((v) => String(v ?? "").trim() !== "");
-        // 아직 입력한 적이 없는 기기에서도 시연 예시가 바로 보이게 해요.
-        setPatient(hasSavedPatient ? { ...demoPatient, ...saved } : demoPatient);
+        // 입력한 적이 없는 기기는 모든 항목이 빈 상태로 시작해요.
+        setPatient(hasSavedPatient ? { ...emptyPatient, ...saved } : emptyPatient);
         setTimeline(d.timeline ?? {});
         setConfirmed(d.confirmed ?? null);
         setRejectedNames(d.rejectedNames ?? []);
@@ -112,7 +112,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     if (ready) localStorage.setItem(TKEY, JSON.stringify({ patient, timeline, confirmed, rejectedNames }));
   }, [ready, patient, timeline, confirmed, rejectedNames]);
   const reset = () => {
-    setPatient(demoPatient);
+    setPatient(emptyPatient);
     setTimeline({});
     setConfirmed(null);
     setRejectedNames([]);
