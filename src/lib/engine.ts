@@ -9,6 +9,7 @@ import { useSyncExternalStore } from "react";
 import type { TransportStatus, HreqStatus, CloseReason, FallbackReason, PhoneProceedReason, DestChangeReason } from "./domain/stateMachine";
 import { api, ApiError, deviceId, errorText, serverNow } from "./api";
 import { onEvent } from "./realtime";
+import { retryOnVersionConflict } from "./versionRetry";
 import { getAuth } from "./auth-store";
 import { RADIUS_STEPS, START_RADIUS, type Hospital } from "./hospitals";
 import { currentLocation, distanceM, moveToward, FIXED_LOCATION, type LatLng } from "./location";
@@ -422,6 +423,18 @@ async function guard<T>(fn: () => Promise<T>): Promise<Result<T>> {
   }
 }
 
+/** 도착·취소: 버전이 상태 변화 없이 올라 거절되면 최신으로 한 번 더 보낸다 (확정 직후 운전 폰의 경로 안내 담당 지정 등) */
+function sendLatest(path: string, body: Record<string, unknown>) {
+  return retryOnVersionConflict(
+    { status: s.status, version: s.version },
+    (version) => api("POST", path, { body: { ...body, version } }),
+    async () => {
+      await refresh();
+      return { status: s.status, version: s.version };
+    },
+  );
+}
+
 const tid = () => {
   if (!s.transportId) throw new ApiError(0, "NO_TRANSPORT", "진행 중 이송이 없어요");
   return s.transportId;
@@ -512,7 +525,7 @@ export const actions = {
   },
   async arrive(method: "button" | "hospital" = "button") {
     return guard(async () => {
-      await api("POST", `/transports/${tid()}/arrive`, { body: { method, version: s.version } });
+      await sendLatest(`/transports/${tid()}/arrive`, { method });
       stopDrive();
       await refresh();
     });
@@ -537,7 +550,7 @@ export const actions = {
   },
   async cancel() {
     return guard(async () => {
-      await api("POST", `/transports/${tid()}/cancel`, { body: { version: s.version } });
+      await sendLatest(`/transports/${tid()}/cancel`, {});
       stopDrive();
       await refresh();
     });
