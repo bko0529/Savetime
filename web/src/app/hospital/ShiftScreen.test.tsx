@@ -177,3 +177,77 @@ describe('알림 켜기 실패', () => {
     expect(screen.queryByText(/알림 켜짐/)).toBeNull();
   });
 });
+
+describe('근무 종료 (SFR-117)', () => {
+  const waiting = (id: number) => ({
+    id,
+    label: `R-${id}`,
+    status: 'waiting',
+    chiefComplaint: '흉통',
+    respondUntil: new Date(Date.now() + 90_000).toISOString(),
+    etaMin: 9,
+    etaSource: 'straight',
+    abnormalCount: 0,
+  });
+
+  function openShift(end: { status: number; body?: unknown }, items: object[] = []) {
+    const server = fakeServer({
+      'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
+      'GET /hw/requests?status=open': {
+        status: 200,
+        body: { items, nextCursor: null, serverNow: new Date().toISOString() },
+      },
+      'GET /hw/incoming': NO_INCOMING,
+      'POST /hw/shifts/current/end': end,
+    });
+    renderWithQuery(<HospitalHome createSocket={createSocket} />);
+    return server;
+  }
+  const endButton = () => screen.getByRole('button', { name: '근무 종료' });
+
+  it('확인하면 근무를 끝내고 근무 시작 화면으로 돌아간다', async () => {
+    const server = openShift({ status: 204 });
+    await screen.findByText('알림 켜기를 다시 누르세요.');
+    fireEvent.click(endButton());
+    expect(await screen.findByText('근무를 끝낼까요?')).toBeDefined();
+
+    server.set('GET /hw/session', { status: 200, body: { ...HOSPITAL, shift: null } });
+    fireEvent.click(screen.getAllByRole('button', { name: '근무 종료' }).at(-1)!);
+
+    expect(await screen.findByLabelText('담당자 이름')).toBeDefined();
+    expect(server.callsTo('POST /hw/shifts/current/end')).toHaveLength(1);
+  });
+
+  it('취소하면 아무것도 보내지 않는다', async () => {
+    const server = openShift({ status: 204 });
+    await screen.findByText('알림 켜기를 다시 누르세요.');
+    fireEvent.click(endButton());
+    fireEvent.click(await screen.findByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.queryByText('근무를 끝낼까요?')).toBeNull());
+    expect(server.callsTo('POST /hw/shifts/current/end')).toHaveLength(0);
+  });
+
+  it('다른 탭에서 이미 끝냈으면(404) 오류 없이 근무 시작 화면으로', async () => {
+    const server = openShift({
+      status: 404,
+      body: { error: { code: 'NOT_FOUND', message: '진행 중인 근무가 없어요' } },
+    });
+    await screen.findByText('알림 켜기를 다시 누르세요.');
+    fireEvent.click(endButton());
+    server.set('GET /hw/session', { status: 200, body: { ...HOSPITAL, shift: null } });
+    fireEvent.click((await screen.findAllByRole('button', { name: '근무 종료' })).at(-1)!);
+    expect(await screen.findByLabelText('담당자 이름')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('아직 응답하지 않은 요청이 있으면 확인창에 개수를 알려 준다', async () => {
+    openShift({ status: 204 }, [waiting(1), waiting(2)]);
+    // 새 요청 창(덮개)을 먼저 확인한다. 실제 화면에서도 덮개가 다른 버튼을 가린다
+    for (let i = 0; i < 2; i += 1) {
+      fireEvent.click(await screen.findByRole('button', { name: '확인' }));
+    }
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(endButton());
+    expect(await screen.findByText('아직 응답하지 않은 요청 2건이 있어요.')).toBeDefined();
+  });
+});
