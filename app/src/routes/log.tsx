@@ -144,7 +144,7 @@ function LogBody() {
       {/* 관리자가 'AI 일지 정리'를 켰을 때만 (QUR-013, 앱이 1분마다 설정을 다시 읽음) */}
       {journalAi && <AiOrganize onApply={(s) => setF(applyAiSuggestions(f, s))} />}
 
-      <Section title="구급출동" auto>
+      <Section title="구급출동" auto note="신고·출동·현장 도착·환자 접촉 시각은 앱이 알 수 없어서 비워 뒀어요. 수정을 눌러 직접 적어 주세요.">
         {(edit) => edit ? (
           <div className="grid grid-cols-2 gap-2">
             {([["callAt", "신고 일시"], ["dispatchAt", "출동 시각"], ["sceneAt", "현장 도착"], ["contactAt", "환자 접촉"], ["departAt", "현장 출발"], ["arriveAt", "병원 도착"]] as const).map(([k, l]) => (

@@ -20,7 +20,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { reset, setTimeline } = useTransport();
+  const { reset } = useTransport();
   const a = useAuth();
   const me = currentAccount(a);
   const e = useEngine();
@@ -30,13 +30,8 @@ function Home() {
   const start = () => {
     reset();
     actions.reset();
-    const now = new Date();
-    setTimeline({
-      callAt: new Date(now.getTime() - 14 * 60000),
-      dispatchAt: new Date(now.getTime() - 12 * 60000),
-      sceneAt: new Date(now.getTime() - 4 * 60000),
-      contactAt: new Date(now.getTime() - 3 * 60000),
-    });
+    // reset() 이 시각 기록을 비운다. 신고·출동·현장 도착·환자 접촉 시각은 이 앱도 서버도 모르므로(119 상황실과
+    // 연결되지 않음) 지어낸 값을 넣지 않고, 대원이 일지에서 직접 적는다. 현장 출발·병원 도착은 이송 기록으로 채운다
     nav({ to: "/patient" });
   };
   const resume = () => {
