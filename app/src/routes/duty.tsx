@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { TeamQrScanner } from "@/components/team-qr-scanner";
 import { QrCode, Search, UserPlus, LogOut, BellRing, Clock, Users } from "lucide-react";
 import { PhoneScreen, BigButton, Label, Notice, SectionTitle, Pill, Segmented, Avatar, IconTile } from "@/components/phone";
 import { useAuth, getAuth, currentAccount, TEAM_MAX, INVITE_MS, driverTaken, type Role } from "@/lib/auth-store";
@@ -9,7 +10,6 @@ import {
 } from "@/lib/auth-server";
 import { leave } from "@/lib/duty";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/duty")({
   head: () => ({
@@ -76,14 +76,19 @@ function DutyPage() {
     setBusy(false);
   };
 
-  const join = async (c: string) => {
-    if (!/^\d{4}$/.test(c)) return setErr("팀원 화면의 4자리 코드를 입력해 주세요");
+  const joinWith = async (by: { code: string } | { qrToken: string }) => {
     setBusy(true);
-    const e = await joinTeam({ code: c }, role);
+    const e = await joinTeam(by, role);
     setBusy(false);
     setErr(e ?? "");
     if (!e) setRole(getAuth().duty?.role ?? role);
   };
+  const join = async (c: string) => {
+    if (!/^\d{4}$/.test(c)) return setErr("팀원 화면의 4자리 코드를 입력해 주세요");
+    await joinWith({ code: c });
+  };
+  // QR 스캔 (SFR-159): 팀원 화면의 QR 을 읽으면 그 팀으로 바로 들어간다
+  const [scanning, setScanning] = useState(false);
 
   const invite = async (p: OnDuty) => {
     if (full) return setErr(`팀은 최대 ${TEAM_MAX}명이에요`);
@@ -141,6 +146,13 @@ function DutyPage() {
         </Link>
       )}
 
+      {scanning && (
+        <TeamQrScanner
+          onClose={() => setScanning(false)}
+          onFound={(qrToken) => { setScanning(false); void joinWith({ qrToken }); }}
+        />
+      )}
+
       <Segmented
         value={mode}
         onChange={(m) => switchMode(m)}
@@ -171,7 +183,7 @@ function DutyPage() {
             <input className="field flex-1 text-center text-2xl font-extrabold tracking-[0.4em] tabular-nums" inputMode="numeric" maxLength={4} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="4821" />
             <button disabled={busy} className="btn-solid-primary shrink-0 rounded-xl px-5 font-extrabold text-primary-foreground disabled:opacity-50" onClick={() => void join(code)}>참여</button>
           </div>
-          <button className="tile mt-2 flex w-full items-center justify-center gap-2 p-3 text-sm font-bold transition hover:bg-surface" onClick={() => toast("QR 스캔은 준비 중이에요. 4자리 코드를 입력해 주세요")}>
+          <button disabled={busy} className="tile mt-2 flex w-full items-center justify-center gap-2 p-3 text-sm font-bold transition hover:bg-surface disabled:opacity-50" onClick={() => { setErr(""); setScanning(true); }}>
             <QrCode className="size-5 text-accent-deep" /> QR 스캔으로 참여
           </button>
           <p className="mt-1.5 text-xs text-muted-foreground">카메라 권한은 QR 스캔할 때 물어요</p>
