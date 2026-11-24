@@ -602,7 +602,11 @@ export const CLOSE_LABEL: Record<CloseReason, string> = {
 // 시연(고정 위치)에서는 병원 입구 쪽으로 시속 약 40km 로 움직이는 것처럼 흉내 내고, 남은 분을 1분마다 같이 보낸다.
 const SPEED_MPS = 11;
 const STEP_SEC = 5;
-let drive: { timer: ReturnType<typeof setInterval>; at: LatLng; target: LatLng; minuteSent: number } | null = null;
+let drive: {
+  timer: ReturnType<typeof setInterval>; at: LatLng; target: LatLng; minuteSent: number;
+  /** 시연 위치일 때: 출발 때 입구까지 거리(m)와 그때 서버가 준 도착 예상(분, 길찾기) */
+  startM: number; startEta: number | null;
+} | null = null;
 let claiming = false;
 
 function stopDrive() {
@@ -644,7 +648,10 @@ async function startDrive(target: LatLng) {
   const start = (await currentLocation()) ?? target;
   starting = false;
   if (drive || s.status !== "moving") return;
-  drive = { at: start, target, minuteSent: 0, timer: setInterval(() => void stepDrive(), STEP_SEC * 1000) };
+  drive = {
+    at: start, target, minuteSent: 0, timer: setInterval(() => void stepDrive(), STEP_SEC * 1000),
+    startM: distanceM(start, target), startEta: s.etaMin,
+  };
   void stepDrive();
 }
 
@@ -658,7 +665,9 @@ async function stepDrive() {
   s.remainingM = Math.round(left);
   // 시연 위치면 흉내 낸 속도, 실제 위치면 5초 동안 움직인 거리로 잰다
   s.speedKmh = FIXED_LOCATION ? (left > 5 ? SPEED_MPS * 3.6 : 0) : Math.round((distanceM(before, d.at) / STEP_SEC) * 3.6);
-  const etaMin = Math.ceil(left / SPEED_MPS / 60);
+  // 시연 위치는 직선으로 빠르게 달리는 흉내라, 남은 시간은 출발 때 길찾기 값을 남은 거리 비율로 줄인다.
+  // 그래야 병원 화면·팀원 화면의 시간이 확정 때 값(예: 6분)에서 이어져 내려간다. 실제 위치는 그대로 계산
+  const etaMin = FIXED_LOCATION ? demoEtaMin(left, d.startM, d.startEta) : Math.ceil(left / SPEED_MPS / 60);
   emit();
   // 남은 분은 1분에 한 번만 실어 보낸다 (그 사이는 서버가 지난 시간을 뺀다)
   const sendEta = now() - d.minuteSent >= 60_000 || etaMin === 0;
@@ -726,4 +735,14 @@ export const DRIVING_KMH = 10;
  */
 export function driverLocked(role: string | null | undefined, status: TransportStatus | null, speedKmh: number | null): boolean {
   return role === "운전" && status === "moving" && speedKmh !== null && speedKmh >= DRIVING_KMH;
+}
+
+/**
+ * 시연 위치(VITE_FIXED_*)로 달릴 때 보낼 남은 분. 출발 때 길찾기 도착 예상을 남은 거리 비율만큼 줄인다.
+ * 출발 때 값이 없으면 시연 속도로 계산한다. 입구 근처(5m 이내)면 0
+ */
+export function demoEtaMin(leftM: number, startM: number, startEta: number | null): number {
+  if (leftM <= 5) return 0;
+  if (startEta === null || startM <= 0) return Math.ceil(leftM / SPEED_MPS / 60);
+  return Math.max(1, Math.ceil(startEta * Math.min(1, leftM / startM)));
 }
