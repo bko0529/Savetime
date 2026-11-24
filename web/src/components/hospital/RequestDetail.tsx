@@ -42,12 +42,16 @@ export function RequestDetail({
   requestId,
   nowMs,
   beds = null,
+  listEta = null,
 }: {
   requestId: number;
   nowMs: number;
   onClose?: () => void;
   // 요청 상세에 병상이 없을 때 쓰는 근무 화면의 병상
   beds?: OurBeds | null;
+  // 요청 목록의 최신 도착 예상. 상세는 열람 기록 때문에 다시 받지 않아서, 요청 직후 연 상세에는
+  // 길찾기 전 추정값이 남는다. 목록은 request.eta 때마다 새로 받으므로 그 값을 쓴다
+  listEta?: { etaMin?: number | null; etaSource?: 'straight' | 'route' } | null;
 }) {
   const detail = useQuery({
     queryKey: detailKey(requestId),
@@ -66,7 +70,15 @@ export function RequestDetail({
   });
   const incomingItem = incoming.data?.items?.find((i) => i.id === requestId);
 
-  const d = detail.data;
+  // 도착 예상은 목록의 최신 값(길찾기 반영)을 우선 쓴다. 확정 뒤에는 도착 예정 목록 값이 따로 이긴다 (etaLine)
+  const d =
+    detail.data && listEta?.etaMin != null
+      ? {
+          ...detail.data,
+          etaMin: listEta.etaMin,
+          etaSource: listEta.etaSource ?? detail.data.etaSource,
+        }
+      : detail.data;
   const a = (d?.assessment ?? {}) as Assessment;
   const waiting = d?.status === 'waiting';
   const urgent = waiting && d?.respondUntil && isUrgent(d.respondUntil, nowMs);

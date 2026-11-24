@@ -62,6 +62,17 @@ describe('요청 상세 (SFR-118)', () => {
     expect(screen.getByText('남은 0:25').className).toContain('text-destructive');
   });
 
+  it('목록이 길찾기 값으로 바뀌었으면 상세도 그 값을 쓴다 (먼저 받은 추정값 대신)', async () => {
+    fakeServer({
+      'GET /hw/requests/102': { status: 200, body: detail({ etaSource: 'straight', etaMin: 3 }) },
+    });
+    renderWithQuery(
+      <RequestDetail requestId={102} nowMs={NOW} listEta={{ etaMin: 6, etaSource: 'route' }} />,
+    );
+    expect(await screen.findByText('6분')).toBeTruthy();
+    expect(screen.queryByText(/추정/)).toBeNull();
+  });
+
   it('길찾기 전 추정 시간은 (추정)으로', async () => {
     fakeServer({
       'GET /hw/requests/102': { status: 200, body: detail({ etaSource: 'straight', etaMin: 9 }) },

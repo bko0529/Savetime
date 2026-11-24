@@ -303,6 +303,7 @@ export function ShiftScreen({
                       requestId={shownId}
                       nowMs={incoming.nowMs}
                       beds={beds}
+                      listEta={incoming.items.find((r) => r.id === shownId) ?? null}
                     />
                   ) : (
                     <EmptyRequestDetail beds={beds} />
