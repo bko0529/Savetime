@@ -19,8 +19,8 @@
 		respond 404
 	}
 
-	# 나머지는 병원 웹(Next.js)
+	# 나머지는 앱(구급대원 앱 + 병원 웹, app/)
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy app:3000
 	}
 }

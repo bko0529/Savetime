@@ -2,20 +2,26 @@
 
 2026-11-09 결정: **앱 서버 1대 + 관리자 서버 1대 + 데이터 서버 1대** (Lightsail 서울). 로드밸런서는 쓰지 않는다.
 
+2026-11-24: 병원·관리자 화면이 Next.js `web/` 에서 진아의 `app/`(구급대원 앱과 한 프로젝트)으로 옮겨졌다.
+그래서 두 서버 모두 `web` 대신 `app` 이미지(`app/Dockerfile`, Node 서버 빌드)를 띄운다.
+구급대원 앱도 앱 도메인에서 같이 열려서, 앱 → 서버 호출이 같은 주소(CORS 없음)가 된다.
+
 ```
- 구급대원 웹앱(Lovable) ─┐
+ 구급대원 폰 브라우저 ───┐
  병원 PC 브라우저 ───────┼─▶ [앱 서버]  Caddy(HTTPS) ─┬─ /api·/socket.io·/health → server (APP_ROLE=main)
-                         │                              └─ 나머지                    → web    (APP_ROLE=hospital)
+                         │                              ├─ /admin*                   → 404
+                         │                              └─ 나머지                    → app (구급대원 앱·병원 웹)
  관리자 (허용 IP만) ─────┴─▶ [관리자 서버] Caddy(HTTPS·IP 제한) ─┬─ /api → server (APP_ROLE=admin, 보내기 전용 실시간)
-                                                                 └─ 나머지 → web (APP_ROLE=admin)
+                                                                 ├─ /    → /admin 으로 이동
+                                                                 └─ 나머지 → app (관리자 화면)
             두 서버 ──(사설 IP)──▶ [데이터 서버] PostgreSQL 16 · Redis 7
 ```
 
 | 폴더 | 서버 | 들어 있는 것 |
 |---|---|---|
 | `deploy/data/` | 데이터 서버 | PostgreSQL·Redis. 사설 IP 에만 포트를 연다 |
-| `deploy/app/` | 앱 서버 | Caddy + 서버(main) + 병원 웹. 주기 작업·타이머·실시간 연결은 여기서만 |
-| `deploy/admin/` | 관리자 서버 | Caddy(허용 IP) + 서버(admin) + 관리자 웹 |
+| `deploy/app/` | 앱 서버 | Caddy + 서버(main) + app(구급대원 앱·병원 웹). 주기 작업·타이머·실시간 연결은 여기서만 |
+| `deploy/admin/` | 관리자 서버 | Caddy(허용 IP) + 서버(admin) + app(관리자 화면) |
 
 ## 관리자 서버가 하는 일과 안 하는 일 (T-11)
 - 관리자 API(`/api/v1/admin/*`)는 **관리자 서버에서만** 켜진다. 앱 서버에서는 404 (개발 모드 `NODE_ENV=development` 에서만 앱 서버에도 켬).
@@ -29,10 +35,11 @@
 | 데이터 | `deploy/data/.env` | `PRIVATE_IP` | 데이터 서버 **사설** IP |
 | | | `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | `openssl rand -hex 16` |
 | 앱 | `deploy/app/.env` | `APP_DOMAIN` | 예: `savetime.example.kr` (DNS 가 이 서버 고정 IP 를 가리킨 뒤 켜야 인증서가 나온다) |
+| | | `VITE_KAKAO_JS_KEY` | 카카오 지도 JavaScript 키. 빌드 때 앱에 들어가는 공개 키라, 카카오 콘솔에서 앱·관리자 도메인만 허용 |
 | | `deploy/app/server.env` | `DATABASE_URL`, `REDIS_URL` | 위 비밀번호 + 데이터 서버 사설 IP |
 | | | `JWT_SECRET` | `openssl rand -base64 32`. **관리자 서버와 같은 값** |
 | | | `ALLOWED_ORIGINS` | `https://앱 도메인,https://admin.앱 도메인` |
-| | | `APP_ORIGINS` | Lovable 구급대원 웹앱 주소 (CR-010) |
+| | | `APP_ORIGINS` | `https://앱 도메인`. 앱이 같은 주소라 CORS 는 필요 없지만, 비우면 경고가 뜬다. Lovable 미리보기 주소에서도 쓰려면 쉼표로 추가 (CR-010) |
 | | | `PUBLIC_DATA_API_KEY`, `KAKAO_REST_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_BASE64` | 운영 키 |
 | | | `S3_*`, `PHOTO_ENC_KEY` | 가입 사진 저장. 비우면 가입 신청이 503 |
 | | | `AI_API_KEY`, `AI_MODEL` | AI 일지 정리. 시연 전 관리자 화면에서 `journal_ai` 켜기 |

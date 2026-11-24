@@ -1,5 +1,6 @@
 /**
- * 세이브타임 서버 연결 (REST). 서버 주소는 VITE_API_BASE_URL, 없으면 노트북 시연 서버(http://localhost:4000).
+ * 세이브타임 서버 연결 (REST). 서버 주소는 VITE_API_BASE_URL.
+ *   없으면 개발 중에는 노트북 시연 서버(http://localhost:4000), 운영 빌드에서는 같은 도메인(Caddy 가 /api·/socket.io 를 서버로 넘김)
  * - 로그인 토큰(15분)이 만료되면 refresh 토큰으로 한 번 갱신하고 다시 보낸다
  * - 응답 헤더 X-Server-Now 로 서버 시각과의 차이를 기억한다 → 2분·5분 남은 시간은 serverNow() 로 계산 (SFR-110)
  * - 오류는 서버의 { error: { code, message, details } } 를 ApiError 로 바꿔 던진다. message 는 그대로 화면에 보여도 되는 한국어
@@ -7,7 +8,7 @@
 
 export const API_BASE_URL: string =
   (import.meta.env["VITE_API_BASE_URL"] as string | undefined)?.replace(/\/$/, "") ||
-  "http://localhost:4000";
+  (import.meta.env.DEV ? "http://localhost:4000" : "");
 
 export type Tokens = { accessToken: string; refreshToken: string };
 

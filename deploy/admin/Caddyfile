@@ -20,7 +20,11 @@
 	handle /socket.io/* {
 		respond 404
 	}
+	# 관리자 도메인의 첫 화면은 관리자 화면으로
+	handle / {
+		redir /admin
+	}
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy app:3000
 	}
 }

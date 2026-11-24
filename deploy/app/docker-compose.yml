@@ -10,7 +10,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data   # HTTPS 인증서. 지우면 다시 발급받는다
-    depends_on: [server, web]
+    depends_on: [server, app]
   server:
     build: { context: ../.., dockerfile: server/Dockerfile }
     restart: unless-stopped
@@ -20,10 +20,12 @@ services:
       NODE_ENV: production
     # 종료 신호 뒤 처리 중인 요청을 끝낼 시간 (index.ts 는 30초 안에 끝낸다)
     stop_grace_period: 35s
-  web:
-    build: { context: ../.., dockerfile: web/Dockerfile }
+  # 구급대원 앱·병원 웹·관리자 웹이 한 프로젝트(app/). 관리자 화면은 Caddy 가 이 서버에서 막는다
+  app:
+    build:
+      context: ../../app
+      args:
+        VITE_KAKAO_JS_KEY: ${VITE_KAKAO_JS_KEY:-}
     restart: unless-stopped
-    environment:
-      APP_ROLE: hospital
 volumes:
   caddy-data:
