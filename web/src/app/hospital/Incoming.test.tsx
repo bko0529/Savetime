@@ -179,3 +179,55 @@ describe('도착 예정 목록의 추가 메모 (SFR-140)', () => {
     expect(within(section).queryByRole('button', { name: '추가 메모' })).toBeNull();
   });
 });
+
+describe('도착 예정 실시간 (SFR-144·105)', () => {
+  it('구급차가 입구 200m 안에 들어오면(incoming.near) 목록을 다시 받아 도착 확인 버튼이 켜진다', async () => {
+    const section = await incomingTable();
+    const row = () => within(section).getByText('R-102').closest('tr')!;
+    await waitFor(() =>
+      expect(within(row()).getByRole('button', { name: '도착 확인' })).toHaveProperty(
+        'disabled',
+        true,
+      ),
+    );
+    server.set(INCOMING, list(incoming(102, { canConfirmArrival: true })));
+    socket.fire('incoming.near', envelope({ requestId: 102 }));
+    await waitFor(() =>
+      expect(within(row()).getByRole('button', { name: '도착 확인' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
+  });
+
+  it('번호를 누르면 확정된 요청의 상세가 열리고, 환자 정보가 바뀌면 새로 받는다', async () => {
+    const DETAIL = 'GET /hw/requests/102';
+    const body = (spo2: number) => ({
+      status: 200,
+      body: {
+        id: 102,
+        label: 'R-102',
+        status: 'confirmed',
+        version: 1,
+        serverNow: new Date().toISOString(),
+        assessment: { chiefComplaint: '흉통', spo2, unknownFields: [] },
+        abnormalFields: ['spo2'],
+        ourHospital: { capability: null, beds: { er: '5/20', icu: null, or: null } },
+      },
+    });
+    server.set(DETAIL, body(85));
+    const section = await incomingTable();
+    fireEvent.click(await within(section).findByRole('button', { name: 'R-102' }));
+    expect(await screen.findByText('⚠ 85%')).toBeTruthy();
+
+    // 남은 시간만 바뀐 때는 상세를 다시 받지 않는다 (열람 기록이 1분마다 쌓이지 않게)
+    socket.fire('incoming.updated', envelope({ requestId: 102, etaMin: 5 }));
+    await waitFor(() => expect(server.callsTo(INCOMING).length).toBeGreaterThan(1));
+    expect(server.callsTo(DETAIL)).toHaveLength(1);
+
+    server.set(DETAIL, body(77));
+    socket.fire('incoming.updated', envelope({ requestId: 102, changedFields: ['spo2'] }));
+    expect(await screen.findByText('⚠ 77%')).toBeTruthy();
+    expect(server.callsTo(DETAIL)).toHaveLength(2);
+  });
+});

@@ -250,6 +250,7 @@ export function ShiftScreen({
                 items={arriving.items}
                 notices={arriving.notices}
                 onDismiss={arriving.dismiss}
+                onOpen={setSelectedId}
               />
             </section>
           </>
