@@ -710,30 +710,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/transports/{transportId}/fallback-radius": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 예비 추천 반경 넓히기 (요청은 안 보냄)
-         * @description 추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.
-         *
-         *     **요구사항**: SFR-029, SFR-012
-         *     **화면**: S-06 예비 추천
-         *     **오류 코드**: NOT_FOUND, MAX_RADIUS, INVALID_TRANSITION
-         */
-        put: operations["put_transports__transportId__fallback_radius"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/transports/{transportId}/rounds": {
         parameters: {
             query?: never;
@@ -3729,47 +3705,6 @@ export interface operations {
                          */
                         emptyGuide?: "expand_radius" | "call_nearby" | null;
                     };
-                };
-            };
-            /** @description 오류 (코드는 오류 코드표) */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    put_transports__transportId__fallback_radius: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transportId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * @description 지금보다 한 단계 큰 값
-                     * @enum {integer}
-                     */
-                    radiusKm: 10 | 20 | 30 | 40;
-                };
-            };
-        };
-        responses: {
-            /** @description 성공 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Transport"];
                 };
             };
             /** @description 오류 (코드는 오류 코드표) */

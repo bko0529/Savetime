@@ -13,6 +13,7 @@
 | 통계 `rejectBySource`(출처별 거절 사유) | D-115, SFR-106 |
 | 기능 토글: `GET /config`, `GET·PUT /admin/feature-flags` | D-122, QUR-013 |
 | 관리자 알림 kind에 `integrity`(일 단위 정합성 점검) | QUR-014 |
+| 2026-11-24: `PUT /transports/{id}/fallback-radius`(예비 추천 반경만 넓히기) 삭제. 요청 화면이 승인 대기와 함께 '가까운 병원(거리순)' 목록과 전화 확인을 처음부터 보여 주고, 반경은 '반경 넓혀 다시 요청'(`rounds` expand)으로만 넓힌다. 응답의 `fallbackRadiusKm` 은 그대로 | SFR-029 |
 
 ## v0.1 → v0.2 바뀐 점
 
@@ -100,7 +101,6 @@
 | GET | `/transports/{transportId}` | 이송 건 보기 | 대원 | - | S-05 · S-09 | SFR-110 |
 | POST | `/transports/{transportId}/confirm` | 승인 병원 확정 | 대원 | CONFIRM | S-05 확정 확인 | SFR-111, SFR-134, SFR-160, SFR-125 |
 | GET | `/transports/{transportId}/recommendations` | 추천 목록 (요청 중·예비 추천 공용, 거리순) | 대원 | - | S-05 요청 화면 | SFR-112, SFR-098, SFR-027, SFR-030, SFR-002 |
-| PUT | `/transports/{transportId}/fallback-radius` | 예비 추천 반경 넓히기 (요청은 안 보냄) | 대원 | - | S-06 예비 추천 | SFR-029, SFR-012 |
 | POST | `/transports/{transportId}/rounds` | 다시 요청 (반경 넓히기 · 승인 취소 후) | 대원 | EXPAND_ROUND, RE_REQUEST | S-06 · S-09 승인 취소 경보 | SFR-131, SFR-128, SFR-156 |
 | POST | `/transports/{transportId}/phone-check/start` | 추천 병원으로 전화 확인 시작 (요청 중에도, 요청은 열어 둠) | 대원 | START_PHONE_CHECK | S-05 → S-08 전화 확인 | SFR-032, SFR-031 |
 | POST | `/transports/{transportId}/phone-checks` | 전화 확인 결과 기록 | 대원 | PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED | S-08 전화 확인 | SFR-032, SFR-033, SFR-034, SFR-074, SFR-075 |
@@ -252,7 +252,7 @@
 | S-03 | `POST /teams` · `POST /teams/join` · `GET /teams/current` · `PATCH /teams/current/members/me` · `POST /teams/current/leave` · `GET /paramedics/on-duty` · `POST /teams/current/invites` · `PUT /memos/{paramedicId}` |
 | S-04 | `GET /teams/current/draft` · `PATCH /teams/current/draft` · `DELETE /teams/current/draft` · `GET /geocode` · `GET /request-targets/preview` · `POST /transports` |
 | S-05 | `POST /transports` · `GET /transports/{transportId}` · `POST /transports/{transportId}/confirm` · `GET /transports/{transportId}/recommendations` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/cancel` |
-| S-06 | `GET /geocode` · `GET /hospitals/nearby` · `POST /transports` · `GET /transports/{transportId}/recommendations` · `PUT /transports/{transportId}/fallback-radius` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/cancel` |
+| S-06 | `GET /geocode` · `GET /hospitals/nearby` · `POST /transports` · `GET /transports/{transportId}/recommendations` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/cancel` |
 | S-07 | `GET /hospitals/{hospitalId}` |
 | S-08 | `POST /transports/{transportId}/phone-check/start` · `POST /transports/{transportId}/phone-checks` · `POST /transports/{transportId}/cancel` |
 | S-09 | `GET /transports/{transportId}` · `POST /transports/{transportId}/rounds` · `POST /transports/{transportId}/nav-device` · `POST /transports/{transportId}/assessments` · `POST /transports/{transportId}/locations` · `POST /transports/{transportId}/destination` · `POST /transports/{transportId}/cancel` |

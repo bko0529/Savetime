@@ -1400,52 +1400,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /transports/{transportId}/fallback-radius:
-    put:
-      tags:
-      - 4. 이송 (대원 앱 · 핵심)
-      summary: 예비 추천 반경 넓히기 (요청은 안 보냄)
-      description: "추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두\
-        \ 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.\n\n**요구사항**: SFR-029, SFR-012\
-        \  \n**화면**: S-06 예비 추천  \n**오류 코드**: NOT_FOUND, MAX_RADIUS, INVALID_TRANSITION"
-      operationId: put_transports__transportId__fallback_radius
-      security: *id009
-      x-error-codes:
-      - NOT_FOUND
-      - MAX_RADIUS
-      - INVALID_TRANSITION
-      parameters:
-      - *id011
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                radiusKm:
-                  type: integer
-                  enum:
-                  - 10
-                  - 20
-                  - 30
-                  - 40
-                  description: 지금보다 한 단계 큰 값
-              required:
-              - radiusKm
-      responses:
-        '200':
-          description: 성공
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transport'
-        4XX:
-          description: 오류 (코드는 오류 코드표)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /transports/{transportId}/rounds:
     post:
       tags:
