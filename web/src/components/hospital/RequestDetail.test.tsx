@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
-import { RequestDetail } from './RequestDetail';
+import { EmptyRequestDetail, RequestDetail } from './RequestDetail';
 
 const NOW = Date.parse('2026-11-03T14:00:00Z');
 
@@ -45,16 +45,21 @@ describe('요청 상세 (SFR-118)', () => {
     fakeServer({ 'GET /hw/requests/102': { status: 200, body: detail() } });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
 
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
-    expect(screen.getByText('도착 예상 12분')).toBeTruthy();
-    expect(screen.getByText(/응급실 5\/20 · 수술실 1\/4 · 중환자실 0\/10/)).toBeTruthy();
+    // 제목: R-번호 · 성별 · 나이대 · 주 증상
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'R-102 · 남 · 60대 · 갑작스러운 두통' }),
+    ).toBeTruthy();
+    expect(screen.getByText('12분')).toBeTruthy();
+    // 우리 병원 칸: 응급실·수술실·중환자실
+    expect(screen.getByText('5/20')).toBeTruthy();
+    expect(screen.getByText('1/4')).toBeTruthy();
+    expect(screen.getByText('0/10')).toBeTruthy();
     // 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
     const spo2 = screen.getByText('⚠ 86%');
     expect(spo2.className).toContain('text-destructive');
-    expect(screen.getByText('88회/분').className).not.toContain('text-destructive');
-    expect(screen.getByText('60대')).toBeTruthy();
+    expect(screen.getByText('88회/분 · —').className).not.toContain('text-destructive');
     // 남은 시간 25초 → 빨간색
-    expect(screen.getByText('남은 시간 0:25').className).toContain('text-destructive');
+    expect(screen.getByText('남은 0:25').className).toContain('text-destructive');
   });
 
   it('길찾기 전 추정 시간은 (추정)으로', async () => {
@@ -62,7 +67,7 @@ describe('요청 상세 (SFR-118)', () => {
       'GET /hw/requests/102': { status: 200, body: detail({ etaSource: 'straight', etaMin: 9 }) },
     });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
-    expect(await screen.findByText('도착 예상 약 9분 (추정)')).toBeTruthy();
+    expect(await screen.findByText('약 9분 (추정)')).toBeTruthy();
   });
 
   // 상세는 열람 기록 때문에 다시 받지 않는다. 확정 뒤 시간은 도착 예정 목록(이미 받아 둔 값)을 따른다
@@ -85,7 +90,7 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([{ id: 102, status: 'confirmed', etaMin: 4 }]);
-    expect(await screen.findByText('도착 예상 4분')).toBeTruthy();
+    expect(await screen.findByText('4분')).toBeTruthy();
     expect(screen.queryByText(/추정/)).toBeNull();
   });
 
@@ -99,7 +104,7 @@ describe('요청 상세 (SFR-118)', () => {
     const arrivedAt = new Date(2026, 10, 12, 9, 34).toISOString();
     renderWithIncoming([{ id: 102, status: 'arrived', etaMin: 1, arrivedAt }]);
     expect(await screen.findByText('09:34 도착')).toBeTruthy();
-    expect(screen.queryByText(/도착 예상/)).toBeNull();
+    expect(screen.queryByText(/3분/)).toBeNull();
   });
 
   it('도착 예정 목록을 아직 못 받았어도 도착한 건에 예전 예상 시간을 보여 주지 않는다', async () => {
@@ -110,8 +115,8 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([]);
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
-    expect(screen.queryByText(/도착 예상/)).toBeNull();
+    expect(await screen.findByText(/갑작스러운 두통/)).toBeTruthy();
+    expect(screen.queryByText(/3분/)).toBeNull();
   });
 
   it('끝난 요청이면 환자 정보 없이 안내만', async () => {
@@ -131,7 +136,7 @@ describe('요청 상세 (SFR-118)', () => {
     fakeServer({ 'GET /hw/requests/102': { status: 404, body: apiError('NOT_FOUND') } });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
     expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(screen.queryByText('갑작스러운 두통')).toBeNull();
+    expect(screen.queryByText(/갑작스러운 두통/)).toBeNull();
   });
 
   it('근무 전이면(SHIFT_REQUIRED) 근무를 먼저 시작하라고 안내', async () => {
@@ -140,11 +145,16 @@ describe('요청 상세 (SFR-118)', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('근무를 먼저 시작해 주세요');
   });
 
-  it('닫기를 누르면 닫는다', async () => {
-    fakeServer({ 'GET /hw/requests/102': { status: 200, body: detail() } });
-    const onClose = vi.fn();
-    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={onClose} />);
-    fireEvent.click(await screen.findByRole('button', { name: '닫기' }));
-    expect(onClose).toHaveBeenCalled();
+  it('요청이 없어도 환자 평가 정보·우리 병원 칸은 그대로, 값은 — 이고 버튼은 누를 수 없다', () => {
+    renderWithQuery(<EmptyRequestDetail />);
+    expect(screen.getByText('환자 평가 정보')).toBeTruthy();
+    expect(screen.getByText('우리 병원')).toBeTruthy();
+    expect(screen.getByText('응급실')).toBeTruthy();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(5);
+    expect(screen.getByRole('button', { name: '승인' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: '거절 (사유 선택)' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 });

@@ -32,15 +32,15 @@ describe('요청 목록 (SFR-135)', () => {
         onOpen={() => {}}
       />,
     );
-    const rows = screen.getAllByRole('row').slice(1);
-    expect(rows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+    // 왼쪽 카드: 'R-번호 · 주 증상', 남은 시간, 도착 예상
+    const cards = screen.getAllByRole('listitem');
+    expect(cards.map((c) => within(c).getByText(/^R-\d+$/).textContent)).toEqual([
       'R-3',
       'R-1',
       'R-2',
     ]);
-    expect(within(rows[0]).getByText('0:40')).toBeTruthy();
-    expect(within(rows[0]).getByText('응답 대기')).toBeTruthy();
-    expect(within(rows[0]).getByText('약 9분')).toBeTruthy();
+    expect(within(cards[0]).getByText('0:40')).toBeTruthy();
+    expect(within(cards[0]).getByText('도착 예상 약 9분')).toBeTruthy();
   });
 
   it('남은 시간 30초 이하는 빨간색 (0:25)', () => {
@@ -83,7 +83,7 @@ describe('요청 목록 (SFR-135)', () => {
   it('번호를 누르면 그 요청을 연다', () => {
     const onOpen = vi.fn();
     render(<RequestList items={[item(7, 60)]} nowMs={NOW} selectedId={null} onOpen={onOpen} />);
-    fireEvent.click(screen.getByRole('button', { name: 'R-7' }));
+    fireEvent.click(screen.getByRole('button', { name: /R-7/ }));
     expect(onOpen).toHaveBeenCalledWith(7);
   });
 

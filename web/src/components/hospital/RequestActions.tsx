@@ -64,10 +64,18 @@ type Props = {
   canAnswer: boolean;
   // 승인했거나 우리 병원으로 확정된 요청이면 '승인 취소'를 보여 준다 (SFR-128)
   canCancelApproval?: boolean;
+  // 대기 중일 때 승인 버튼 위에 '지금 유효한 승인 n건 · 응급실 병상 m개' (SFR-154 과승인 미리 알림)
+  overApprovalHint?: { validApprovals: number; erBeds: string | null } | null;
 };
 
 // 승인·거절 (SFR-119), 승인 취소 (SFR-128). 응답자 이름은 서버가 근무 시작 때 입력한 담당자 이름으로 남긴다
-export function RequestActions({ requestId, version, canAnswer, canCancelApproval }: Props) {
+export function RequestActions({
+  requestId,
+  version,
+  canAnswer,
+  canCancelApproval,
+  overApprovalHint,
+}: Props) {
   const queryClient = useQueryClient();
   // 열려 있는 사유 창: 거절 / 승인 취소
   const [reasonFor, setReasonFor] = useState<'reject' | 'cancelApproval' | null>(null);
@@ -136,21 +144,28 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
       )}
       {canAnswer && (
         <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
-          승인 메모 (선택, {MEMO_MAX}자까지)
+          승인 메모 (선택 · 최대 {MEMO_MAX}자 · 환자 이름 쓰지 않기)
           <input
             value={approveMemo}
             onChange={(e) => setApproveMemo(e.target.value.slice(0, MEMO_MAX))}
             maxLength={MEMO_MAX}
             placeholder="예: 3번 출입구로 오세요"
-            className="h-[52px] w-full rounded-[10px] border-2 border-input px-3 text-[19px] font-normal text-foreground"
+            className="h-[52px] w-full rounded-[12px] border border-line bg-card px-4 text-[18px] font-normal text-foreground"
           />
         </label>
+      )}
+      {canAnswer && overApprovalHint && (
+        <p className="rounded-[12px] border border-info-strong/20 bg-info-soft px-4 py-3 text-[16px] font-bold text-info-strong">
+          지금 유효한 승인 {overApprovalHint.validApprovals}건 · 응급실 병상{' '}
+          {overApprovalHint.erBeds ? `${overApprovalHint.erBeds.split('/')[0]}개` : '정보 없음'}{' '}
+          (병상보다 많이 승인하면 확인을 한 번 더 받아요)
+        </p>
       )}
       {canAnswer && (
         <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className="h-[64px] w-full rounded-[14px] text-[22px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => send(approve())}
           >
@@ -159,14 +174,14 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           <Button
             size="lg"
             variant="destructive"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className="h-[64px] w-full rounded-[14px] text-[22px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => {
               answer.reset();
               setReasonFor('reject');
             }}
           >
-            거절
+            거절 (사유 선택)
           </Button>
         </div>
       )}

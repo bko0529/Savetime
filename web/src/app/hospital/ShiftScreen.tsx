@@ -12,7 +12,7 @@ import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
-import { RequestDetail } from '@/components/hospital/RequestDetail';
+import { EmptyRequestDetail, RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { cn } from '@/lib/utils';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
@@ -26,6 +26,11 @@ type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
 export const STAFF_NAME_MAX = 40;
 
 const cardClass = 'rounded-[16px] border border-line bg-card';
+const tabClass = (on: boolean) =>
+  cn(
+    'h-[44px] rounded-full px-5 text-[17px] font-semibold transition',
+    on ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-surface',
+  );
 const inputClass =
   'h-[56px] rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
@@ -93,12 +98,15 @@ export function ShiftScreen({
   pause = { paused: false, pausedAt: null },
   brand,
   notice,
+  hospitalName,
   createSocket,
 }: {
   shift: Shift | null;
   // 상단 막대 왼쪽(병원·PC 이름)과 막대 바로 아래 안내
   brand?: ReactNode;
   notice?: ReactNode;
+  // 탭 줄 오른쪽 '새 이송 요청 n건 · 병원 이름'
+  hospitalName?: string;
   // 병원 전체의 잠시 요청 중지 상태 (GET /hw/session, SFR-139)
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
@@ -112,6 +120,14 @@ export function ShiftScreen({
   // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
   // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [tab, setTab] = useState<'requests' | 'incoming'>('requests');
+  // 고른 요청이 없으면 맨 위 요청을 오른쪽에 보여 준다. 요청이 하나도 없으면 빈 칸.
+  // 고른 요청이 끝나 목록에서 빠져도 그대로 둬서 '이미 끝난 요청' 안내가 보이게 한다
+  const shownId = selectedId ?? incoming.items[0]?.id ?? null;
+  // 2분이 안 지나 아직 응답할 수 있는 요청
+  const openWaiting = incoming.waiting.filter(
+    (r) => Date.parse(r.respondUntil) > incoming.nowMs,
+  ).length;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -149,9 +165,7 @@ export function ShiftScreen({
           {shift !== null && (
             <EndShiftButton
               // 2분이 안 지나 아직 응답할 수 있는 요청만 센다
-              waitingCount={
-                incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
-              }
+              waitingCount={openWaiting}
             />
           )}
         </div>
@@ -200,68 +214,113 @@ export function ShiftScreen({
 
         {shift !== null && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* 탭: 요청 · 도착 예정 · 잠시 요청 중지 (시안 2026-11-24). 오른쪽에 새 요청 수 */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div role="tablist" className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'requests'}
+                  onClick={() => setTab('requests')}
+                  className={tabClass(tab === 'requests')}
+                >
+                  요청 ({incoming.items.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'incoming'}
+                  onClick={() => setTab('incoming')}
+                  className={tabClass(tab === 'incoming')}
+                >
+                  도착 예정 ({arriving.items.length})
+                </button>
+                {!pause.paused && (
+                  <PauseControl
+                    paused={pause.paused}
+                    pausedAt={pause.pausedAt}
+                    waitingCount={openWaiting}
+                    socket={socket}
+                  />
+                )}
+              </div>
               {incoming.waiting.length > 0 && (
-                <p className="text-[30px] font-extrabold tracking-[-0.02em] text-destructive">
-                  🔴 새 이송 요청 {incoming.waiting.length}건
+                <p className="flex items-center gap-2 text-[18px] font-extrabold">
+                  <span aria-hidden className="size-3 rounded-full bg-destructive" />새 이송 요청{' '}
+                  {incoming.waiting.length}건{hospitalName ? ` · ${hospitalName}` : ''}
                 </p>
               )}
+            </div>
+            {/* 중지 중이면 탭 아래에 크게 (요청 다시 받기 버튼 포함) */}
+            {pause.paused && (
               <PauseControl
                 paused={pause.paused}
                 pausedAt={pause.pausedAt}
-                // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
-                waitingCount={
-                  incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
-                }
+                waitingCount={openWaiting}
                 socket={socket}
               />
-            </div>
+            )}
 
-            {/* 목록과 상세를 나란히, 좁으면 상세가 목록 아래로 내려간다 */}
-            <div className="flex flex-wrap items-start gap-[24px]">
-              <section
-                className={cn(cardClass, 'min-w-[min(100%,560px)] flex-[1.5] overflow-hidden')}
-              >
-                <div className="flex items-baseline justify-between gap-3 px-6 py-4">
-                  <h2 className="text-[24px] font-extrabold tracking-[-0.02em]">요청 목록</h2>
-                  <span className="text-[15px] text-muted-foreground">남은 시간 짧은 순</span>
+            {tab === 'requests' ? (
+              // 왼쪽 요청 카드, 오른쪽 상세. 좁으면 상세가 아래로 내려간다
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(320px,420px)_1fr]">
+                <section aria-label="요청 목록" className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="flex items-center gap-2 text-[18px] font-extrabold">
+                      <span aria-hidden className="h-4 w-[3px] rounded-full bg-destructive" />
+                      응답 대기 {incoming.waiting.length}건 · 남은 시간 짧은 순
+                    </h2>
+                    {incoming.waiting.length > 0 && alarm.kind === 'on' && (
+                      <Chip
+                        tone="danger"
+                        className="rounded-full border border-danger-line text-[14px]"
+                      >
+                        🔔 알림음 반복 중
+                      </Chip>
+                    )}
+                  </div>
+                  <RequestList
+                    items={incoming.items}
+                    nowMs={incoming.nowMs}
+                    selectedId={shownId}
+                    onOpen={setSelectedId}
+                  />
+                  <p className="text-[14px] text-muted-foreground">
+                    이상 수치가 있어도 순서는 남은 시간 순 그대로예요 (앱은 위급도를 판정하지 않음).
+                  </p>
+                </section>
+                <div className="min-w-0">
+                  {shownId !== null ? (
+                    <RequestDetail key={shownId} requestId={shownId} nowMs={incoming.nowMs} />
+                  ) : (
+                    <EmptyRequestDetail />
+                  )}
                 </div>
-                <RequestList
-                  items={incoming.items}
-                  nowMs={incoming.nowMs}
-                  selectedId={selectedId}
-                  onOpen={setSelectedId}
+              </div>
+            ) : (
+              <section className={cn(cardClass, 'relative overflow-hidden')}>
+                <h2 className="px-6 py-4 text-[24px] font-extrabold tracking-[-0.02em]">
+                  도착 예정
+                </h2>
+                <span className="absolute top-5 right-6 text-[15px] text-muted-foreground">
+                  구급차 위치는 표시하지 않아요
+                </span>
+                {arriving.isError && (
+                  <p role="alert" className="px-6 pb-4 text-xl font-bold text-destructive">
+                    {errorText(arriving.error)}
+                  </p>
+                )}
+                <IncomingList
+                  items={arriving.items}
+                  notices={arriving.notices}
+                  onDismiss={arriving.dismiss}
+                  onOpen={(id) => {
+                    setSelectedId(id);
+                    setTab('requests');
+                  }}
                 />
               </section>
-              {selectedId !== null && (
-                <div className="min-w-[min(100%,400px)] flex-1">
-                  <RequestDetail
-                    key={selectedId}
-                    requestId={selectedId}
-                    nowMs={incoming.nowMs}
-                    onClose={() => setSelectedId(null)}
-                  />
-                </div>
-              )}
-            </div>
-
-            <section className={cn(cardClass, 'relative overflow-hidden')}>
-              <h2 className="px-6 py-4 text-[24px] font-extrabold tracking-[-0.02em]">도착 예정</h2>
-              <span className="absolute top-5 right-6 text-[15px] text-muted-foreground">
-                구급차 위치는 표시하지 않아요
-              </span>
-              {arriving.isError && (
-                <p role="alert" className="px-6 pb-4 text-xl font-bold text-destructive">
-                  {errorText(arriving.error)}
-                </p>
-              )}
-              <IncomingList
-                items={arriving.items}
-                notices={arriving.notices}
-                onDismiss={arriving.dismiss}
-                onOpen={setSelectedId}
-              />
-            </section>
+            )}
           </>
         )}
       </div>

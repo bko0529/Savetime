@@ -107,8 +107,8 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
     <>
       <Button
         size="lg"
-        variant="outline"
-        className="ml-auto h-[48px] w-fit rounded-[10px] border-2 bg-card px-5 text-lg"
+        variant="ghost"
+        className="h-[44px] w-fit rounded-full px-5 text-[17px] font-semibold text-muted-foreground"
         onClick={() => {
           toggle.reset();
           setConfirming(true);

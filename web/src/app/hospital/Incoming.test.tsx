@@ -46,7 +46,7 @@ const list = (...items: object[]) => ({
 let socket: FakeSocket;
 let server: ReturnType<typeof fakeServer>;
 
-beforeEach(() => {
+beforeEach(async () => {
   socket = new FakeSocket();
   server = fakeServer({
     'GET /hw/session': { status: 200, body: SESSION },
@@ -54,6 +54,8 @@ beforeEach(() => {
     [INCOMING]: list(incoming(102)),
   });
   renderWithQuery(<HospitalHome createSocket={() => socket.asSocket()} />);
+  // 도착 예정은 탭 안에 있다
+  fireEvent.click(await screen.findByRole('tab', { name: /도착 예정/ }));
 });
 afterEach(() => {
   cleanup();
@@ -62,13 +64,18 @@ afterEach(() => {
 
 // '도착 예정' 제목 아래 표
 async function incomingTable() {
+  // 도착 예정은 이제 탭 안에 있다 (요청 · 도착 예정 · 잠시 요청 중지)
+  const tab = await screen.findByRole('tab', { name: /도착 예정/ });
+  if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab);
   const heading = await screen.findByRole('heading', { name: '도착 예정' });
   return heading.parentElement!;
 }
 
 describe('도착 예정 목록 (SFR-121)', () => {
-  it("근무 중이면 화면 제목이 '근무 시작'이 아니라 '이송 요청'", async () => {
-    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('이송 요청');
+  it("근무 중이면 화면 제목이 '근무 시작'이 아니라 '병원 · 응급실 이송 요청'", async () => {
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      '병원 · 응급실 이송 요청',
+    );
   });
 
   it("우리 병원으로 확정된 환자를 '요약 · 이동 중 · 도착 예상 N분'으로 보여 준다", async () => {
@@ -81,7 +88,13 @@ describe('도착 예정 목록 (SFR-121)', () => {
 
   it('구급차 위치·지도는 보여 주지 않는다 (D-71)', async () => {
     await screen.findByText('도착 예상 7분');
-    expect(document.body.textContent).not.toMatch(/위도|경도|지도|km/);
+    // 화면 글자를 요소마다 띄어서 모은다 (붙여 읽으면 '요청 중지'+'도착'이 '지도'로 읽힌다)
+    const words = Array.from(document.body.querySelectorAll('*'))
+      .flatMap((el) => Array.from(el.childNodes))
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => n.textContent)
+      .join(' | ');
+    expect(words).not.toMatch(/위도|경도|지도|km/);
     expect(document.querySelector('iframe, canvas, [data-map]')).toBeNull();
   });
 

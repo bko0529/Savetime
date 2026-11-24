@@ -29,7 +29,7 @@ describe('HospitalHome', () => {
       },
     });
     renderWithQuery(<HospitalHome />);
-    expect(await screen.findByText('A병원')).toBeDefined();
+    expect(await screen.findByText(/A병원/)).toBeDefined();
     expect(screen.getByText(/응급실 접수대/)).toBeDefined();
     expect(fetchFn.mock.calls[0][0]).toBe('/api/v1/hw/session');
     expect(replace).not.toHaveBeenCalled();

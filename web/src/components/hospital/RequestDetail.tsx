@@ -32,9 +32,6 @@ const STATUS_TEXT: Record<string, string> = {
   rejected: '거절함',
 };
 
-const tileClass =
-  'flex items-center justify-center rounded-[12px] bg-surface px-3 py-3 text-center text-[19px] font-extrabold tabular-nums';
-
 export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
 
 // 요청 상세 (SFR-118, H-02). 열 때마다 서버가 열람 기록을 남기므로(SFR-137)
@@ -42,11 +39,10 @@ export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as con
 export function RequestDetail({
   requestId,
   nowMs,
-  onClose,
 }: {
   requestId: number;
   nowMs: number;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const detail = useQuery({
     queryKey: detailKey(requestId),
@@ -65,54 +61,109 @@ export function RequestDetail({
   });
   const incomingItem = incoming.data?.items?.find((i) => i.id === requestId);
 
+  const d = detail.data;
+  const a = (d?.assessment ?? {}) as Assessment;
+  const waiting = d?.status === 'waiting';
+  const urgent = waiting && d?.respondUntil && isUrgent(d.respondUntil, nowMs);
+  const titleBits = [fieldText(a, 'sex'), fieldText(a, 'ageBand'), a.chiefComplaint].filter(
+    Boolean,
+  );
+
   return (
-    <section
-      aria-label="요청 상세"
-      className="flex flex-col gap-4 rounded-[16px] border-2 border-foreground bg-card p-[24px]"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[15px] font-semibold text-muted-foreground">요청 상세</p>
-          <h2 className="text-[30px] font-extrabold tracking-[-0.02em] tabular-nums">
-            요청 R-{requestId}
+    <section aria-label="요청 상세" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold text-muted-foreground">요청 상세</p>
+          <h2 className="text-[28px] font-extrabold tracking-[-0.02em] break-words">
+            <span className="tabular-nums">R-{requestId}</span>
+            {titleBits.length > 0 && ` · ${titleBits.join(' · ')}`}
           </h2>
         </div>
-        <Button variant="outline" className="rounded-[10px]" onClick={onClose}>
-          닫기
-        </Button>
+        {d && (
+          <span
+            className={cn(
+              'shrink-0 rounded-full border px-4 py-1.5 text-[16px] font-extrabold tabular-nums',
+              waiting && d.respondUntil
+                ? urgent
+                  ? 'border-danger-line bg-danger-soft text-destructive'
+                  : 'border-warning-strong/30 bg-warning-soft text-warning-strong'
+                : 'border-line bg-surface',
+            )}
+          >
+            {waiting && d.respondUntil
+              ? `남은 ${remainingText(d.respondUntil, nowMs)}`
+              : (STATUS_TEXT[d.status ?? ''] ?? d.status)}
+          </span>
+        )}
       </div>
-      {detail.isPending && <p className="text-xl">불러오는 중…</p>}
+      {detail.isPending && <DetailGrid />}
       {/* 다시 받다가 실패하면(요청이 끝남 등) 예전 환자 정보는 남기지 않는다 (SER-014) */}
       {detail.isError ? (
         <DetailError error={detail.error} />
       ) : (
-        detail.data && <DetailBody detail={detail.data} incomingItem={incomingItem} nowMs={nowMs} />
+        d && <DetailBody detail={d} incomingItem={incomingItem} />
       )}
       {/* 응답 결과 문구(다른 PC 가 먼저 응답 등)는 요청이 끝나 상세가 닫혀도 남아 있어야 해서 본문 밖에 둔다 */}
-      {detail.data && (
+      {d && (
         <RequestActions
           requestId={requestId}
-          version={detail.data.version ?? 1}
+          version={d.version ?? 1}
           canAnswer={
             !detail.isError &&
-            detail.data.status === 'waiting' &&
-            !!detail.data.respondUntil &&
-            Date.parse(detail.data.respondUntil) > nowMs
+            d.status === 'waiting' &&
+            !!d.respondUntil &&
+            Date.parse(d.respondUntil) > nowMs
           }
           canCancelApproval={
-            !detail.isError &&
-            (detail.data.status === 'approved' || detail.data.status === 'confirmed')
+            !detail.isError && (d.status === 'approved' || d.status === 'confirmed')
+          }
+          overApprovalHint={
+            waiting
+              ? { validApprovals: d.validApprovals ?? 0, erBeds: d.ourHospital?.beds?.er ?? null }
+              : null
           }
         />
       )}
       {/* 추가 메모: 우리 병원으로 확정된 요청에 한 번만 (SFR-140) */}
-      {detail.data && !detail.isError && detail.data.status === 'confirmed' && (
-        <ExtraMemoButton
-          requestId={requestId}
-          version={detail.data.version ?? 1}
-          used={!!detail.data.extraMemo}
-        />
+      {d && !detail.isError && d.status === 'confirmed' && (
+        <ExtraMemoButton requestId={requestId} version={d.version ?? 1} used={!!d.extraMemo} />
       )}
+    </section>
+  );
+}
+
+// 요청을 고르지 않았거나 아직 없을 때도 칸 모양은 그대로 둔다. 값 자리는 '—', 버튼은 누를 수 없다
+export function EmptyRequestDetail() {
+  return (
+    <section aria-label="요청 상세" className="flex flex-col gap-4">
+      <div>
+        <p className="text-[14px] font-semibold text-muted-foreground">요청 상세</p>
+        <h2 className="text-[28px] font-extrabold tracking-[-0.02em] text-muted-foreground">
+          새 요청을 기다리는 중
+        </h2>
+      </div>
+      <DetailGrid />
+      <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
+        승인 메모 (선택 · 최대 50자 · 환자 이름 쓰지 않기)
+        <input
+          disabled
+          placeholder="예: 3번 출입구로 오세요"
+          className="h-[52px] w-full rounded-[12px] border border-line bg-card px-4 text-[18px] font-normal"
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <Button size="lg" disabled className="h-[64px] rounded-[14px] text-[22px] font-extrabold">
+          승인
+        </Button>
+        <Button
+          size="lg"
+          variant="destructive"
+          disabled
+          className="h-[64px] rounded-[14px] text-[22px] font-extrabold"
+        >
+          거절 (사유 선택)
+        </Button>
+      </div>
     </section>
   );
 }
@@ -138,88 +189,131 @@ function DetailError({ error }: { error: unknown }) {
 // 요청 단계(대기·승인)에는 요청 때 계산한 값(직선거리면 '약 n분 (추정)'),
 // 우리 병원으로 확정된 뒤에는 도착 예정 목록의 최신 값(내비 남은 시간·도착 시각)을 쓴다
 function etaLine(detail: Detail, incomingItem: HwIncoming | undefined): string | null {
-  if (incomingItem) return etaText(incomingItem);
+  if (incomingItem) return etaText(incomingItem).replace(/^도착 예상 /, '');
   // 목록을 아직 못 받았는데 이미 도착한 건이면 예전 예상 시간을 보여 주지 않는다
   if (detail.status === 'arrived') return null;
   if (detail.etaMin == null) return null;
   const estimated = detail.etaSource === 'straight';
-  return `도착 예상 ${estimated ? '약 ' : ''}${detail.etaMin}분${estimated ? ' (추정)' : ''}`;
+  return `${estimated ? '약 ' : ''}${detail.etaMin}분${estimated ? ' (추정)' : ''}`;
+}
+
+const cardClass =
+  'flex min-w-0 flex-col rounded-[16px] bg-card px-5 py-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)]';
+
+function CardTitle({ children }: { children: string }) {
+  return (
+    <h3 className="mb-2 flex items-center gap-2 text-[17px] font-extrabold">
+      <span aria-hidden className="h-4 w-[3px] rounded-full bg-destructive" />
+      {children}
+    </h3>
+  );
+}
+
+function Row({ label, value, warn }: { label: string; value: string | null; warn?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-line py-2 last:border-0">
+      <dt className="shrink-0 text-[15px] text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'text-right text-[16px] font-bold break-words tabular-nums',
+          !value && 'font-normal text-muted-foreground',
+          warn && 'text-destructive',
+        )}
+        data-abnormal={warn || undefined}
+      >
+        {value ? (warn ? `⚠ ${value}` : value) : '—'}
+      </dd>
+    </div>
+  );
+}
+
+// 환자 평가 정보 · 우리 병원 두 칸. 요청이 없으면(detail 없음) 같은 칸에 '—' 만 보인다
+function DetailGrid({ detail, incomingItem }: { detail?: Detail; incomingItem?: HwIncoming }) {
+  const a = (detail?.assessment ?? {}) as Assessment;
+  const abnormal = new Set(detail?.abnormalFields ?? []);
+  const t = (f: keyof Assessment) => (detail ? fieldText(a, f) : null);
+  const join = (...v: (string | null)[]) =>
+    v.some(Boolean) ? v.map((x) => x ?? '—').join(' · ') : null;
+  const pain = detail
+    ? [
+        fieldText(a, 'painSite'),
+        a.painScore != null ? `${a.painScore}/10` : null,
+        fieldText(a, 'onset'),
+      ]
+        .filter(Boolean)
+        .join(' · ') || null
+    : null;
+  const beds = detail?.ourHospital?.beds;
+  const cap = detail?.ourHospital?.capability;
+  const eta = detail ? etaLine(detail, incomingItem) : null;
+  // 기본 칸 말고 값이 있을 때만 보이는 칸
+  const extra = (['temp', 'glucose', 'history', 'traumaCause'] as const).filter((f) => t(f));
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className={cardClass}>
+        <CardTitle>환자 평가 정보</CardTitle>
+        <dl>
+          <Row label="의식" value={t('consciousness')} warn={abnormal.has('consciousness')} />
+          <Row label="혈압" value={t('bp')} warn={abnormal.has('bp')} />
+          <Row
+            label="맥박 · 호흡"
+            value={join(t('pulse'), t('resp'))}
+            warn={abnormal.has('pulse') || abnormal.has('resp')}
+          />
+          <Row label="산소포화도" value={t('spo2')} warn={abnormal.has('spo2')} />
+          <Row label="통증" value={pain} warn={abnormal.has('painScore')} />
+          <Row label="외상" value={t('trauma')} warn={abnormal.has('trauma')} />
+          <Row label="KTAS" value={detail ? (t('ktas') ?? '미입력') : null} />
+          {extra.map((f) => (
+            <Row key={f} label={FIELD_LABEL[f] ?? f} value={t(f)} warn={abnormal.has(f)} />
+          ))}
+        </dl>
+      </div>
+      <div className={cardClass}>
+        <CardTitle>우리 병원</CardTitle>
+        <dl>
+          {cap?.name && (
+            <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-line py-2">
+              <dt className="text-[15px] text-muted-foreground">[{cap.name}]</dt>
+              <dd
+                className={cn(
+                  'text-[16px] font-extrabold',
+                  cap.available ? 'text-success-strong' : 'text-destructive',
+                )}
+              >
+                {cap.available ? '가능 ✓' : '불가'}
+              </dd>
+            </div>
+          )}
+          <Row label="응급실" value={beds?.er ?? null} />
+          <Row label="수술실" value={beds?.or ?? null} />
+          <Row label="중환자실" value={beds?.icu ?? null} />
+          <Row label="도착 예상" value={eta} />
+        </dl>
+      </div>
+    </div>
+  );
 }
 
 function DetailBody({
   detail,
   incomingItem,
-  nowMs,
 }: {
   detail: Detail;
   incomingItem: HwIncoming | undefined;
-  nowMs: number;
 }) {
-  const eta = etaLine(detail, incomingItem);
-  const a = (detail.assessment ?? {}) as Assessment;
-  const abnormal = new Set(detail.abnormalFields ?? []);
-  const waiting = detail.status === 'waiting';
-  const urgent = waiting && detail.respondUntil && isUrgent(detail.respondUntil, nowMs);
-  const beds = detail.ourHospital?.beds;
-  const rows = (Object.keys(FIELD_LABEL) as (keyof Assessment)[])
-    .map((field) => ({ field, text: fieldText(a, field) }))
-    .filter((r): r is { field: keyof Assessment; text: string } => r.text !== null);
-
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-[10px]">
-        <span className={tileClass}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
-        {waiting && detail.respondUntil && (
-          <span
-            className={cn(tileClass, urgent && 'bg-danger-soft font-extrabold text-destructive')}
-          >
-            남은 시간 {remainingText(detail.respondUntil, nowMs)}
-          </span>
-        )}
-        {eta && <span className={tileClass}>{eta}</span>}
-      </div>
-
-      <p className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] break-words">
-        {a.chiefComplaint}
-      </p>
-
-      {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
-        {rows.map(({ field, text }) => (
-          <div
-            key={field}
-            className={cn(
-              'min-w-0 rounded-[10px] border border-line px-3 py-2',
-              abnormal.has(field) && 'border-danger-line bg-danger-soft',
-            )}
-          >
-            <dt className="text-[14px] text-muted-foreground">{FIELD_LABEL[field]}</dt>
-            <dd
-              className={cn(
-                'text-[19px] font-semibold break-words',
-                abnormal.has(field) && 'font-extrabold text-destructive',
-              )}
-              data-abnormal={abnormal.has(field) || undefined}
-            >
-              {abnormal.has(field) ? `⚠ ${text}` : text}
-            </dd>
-          </div>
-        ))}
-      </dl>
-
-      <p className="rounded-[12px] bg-surface px-4 py-3 text-[19px] font-semibold tabular-nums">
-        <span className="font-extrabold">우리 병원</span>: 응급실 {beds?.er ?? '정보 없음'} · 수술실{' '}
-        {beds?.or ?? '정보 없음'} · 중환자실 {beds?.icu ?? '정보 없음'}
-      </p>
-
+      <DetailGrid detail={detail} incomingItem={incomingItem} />
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
-        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
+        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[18px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
       {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
       {detail.extraMemo && (
-        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
+        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[18px] font-bold text-info-strong">
           추가 메모: {detail.extraMemo}
         </p>
       )}

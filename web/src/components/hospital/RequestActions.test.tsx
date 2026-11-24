@@ -75,7 +75,7 @@ describe('승인 (SFR-119)', () => {
 
     expect(await screen.findByText('다른 PC에서 이미 승인했어요 (박서연 · 처치실)')).toBeTruthy();
     expect(await screen.findByText('박서연 님이 승인함')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '거절' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '거절 (사유 선택)' })).toBeNull();
   });
 
   it('2분이 지났으면 응답 시간이 지났다고 알려 준다', async () => {
@@ -119,7 +119,7 @@ describe('승인 (SFR-119)', () => {
 describe('거절 (SFR-119)', () => {
   it('사유 없이 거절하면 보내지 않고 사유를 고르라고 한다', async () => {
     const server = open({ [REJECT]: { status: 200, body: { status: 'rejected', version: 4 } } });
-    fireEvent.click(await screen.findByRole('button', { name: '거절' }));
+    fireEvent.click(await screen.findByRole('button', { name: '거절 (사유 선택)' }));
     const dialog = await reasonDialog();
 
     fireEvent.click(within(dialog).getByRole('button', { name: '거절 보내기' }));
@@ -130,7 +130,7 @@ describe('거절 (SFR-119)', () => {
 
   it('사유를 고르면 그 사유와 version 을 보낸다', async () => {
     const server = open({ [REJECT]: { status: 200, body: { status: 'rejected', version: 4 } } });
-    fireEvent.click(await screen.findByRole('button', { name: '거절' }));
+    fireEvent.click(await screen.findByRole('button', { name: '거절 (사유 선택)' }));
     const dialog = await reasonDialog();
     // '요청 중지'는 시스템 사유라 목록에 없다
     expect(within(dialog).queryByLabelText(/요청 중지/)).toBeNull();
@@ -150,7 +150,7 @@ describe('거절 (SFR-119)', () => {
 
   it("'기타'는 20자까지만 입력되고, 비우면 보내지 않는다", async () => {
     const server = open({ [REJECT]: { status: 200, body: { status: 'rejected', version: 4 } } });
-    fireEvent.click(await screen.findByRole('button', { name: '거절' }));
+    fireEvent.click(await screen.findByRole('button', { name: '거절 (사유 선택)' }));
     const dialog = await reasonDialog();
     fireEvent.click(within(dialog).getByLabelText('기타'));
     const input = within(dialog).getByRole('textbox');
@@ -172,7 +172,7 @@ describe('거절 (SFR-119)', () => {
 
   it('취소하면 창만 닫고 보내지 않는다', async () => {
     const server = open({});
-    fireEvent.click(await screen.findByRole('button', { name: '거절' }));
+    fireEvent.click(await screen.findByRole('button', { name: '거절 (사유 선택)' }));
     const dialog = await reasonDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: '취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -295,12 +295,13 @@ describe('응답할 수 없는 요청', () => {
     open({ [DETAIL]: detail({ status: 'approved', respondedBy: '박서연' }) });
     await screen.findByText('박서연 님이 승인함');
     expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '거절' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '거절 (사유 선택)' })).toBeNull();
   });
 
   it('남은 시간이 0이면 버튼이 없다 (서버 판정 전이라도)', async () => {
     open({ [DETAIL]: detail({ respondUntil: new Date(NOW - 1000).toISOString() }) });
-    await screen.findByText('흉통');
+    // 주 증상은 이제 제목(R-번호 · 성별 · 나이대 · 주 증상)에 들어 있다
+    await screen.findByText(/흉통/);
     expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
   });
 });
