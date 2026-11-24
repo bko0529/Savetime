@@ -8,6 +8,7 @@ import { useEngine, actions, previewTargets } from "@/lib/engine";
 import { ACTIVE } from "@/lib/domain/stateMachine";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
+import { useTeamDraftSync } from "@/lib/team-draft";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/patient")({
@@ -51,6 +52,8 @@ function PatientPage() {
     if (active) { toast.success("변경 사항을 병원에 보냈어요 · 강조 표시돼요"); nav({ to: e.status === "moving" ? "/transport" : "/request" }); }
   };
   const set = (k: keyof Patient, v: string | Grade) => setPatient({ ...p, [k]: v });
+  // 팀원과 같이 입력 (SFR-114): 내가 고친 칸은 서버에 저장하고, 팀원이 고친 칸은 받아 넣는다
+  const draft = useTeamDraftSync(p, setPatient);
   const count = filledCount(p);
   const allDone = count === REQUIRED_FIELDS.length;
   // 'n곳에 요청합니다': 서버가 지금 위치·등급으로 센다 (SFR-163)
@@ -117,6 +120,7 @@ function PatientPage() {
       }
     >
       <StepDots step={step} total={3} onJump={setStep} />
+      {draft.notice && <div className="mt-3"><Notice tone="info">{draft.notice}</Notice></div>}
       <p className="mt-2 mb-5 text-xs font-semibold text-muted-foreground">
         {step === 1 && (gradeOn ? "1단계 · 병원 등급 · 주 증상 · 성별·나이대" : "1단계 · 주 증상 · 성별·나이대")}
         {step === 2 && "2단계 · 의식 · 활력징후"}
