@@ -117,6 +117,16 @@ export function ShiftScreen({
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
       )}
+      {/* 지금 새 요청을 받을 수 있는 상태인지 늘 보이게 한다 (SFR-122) */}
+      {connection === 'connected' && (
+        <p
+          role="status"
+          className="flex w-fit items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-50 px-3 py-1 text-base font-semibold text-emerald-800"
+        >
+          <span aria-hidden className="size-2 rounded-full bg-emerald-600" />
+          실시간 연결됨
+        </p>
+      )}
       {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
       {shift !== null && notificationBlocked && (
         <NotificationPermissionGuide reason={notificationBlocked} />

@@ -74,8 +74,11 @@ describe("근무 시작 → 알림 켜기 (SFR-117)", () => {
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
     await screen.findByText("알림 켜기를 다시 누르세요.");
     expect(alarmButton()).toHaveProperty("disabled", true);
+    expect(screen.queryByText("실시간 연결됨")).toBeNull();
     socket.serverConnect();
     expect(alarmButton()).toHaveProperty("disabled", false);
+    // 연결되면 '실시간 연결됨'을 보여 준다 (SFR-122)
+    expect(screen.getByText("실시간 연결됨")).toBeDefined();
   });
 });
 describe("연결 끊김·자동 복구·꺼짐", () => {
@@ -100,7 +103,9 @@ describe("연결 끊김·자동 복구·꺼짐", () => {
     expect(banner.textContent).toBe("연결 끊김 — 새 요청을 받을 수 없어요");
     // 근무 화면의 맨 위 (SFR-122)
     expect(banner.parentElement?.firstElementChild).toBe(banner);
+    expect(screen.queryByText("실시간 연결됨")).toBeNull();
     socket.serverConnect("sock-2");
+    expect(screen.getByText("실시간 연결됨")).toBeDefined();
     expect(screen.queryByRole("alert")).toBeNull();
     const resume = socket.emitted.at(-1);
     expect(resume?.event).toBe("alarm.resume");
