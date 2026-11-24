@@ -129,7 +129,8 @@ export function ShiftScreen({
   ).length;
 
   return (
-    <div className="flex flex-1 flex-col">
+    // hw-screen: 큰 모니터에서는 화면 전체를 키운다 (globals.css). 응급실에서 조금 떨어져 봐도 읽히게
+    <div className="hw-screen flex flex-1 flex-col">
       {/* 연결이 끊기면 새 요청을 못 받으니 화면 맨 위에 크게, 내려도 보이게 고정한다 (SFR-122).
           다시 붙으면 목록을 새로 받아 놓친 요청을 불러온다 (useNewRequests) */}
       {connection === 'disconnected' && (
