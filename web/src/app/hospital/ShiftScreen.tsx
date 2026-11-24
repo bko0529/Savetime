@@ -150,6 +150,23 @@ export function ShiftScreen({
               <span>🔔 알림 켜짐 · {shift.staffName} 님 근무 중</span>
             </Chip>
           )}
+          {/* 알림이 꺼져 있으면 오른쪽 위에 작게: 이유 + '알림 켜기' (시안 2026-11-24) */}
+          {shift !== null && alarm.kind !== 'on' && (
+            <div className="flex items-center gap-2 rounded-full border border-danger-line bg-danger-soft py-1 pr-1 pl-3">
+              <span aria-hidden>🔕</span>
+              <p className="text-[14px] font-bold text-danger-strong">
+                {offMessage(alarm, startedHere)}
+              </p>
+              <Button
+                size="sm"
+                className="h-8 rounded-full px-4 text-[14px]"
+                onClick={() => turnOn.mutate()}
+                disabled={turnOn.isPending || connection !== 'connected'}
+              >
+                {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
+              </Button>
+            </div>
+          )}
           {connection === 'connected' && (
             <Chip tone="success" className="border border-success-dot/40 bg-card">
               <span aria-hidden className="size-2 rounded-full bg-success-dot" />
@@ -173,6 +190,11 @@ export function ShiftScreen({
 
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
         {notice}
+        {turnOn.isError && (
+          <p role="alert" className="text-right text-[15px] font-bold text-destructive">
+            {errorText(turnOn.error)}
+          </p>
+        )}
         {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
         {shift !== null && notificationBlocked && (
           <NotificationPermissionGuide reason={notificationBlocked} />
@@ -189,28 +211,6 @@ export function ShiftScreen({
         />
 
         {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
-        {shift !== null && alarm.kind !== 'on' && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4">
-            <div className="flex flex-col gap-2">
-              <p className="text-[26px] font-extrabold text-danger-strong">
-                {offMessage(alarm, startedHere)}
-              </p>
-              {turnOn.isError && (
-                <p role="alert" className="text-lg font-bold text-destructive">
-                  {errorText(turnOn.error)}
-                </p>
-              )}
-            </div>
-            <Button
-              size="lg"
-              className="h-[64px] rounded-[12px]"
-              onClick={() => turnOn.mutate()}
-              disabled={turnOn.isPending || connection !== 'connected'}
-            >
-              {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
-            </Button>
-          </div>
-        )}
 
         {shift !== null && (
           <>
