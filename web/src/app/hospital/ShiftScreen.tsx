@@ -7,6 +7,7 @@ import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { Chip } from '@/components/hospital/Chip';
+import { EndShiftButton } from '@/components/hospital/EndShiftButton';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
@@ -144,6 +145,14 @@ export function ShiftScreen({
               <span aria-hidden className="size-2 rounded-full bg-destructive" />
               연결 끊김
             </Chip>
+          )}
+          {shift !== null && (
+            <EndShiftButton
+              // 2분이 안 지나 아직 응답할 수 있는 요청만 센다
+              waitingCount={
+                incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
+              }
+            />
           )}
         </div>
       </header>
