@@ -7,6 +7,7 @@ import { START_RADIUS } from "@/lib/hospitals";
 import { useEngine, actions, previewTargets } from "@/lib/engine";
 import { ACTIVE } from "@/lib/domain/stateMachine";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/patient")({
@@ -38,10 +39,13 @@ function PatientPage() {
   const e = useEngine();
   const active = !!e.status && ACTIVE.includes(e.status);
   const p = patient;
+  // 관리자가 '병원 등급 선택'을 끄면 등급 칸을 숨기고, 전에 골라 둔 등급도 쓰지 않는다 (QUR-013)
+  const gradeOn = useAuth().featureFlags.hospitalGrade;
+  const grade = gradeOn ? p.grade : null;
   const [sending, setSending] = useState(false);
   const send = async () => {
     setSending(true);
-    const r = active ? await actions.updateAssessment(p) : await actions.create(p.grade, p);
+    const r = active ? await actions.updateAssessment(p) : await actions.create(grade, p);
     setSending(false);
     if (!r.ok) { toast.error(r.error); return; }
     if (active) { toast.success("변경 사항을 병원에 보냈어요 · 강조 표시돼요"); nav({ to: e.status === "moving" ? "/transport" : "/request" }); }
@@ -53,9 +57,9 @@ function PatientPage() {
   const [targets, setTargets] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    void previewTargets(p.grade).then((n) => alive && setTargets(n));
+    void previewTargets(grade).then((n) => alive && setTargets(n));
     return () => { alive = false; };
-  }, [p.grade]);
+  }, [grade]);
 
   const fillUnknown = () => {
     const next = { ...p };
@@ -114,13 +118,14 @@ function PatientPage() {
     >
       <StepDots step={step} total={3} onJump={setStep} />
       <p className="mt-2 mb-5 text-xs font-semibold text-muted-foreground">
-        {step === 1 && "1단계 · 병원 등급 · 주 증상 · 성별·나이대"}
+        {step === 1 && (gradeOn ? "1단계 · 병원 등급 · 주 증상 · 성별·나이대" : "1단계 · 주 증상 · 성별·나이대")}
         {step === 2 && "2단계 · 의식 · 활력징후"}
         {step === 3 && "3단계 · 통증 · 외상 · 선택 항목"}
       </p>
 
       {step === 1 && (
         <>
+          {gradeOn && <>
           <SectionTitle hint="고른 등급 이상 병원에만 요청해요. 안 고르면 모든 병원에 요청해요.">병원 등급 (선택)</SectionTitle>
           <div className="grid grid-cols-3 gap-2">
             {GRADES.map(({ g, sub, icon: Icon }) => {
@@ -138,6 +143,7 @@ function PatientPage() {
               );
             })}
           </div>
+          </>}
 
           <SectionTitle>주 증상 (필수)</SectionTitle>
           <Label>직접 입력하세요</Label>
@@ -213,7 +219,7 @@ function PatientPage() {
             <UserCheck className="size-4" /> 나머지 확인 불가로 보내기
           </BigButton>
           <div className="mt-5 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <p className="text-sm font-extrabold">{p.grade ? `${p.grade} 이상 · ` : "모든 등급 · "}반경 {START_RADIUS}km 안 {targets ?? "-"}곳에 요청합니다</p>
+            <p className="text-sm font-extrabold">{grade ? `${grade} 이상 · ` : "모든 등급 · "}반경 {START_RADIUS}km 안 {targets ?? "-"}곳에 요청합니다</p>
             <p className="mt-1 text-xs text-muted-foreground">등급 바꾸기는 1단계에서</p>
           </div>
         </>

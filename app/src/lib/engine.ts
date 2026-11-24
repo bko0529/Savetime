@@ -14,6 +14,7 @@ import { getAuth } from "./auth-store";
 import { RADIUS_STEPS, START_RADIUS, type Hospital } from "./hospitals";
 import { currentLocation, distanceM, moveToward, FIXED_LOCATION, type LatLng } from "./location";
 import { UNKNOWN, type Grade, type Patient } from "./transport-store";
+import type { AiSuggestions } from "./journal";
 
 export type Hreq = {
   id: number;
@@ -693,5 +694,18 @@ export async function loadJournalDraft(): Promise<JournalDraft | null> {
     return await api<JournalDraft>("GET", `/transports/${s.transportId}/journal-draft`);
   } catch {
     return null;
+  }
+}
+
+/**
+ * SFR-167: AI 일지 정리. 대원 메모를 일지 항목별 제안으로 받는다.
+ * 서버가 식별정보를 지운 뒤 AI 로 보내고 저장하지 않는다. 기능이 꺼졌거나(403) AI 를 못 쓰면(503) 서버 문구를 그대로 보여 준다
+ */
+export async function organizeJournalWithAi(text: string): Promise<Result<AiSuggestions>> {
+  try {
+    const r = await api<{ suggestions: AiSuggestions }>("POST", "/journal/ai-organize", { body: { text: text.trim() } });
+    return { ok: true, value: r.suggestions };
+  } catch (e) {
+    return { ok: false, error: errorText(e) };
   }
 }

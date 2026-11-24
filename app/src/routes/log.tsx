@@ -4,10 +4,11 @@ import { Pencil, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneScreen, BigButton, Label } from "@/components/phone";
 import { useTransport, fmtTime, UNKNOWN } from "@/lib/transport-store";
-import { mergePatient } from "@/lib/journal";
+import { mergePatient, applyAiSuggestions } from "@/lib/journal";
+import { AiOrganize } from "@/components/ai-organize";
 import { cn } from "@/lib/utils";
 import { actions, loadJournalDraft } from "@/lib/engine";
-import { getAuth, currentAccount } from "@/lib/auth-store";
+import { getAuth, currentAccount, useAuth } from "@/lib/auth-store";
 import { LogFormSheet, type LogData } from "@/components/log-form-sheet";
 
 export const Route = createFileRoute("/log")({
@@ -77,6 +78,7 @@ function LogBody() {
   const [bpS, bpD] = v(p.bp).split("/");
 
   const [sheet, setSheet] = useState(false);
+  const { journalAi } = useAuth().featureFlags;
   const st = getAuth();
   const me = currentAccount(st);
   const drv = st.duty?.members.find((m) => m.role === "운전");
@@ -138,6 +140,9 @@ function LogBody() {
         <Sparkles className="mt-px size-4 shrink-0 text-accent-deep" />
         <span className="leading-relaxed"><b>자동</b> 표시가 있는 칸은 이송 중 기록으로 채웠어요. 각 칸의 <b>수정</b>을 눌러 고칠 수 있어요.</span>
       </div>
+
+      {/* 관리자가 'AI 일지 정리'를 켰을 때만 (QUR-013, 앱이 1분마다 설정을 다시 읽음) */}
+      {journalAi && <AiOrganize onApply={(s) => setF(applyAiSuggestions(f, s))} />}
 
       <Section title="구급출동" auto>
         {(edit) => edit ? (

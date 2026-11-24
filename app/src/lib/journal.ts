@@ -27,3 +27,36 @@ export function mergePatient(p: Patient, d: JournalDraft): Patient {
   };
 }
 
+
+// ---------------- AI 일지 정리 (SFR-167) ----------------
+
+/** 서버가 돌려주는 AI 제안. 항목이 없으면 null */
+export type AiSuggestions = {
+  chiefComplaint: string | null;
+  history: string | null;
+  treatment: string | null;
+  medicalDirection: string | null;
+  other: string | null;
+};
+
+/** 일지에서 AI 제안을 넣을 칸 */
+export type AiTarget = { complaint: string; historyEtc: string; opinion: string };
+
+/**
+ * '적용'을 눌렀을 때만 제안을 일지 칸에 넣는다 (서버 명세: 앱은 제안만 보여 주고 적용은 대원이 고른다).
+ * - 주 호소·기타 병력: 제안이 있으면 그 값으로
+ * - 평가소견: 원래 소견 뒤에 처치·의료지도·그 밖의 내용을 붙인다 (대원이 쓴 소견은 지우지 않는다)
+ */
+export function applyAiSuggestions<T extends AiTarget>(f: T, s: AiSuggestions): T {
+  const extra = [
+    s.treatment && `처치: ${s.treatment}`,
+    s.medicalDirection && `의료지도: ${s.medicalDirection}`,
+    s.other,
+  ].filter(Boolean);
+  return {
+    ...f,
+    complaint: s.chiefComplaint?.trim() || f.complaint,
+    historyEtc: s.history?.trim() || f.historyEtc,
+    opinion: [f.opinion, ...extra].filter(Boolean).join(" · "),
+  };
+}
