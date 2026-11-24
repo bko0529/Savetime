@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@/savetime-web/navigation';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/savetime-web/components/ui/button';
@@ -25,6 +25,7 @@ function formatLastUsed(iso: string | null): string {
 // 병원 PC 등록 (SFR-116, H-01). 아이디·비밀번호·가입 메뉴 없이 라이선스 키 + PC 이름만 받는다.
 export function RegisterForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [licenseKey, setLicenseKey] = useState('');
   const [pcName, setPcName] = useState('');
   // 3대가 꽉 찼을 때 서버가 준 기존 PC 목록과, 그중 바꿀 PC
@@ -34,8 +35,13 @@ export function RegisterForm() {
   const register = useMutation({
     mutationFn: (body: RegisterBody) =>
       apiFetch<RegisterResult>('/hw/pc/register', { method: 'POST', body: JSON.stringify(body) }),
-    // 성공하면 서버가 st_pc 쿠키를 심어 주므로, 이후에는 키 입력 없이 근무 시작 화면으로 간다
-    onSuccess: () => router.replace('/hospital'),
+    // 성공하면 서버가 st_pc 쿠키를 심어 주므로, 이후에는 키 입력 없이 근무 시작 화면으로 간다.
+    // 이 탭에 남은 '등록 안 된 PC'(401) 결과를 먼저 지운다. 남아 있으면 근무 화면이 그걸 보고
+    // 다시 등록 화면으로 돌려보낸다 (키 재발급 뒤 같은 탭에서 새 키로 등록할 때)
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['hw'] });
+      router.replace('/hospital');
+    },
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'PC_LIMIT_REACHED') {
         setFullPcs((error.details?.['pcs'] as RegisteredPc[] | undefined) ?? []);

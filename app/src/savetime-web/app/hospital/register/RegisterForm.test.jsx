@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, mockFetch, renderWithQuery } from '@/savetime-web/testing/render';
 import { RegisterForm } from './RegisterForm';
@@ -80,6 +81,17 @@ describe('RegisterForm', () => {
         replacePcId: null
       }
     });
+  });
+  it('성공하면 이 탭에 남은 병원 웹 결과(등록 안 된 PC 오류)를 지운다 — 다시 등록 화면으로 튕기지 않게', async () => {
+    mockFetch({ status: 201, body: { hospital: { id: 1, name: 'A병원' }, pcId: 7 } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // 옛 키로 실패했던 탭: 근무 화면이 받았던 결과가 남아 있다
+    client.setQueryData(['hw', 'session'], { stale: true });
+    render(<QueryClientProvider client={client}><RegisterForm /></QueryClientProvider>);
+    fill();
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/hospital'));
+    expect(client.getQueryState(['hw', 'session'])).toBeUndefined();
   });
   it.each([['INVALID_LICENSE', '라이선스 키가 맞지 않아요'], ['LICENSE_EXPIRED', '관리자에게 새 키를 요청'], ['TOO_MANY_ATTEMPTS', '10분 동안 입력할 수 없어요']])('%s 이면 쉬운 문구를 보여준다', async (code, text) => {
     mockFetch({
