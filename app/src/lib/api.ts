@@ -51,7 +51,7 @@ export function deviceId(): string {
   try {
     let id = localStorage.getItem(DEVICE_KEY);
     if (!id) {
-      id = `web-${crypto.randomUUID()}`;
+      id = `web-${uuid()}`;
       localStorage.setItem(DEVICE_KEY, id);
     }
     return id;
@@ -140,3 +140,16 @@ export async function api<T = unknown>(
 /** 오류를 화면 문구로 */
 export const errorText = (e: unknown) =>
   e instanceof ApiError ? e.message : "알 수 없는 오류가 났어요";
+
+/**
+ * 무작위 ID (UUID v4). crypto.randomUUID 는 https·localhost 에서만 있어서, 휴대폰이 http://노트북IP 로
+ * 열면 없다(시연). 그때는 어디서나 되는 crypto.getRandomValues 로 같은 모양을 만든다
+ */
+export function uuid(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40;
+  b[8] = (b[8]! & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}

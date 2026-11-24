@@ -7,7 +7,7 @@
  */
 import { useSyncExternalStore } from "react";
 import type { TransportStatus, HreqStatus, CloseReason, FallbackReason, PhoneProceedReason, DestChangeReason } from "./domain/stateMachine";
-import { api, ApiError, deviceId, errorText, serverNow } from "./api";
+import { api, ApiError, deviceId, errorText, serverNow, uuid } from "./api";
 import { onEvent } from "./realtime";
 import { retryOnVersionConflict } from "./versionRetry";
 import { getAuth } from "./auth-store";
@@ -461,7 +461,7 @@ export const actions = {
       s = { ...initial(), hospitalsRev: s.hospitalsRev };
       const t = await api<ServerTransport>("POST", "/transports", {
         body: {
-          id: crypto.randomUUID(),
+          id: uuid(),
           radiusKm: START_RADIUS,
           location,
           locationConsent: true,
@@ -479,7 +479,7 @@ export const actions = {
       if (!r) throw new ApiError(409, "REQUEST_NOT_APPROVED", "승인 상태가 아니에요");
       await api("POST", `/transports/${tid()}/confirm`, {
         body: { hospitalRequestId: r.id, version: s.version },
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Idempotency-Key": uuid() },
       });
       await refresh();
     });
