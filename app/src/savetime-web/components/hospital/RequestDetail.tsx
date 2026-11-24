@@ -55,7 +55,10 @@ export function RequestDetail({
       className="flex flex-col gap-5 rounded-lg border-2 border-foreground p-6"
     >
       <div className="flex items-start justify-between gap-4">
-        <h2 className="text-3xl font-bold">요청 R-{requestId}</h2>
+        <div>
+          <p className="text-sm font-semibold text-muted-foreground">요청 상세</p>
+          <h2 className="text-3xl font-bold">요청 R-{requestId}</h2>
+        </div>
         <Button variant="outline" size="lg" onClick={onClose}>
           닫기
         </Button>

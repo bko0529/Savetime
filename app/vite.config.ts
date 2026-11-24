@@ -8,6 +8,9 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   vite: {
+    // 개발 서버가 켜질 때 모든 화면(앱·병원·관리자)의 부품을 미리 준비한다.
+    // 안 그러면 처음 여는 화면에서 부품을 새로 준비하며 페이지를 다시 불러와, 메모리에만 있는 관리자 로그인이 풀린다
+    optimizeDeps: { entries: ["src/routes/**/*.tsx"] },
     server: {
       proxy: {
         "/api/v1": { target: process.env['API_ORIGIN'] || "http://localhost:4000", changeOrigin: true },
