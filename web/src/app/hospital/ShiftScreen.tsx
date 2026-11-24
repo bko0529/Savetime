@@ -9,7 +9,6 @@ import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { Chip } from '@/components/hospital/Chip';
 import { EndShiftButton } from '@/components/hospital/EndShiftButton';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
-import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
 import { EmptyRequestDetail, RequestDetail } from '@/components/hospital/RequestDetail';
@@ -111,7 +110,7 @@ export function ShiftScreen({
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
 }) {
-  const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
+  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
   usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
@@ -195,10 +194,8 @@ export function ShiftScreen({
             {errorText(turnOn.error)}
           </p>
         )}
-        {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
-        {shift !== null && notificationBlocked && (
-          <NotificationPermissionGuide reason={notificationBlocked} />
-        )}
+        {/* 브라우저 알림 권한 안내(노란 띠)는 띄우지 않는다 (강욱 결정 2026-11-24). 권한이 없어도
+            새 요청은 화면 덮개·알림음 반복·탭 제목으로 알린다 */}
         <NewRequestOverlay
           request={incoming.overlay}
           pendingCount={incoming.waiting.length}
