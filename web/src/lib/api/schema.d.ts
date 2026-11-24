@@ -4352,6 +4352,12 @@ export interface operations {
                         paused?: boolean;
                         /** Format: date-time */
                         pausedAt?: string | null;
+                        /** @description 우리 병원 병상 '가용/전체' (예 3/12). 요청이 없어도 근무 화면에 보여 준다 (SFR-118). 수집된 값이 없으면 null */
+                        beds?: {
+                            er?: string | null;
+                            icu?: string | null;
+                            or?: string | null;
+                        };
                         /** Format: date-time */
                         serverNow?: string;
                     };

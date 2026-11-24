@@ -22,7 +22,7 @@ import { extraMemoSchema, sendExtraMemo } from './extraMemo.js';
 import { listIncoming } from './incoming.js';
 import { detectOddPc } from './oddPc.js';
 import { markUnacceptable, unacceptableSchema } from './unacceptable.js';
-import { getRequestDetail, listQuerySchema, listRequests } from './requests.js';
+import { bedText, getRequestDetail, listQuerySchema, listRequests } from './requests.js';
 import { pauseSchema, setPaused } from './pause.js';
 import { approveSchema, cancelApprovalSchema, rejectSchema, respondToRequest } from './respond.js';
 
@@ -192,10 +192,19 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
       paused: boolean;
       paused_at: Date | null;
       server_now: Date;
+      er_avail: number | null;
+      er_total: number | null;
+      icu_avail: number | null;
+      icu_total: number | null;
+      or_avail: number | null;
+      or_total: number | null;
     }>(
+      // 우리 병원 병상은 요청이 없어도 근무 화면 '우리 병원' 칸에 보여 준다 (SFR-118). 환자 정보가 아니다
       `SELECT s.id AS shift_id, s.staff_name, s.alarm_on_at IS NOT NULL AS alarm_on,
-              h.requests_paused AS paused, h.paused_at, now() AS server_now
+              h.requests_paused AS paused, h.paused_at, now() AS server_now,
+              b.er_avail, b.er_total, b.icu_avail, b.icu_total, b.or_avail, b.or_total
          FROM hospital h
+         LEFT JOIN bed_current b ON b.hospital_id = h.id
          LEFT JOIN LATERAL (
            SELECT id, staff_name, alarm_on_at FROM hospital_shift
             WHERE pc_id = $2 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1
@@ -213,6 +222,11 @@ export function hospitalWebRouter(ctx: HospitalWebContext): Router {
         : null,
       paused: row.paused,
       pausedAt: row.paused_at?.toISOString() ?? null,
+      beds: {
+        er: bedText(row.er_avail, row.er_total),
+        icu: bedText(row.icu_avail, row.icu_total),
+        or: bedText(row.or_avail, row.or_total),
+      },
       serverNow: row.server_now.toISOString(),
     });
   });
