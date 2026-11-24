@@ -119,4 +119,31 @@ describe("환자 정보 화면과 팀 작성 중 정보 맞추기", () => {
     });
     expect(mocks.api).toHaveBeenCalledTimes(1);
   });
+
+  it("직전 환자 정보로 채워졌으면 알려 주고, '지우기'를 누르면 서버와 내 화면을 비운다 (SFR-157)", async () => {
+    mocks.api.mockResolvedValueOnce({ version: 5, assessment: { chiefComplaint: "지난 환자" }, prefilledFromTransportId: "t-1" });
+    const h = setup(P({}));
+    await act(async () => {});
+    expect(h.result.current.sync.prevPatient).toBe(true);
+    expect(h.result.current.p.complaint).toBe("지난 환자");
+    mocks.api.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await h.result.current.sync.clearPrevPatient();
+    });
+    expect(mocks.api).toHaveBeenLastCalledWith("DELETE", "/teams/current/draft");
+    expect(h.result.current.sync.prevPatient).toBe(false);
+    expect(h.result.current.p.complaint).toBe("");
+  });
+});
+
+describe("운전 중 입력 잠금 (SFR-115)", () => {
+  it("운전 역할이 이동 중 시속 10km 이상이면 잠근다", async () => {
+    const { driverLocked } = await import("@/lib/engine");
+    expect(driverLocked("운전", "moving", 39.6)).toBe(true);
+    expect(driverLocked("운전", "moving", 3)).toBe(false);
+    expect(driverLocked("처치", "moving", 39.6)).toBe(false);
+    expect(driverLocked("운전", "requesting", 39.6)).toBe(false);
+    // 이 폰이 속도를 모르면 서버 판단에 맡긴다
+    expect(driverLocked("운전", "moving", null)).toBe(false);
+  });
 });

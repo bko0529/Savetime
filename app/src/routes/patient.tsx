@@ -4,7 +4,7 @@ import { Building2, Hospital, Stethoscope, AlertTriangle, ArrowLeft, ArrowRight,
 import { PhoneScreen, BigButton, SectionTitle, Label, Notice, StepDots, Pill } from "@/components/phone";
 import { useTransport, filledCount, REQUIRED_FIELDS, UNKNOWN, type Patient, type Grade } from "@/lib/transport-store";
 import { START_RADIUS } from "@/lib/hospitals";
-import { useEngine, actions, previewTargets } from "@/lib/engine";
+import { useEngine, actions, previewTargets, driverLocked } from "@/lib/engine";
 import { ACTIVE } from "@/lib/domain/stateMachine";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
@@ -41,7 +41,8 @@ function PatientPage() {
   const active = !!e.status && ACTIVE.includes(e.status);
   const p = patient;
   // 관리자가 '병원 등급 선택'을 끄면 등급 칸을 숨기고, 전에 골라 둔 등급도 쓰지 않는다 (QUR-013)
-  const gradeOn = useAuth().featureFlags.hospitalGrade;
+  const auth = useAuth();
+  const gradeOn = auth.featureFlags.hospitalGrade;
   const grade = gradeOn ? p.grade : null;
   const [sending, setSending] = useState(false);
   const send = async () => {
@@ -53,7 +54,22 @@ function PatientPage() {
   };
   const set = (k: keyof Patient, v: string | Grade) => setPatient({ ...p, [k]: v });
   // 팀원과 같이 입력 (SFR-114): 내가 고친 칸은 서버에 저장하고, 팀원이 고친 칸은 받아 넣는다
-  const draft = useTeamDraftSync(p, setPatient);
+  // 운전 역할이 달리는 중이면 입력을 막는다 (SFR-115). 앱이 잰 속도로 먼저 막고, 서버가 막았다고 하면 그것도 따른다
+  const [serverLocked, setServerLocked] = useState(false);
+  const appLocked = driverLocked(auth.duty?.role, e.status, e.speedKmh);
+  const locked = appLocked || serverLocked;
+  useEffect(() => {
+    if (!serverLocked) return;
+    // 서버 잠금은 15초 동안만 따른다 (서버도 최근 15초 위치 기록으로 판단). 그 뒤 다시 고치면 서버가 다시 본다
+    const t = setTimeout(() => setServerLocked(false), 15_000);
+    return () => clearTimeout(t);
+  }, [serverLocked]);
+  const draft = useTeamDraftSync(p, setPatient, {
+    extraBody: () => (e.speedKmh !== null ? { speedKmh: e.speedKmh } : {}),
+    onError: (err) => {
+      if (err.code === "DRIVER_INPUT_LOCKED") setServerLocked(true);
+    },
+  });
   const count = filledCount(p);
   const allDone = count === REQUIRED_FIELDS.length;
   // 'n곳에 요청합니다': 서버가 지금 위치·등급으로 센다 (SFR-163)
@@ -108,7 +124,7 @@ function PatientPage() {
               </BigButton>
             )}
           </div>
-          <BigButton size="lg" className="mt-2" disabled={!allDone || sending} onClick={() => void send()}>
+          <BigButton size="lg" className="mt-2" disabled={!allDone || sending || locked} onClick={() => void send()}>
             {active ? "변경 사항 보내기" : "병원에 요청"}
           </BigButton>
           <p className="mt-2 text-center text-xs text-muted-foreground">
@@ -121,6 +137,18 @@ function PatientPage() {
     >
       <StepDots step={step} total={3} onJump={setStep} />
       {draft.notice && <div className="mt-3"><Notice tone="info">{draft.notice}</Notice></div>}
+      {draft.prevPatient && (
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex-1"><Notice tone="warn">직전 환자 정보로 채워져 있어요. 새 환자면 지워 주세요.</Notice></div>
+          <button className="shrink-0 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-bold" onClick={() => void draft.clearPrevPatient()}>지우기</button>
+        </div>
+      )}
+      {locked && (
+        <div role="alert" className="mt-3">
+          <Notice tone="warn">운전 중에는 입력할 수 없어요. 차를 세우거나 처치 대원이 입력해 주세요.</Notice>
+        </div>
+      )}
+      <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-60">
       <p className="mt-2 mb-5 text-xs font-semibold text-muted-foreground">
         {step === 1 && (gradeOn ? "1단계 · 병원 등급 · 주 증상 · 성별·나이대" : "1단계 · 주 증상 · 성별·나이대")}
         {step === 2 && "2단계 · 의식 · 활력징후"}
@@ -228,6 +256,7 @@ function PatientPage() {
           </div>
         </>
       )}
+      </fieldset>
     </PhoneScreen>
   );
 }

@@ -56,6 +56,8 @@ export type EngineState = {
   navIsMe: boolean;
   /** 담당 단말이 병원 입구까지 남은 거리 (m) */
   remainingM: number | null;
+  /** 이 기기가 잰 지금 속도 (km/h). 경로 안내 담당일 때만 안다 (운전 입력 잠금, SFR-115) */
+  speedKmh: number | null;
   /** 병원이 '도착 확인'을 눌렀다 (SFR-144) */
   arriveRequested: boolean;
   /** 확정 병원 입구 좌표·메모 */
@@ -70,7 +72,7 @@ export type EngineState = {
 const initial = (): EngineState => ({
   transportId: null, status: null, version: 1, radius: START_RADIUS, round: 0, roundSentAt: 0, grade: null, hreqs: [],
   excluded: [], phoneTarget: null, confirmedId: null, alert: null, destChanged: false, fallbackReason: null, history: [],
-  etaMin: null, navDeviceId: null, navIsMe: false, remainingM: null, arriveRequested: false, confirmed: null,
+  etaMin: null, navDeviceId: null, navIsMe: false, remainingM: null, speedKmh: null, arriveRequested: false, confirmed: null,
   lastSentSeq: 0, nearby: [], hospitalsRev: 0,
 });
 
@@ -607,6 +609,7 @@ function stopDrive() {
   if (drive) clearInterval(drive.timer);
   drive = null;
   s.remainingM = null;
+  s.speedKmh = null;
 }
 
 function afterApply() {
@@ -648,10 +651,13 @@ async function startDrive(target: LatLng) {
 async function stepDrive() {
   const d = drive;
   if (!d || !s.transportId) return;
+  const before = d.at;
   if (FIXED_LOCATION) d.at = moveToward(d.at, d.target, SPEED_MPS * STEP_SEC);
   else d.at = (await currentLocation(3000)) ?? d.at;
   const left = distanceM(d.at, d.target);
   s.remainingM = Math.round(left);
+  // 시연 위치면 흉내 낸 속도, 실제 위치면 5초 동안 움직인 거리로 잰다
+  s.speedKmh = FIXED_LOCATION ? (left > 5 ? SPEED_MPS * 3.6 : 0) : Math.round((distanceM(before, d.at) / STEP_SEC) * 3.6);
   const etaMin = Math.ceil(left / SPEED_MPS / 60);
   emit();
   // 남은 분은 1분에 한 번만 실어 보낸다 (그 사이는 서버가 지난 시간을 뺀다)
@@ -660,7 +666,7 @@ async function stepDrive() {
     await api("POST", `/transports/${s.transportId}/locations`, {
       body: {
         deviceId: deviceId(),
-        points: [{ lat: d.at.lat, lng: d.at.lng, speedKmh: left > 5 ? SPEED_MPS * 3.6 : 0, recordedAt: new Date(now()).toISOString() }],
+        points: [{ lat: d.at.lat, lng: d.at.lng, speedKmh: s.speedKmh ?? 0, recordedAt: new Date(now()).toISOString() }],
         ...(sendEta ? { etaMin } : {}),
       },
     });
@@ -708,4 +714,16 @@ export async function organizeJournalWithAi(text: string): Promise<Result<AiSugg
   } catch (e) {
     return { ok: false, error: errorText(e) };
   }
+}
+
+// ---------------- 운전 중 입력 잠금 (SFR-115) ----------------
+/** 이 속도 이상이면 주행 중 (서버 DRIVING_KMH 와 같음) */
+export const DRIVING_KMH = 10;
+
+/**
+ * 운전 역할 대원이 달리는 중이면 환자 정보 입력을 막는다. 앱이 먼저 막고, 서버가 한 번 더 본다(DRIVER_INPUT_LOCKED).
+ * 속도를 모르면(이 폰이 경로 안내 담당이 아님) 앱은 막지 않고 서버 판단에 맡긴다
+ */
+export function driverLocked(role: string | null | undefined, status: TransportStatus | null, speedKmh: number | null): boolean {
+  return role === "운전" && status === "moving" && speedKmh !== null && speedKmh >= DRIVING_KMH;
 }

@@ -97,7 +97,7 @@ export function applyDraft(p: Patient, a: DraftAssessment, fields?: string[]): P
   return out;
 }
 
-type DraftResponse = { version: number; assessment: DraftAssessment | null };
+type DraftResponse = { version: number; assessment: DraftAssessment | null; prefilledFromTransportId?: string | null };
 type DraftUpdated = { version: number; fields: string[]; byName: string | null };
 
 const SEND_DELAY_MS = 700;
@@ -120,6 +120,8 @@ export function useTeamDraftSync(
   const [notice, setNotice] = useState<string | null>(null);
   // 처음 받아 오기가 끝났는지. 끝나야 '내 화면에만 있는 값'을 보낼 수 있다
   const [loaded, setLoaded] = useState(false);
+  // 직전 환자 정보로 채워졌는가 (SFR-157: 이송이 끝나고 10분 동안 서버가 남겨 둠)
+  const [prevPatient, setPrevPatient] = useState(false);
   const opt = useRef(opts);
   opt.current = opts;
 
@@ -132,6 +134,7 @@ export function useTeamDraftSync(
         if (!alive) return;
         const a = d.assessment ?? {};
         version.current = d.version;
+        setPrevPatient(!!d.prefilledFromTransportId);
         synced.current = draftAsPatient(a, latest.current);
         const merged = applyDraft(latest.current, a);
         if (PATIENT_KEYS.some((k) => merged[k] !== latest.current[k])) setPatient(merged);
@@ -162,6 +165,7 @@ export function useTeamDraftSync(
         const next = applyDraft(latest.current, a, fields);
         if (synced.current) synced.current = applyDraft(synced.current, a, fields);
         setPatient(next);
+        if (e.version === 0) setPrevPatient(false);
         if (e.byName && e.fields.length) setNotice(`${e.byName} 대원이 환자 정보를 고쳤어요`);
       });
     });
@@ -197,5 +201,15 @@ export function useTeamDraftSync(
     return () => clearTimeout(t);
   }, [notice]);
 
-  return { notice };
+  /** '지우기': 직전 환자 정보를 팀 모두에게서 비운다 (DELETE, 팀원에게 draft.updated version 0) */
+  const clearPrevPatient = async () => {
+    await api("DELETE", "/teams/current/draft").catch(() => undefined);
+    const empty = draftAsPatient({}, latest.current);
+    version.current = 0;
+    synced.current = { ...empty };
+    setPrevPatient(false);
+    setPatient(empty);
+  };
+
+  return { notice, prevPatient, clearPrevPatient };
 }
