@@ -171,7 +171,7 @@ interface DetailRow extends RequestRow {
 }
 
 // 병상 '가용/전체'. 수집된 값이 없으면 null
-const bedText = (avail: number | null, total: number | null) =>
+export const bedText = (avail: number | null, total: number | null) =>
   avail === null || total === null ? null : `${avail}/${total}`;
 
 // 요청 상세 (SFR-118). 열 때마다 열람 기록을 남긴다 (SFR-137)

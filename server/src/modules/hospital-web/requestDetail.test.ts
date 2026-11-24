@@ -160,3 +160,21 @@ test('확정 뒤 보낸 추가 메모가 상세에 나온다 (SFR-140)', async (
     assert.equal(res.body.extraMemo, 'CT 고장');
   });
 });
+
+test('근무 화면 세션에 우리 병원 병상이 있다 — 요청이 없어도 (SFR-118)', async () => {
+  await withRequestApp(async (h) => {
+    const cookie = await onShift(h);
+    // 아직 수집된 병상이 없으면 null
+    const before = await h.get('/hw/session', cookie);
+    assert.deepEqual(before.body.beds, { er: null, icu: null, or: null });
+
+    await h.pool.query(
+      `INSERT INTO bed_current (hospital_id, er_avail, er_total, icu_avail, icu_total, or_avail, or_total, source_time)
+       VALUES ($1, 3, 12, 2, 10, 1, 4, now())`,
+      [h.hospitalId],
+    );
+    const res = await h.get('/hw/session', cookie);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.beds, { er: '3/12', icu: '2/10', or: '1/4' });
+  });
+});
