@@ -601,6 +601,8 @@ export const CLOSE_LABEL: Record<CloseReason, string> = {
 // 운전 역할 단말은 확정 뒤 10초 안에 '내가 담당'이라고 알린다. 담당 단말만 5초마다 위치를 올린다.
 // 시연(고정 위치)에서는 병원 입구 쪽으로 시속 약 40km 로 움직이는 것처럼 흉내 내고, 남은 분을 1분마다 같이 보낸다.
 const SPEED_MPS = 11;
+/** 시연 위치일 때 입구까지 걸리는 시간(초). VITE_DEMO_DRIVE_SEC 로 바꿀 수 있다 */
+const DEMO_DRIVE_SEC = Number(import.meta.env["VITE_DEMO_DRIVE_SEC"]) || 30;
 const STEP_SEC = 5;
 let drive: {
   timer: ReturnType<typeof setInterval>; at: LatLng; target: LatLng; minuteSent: number;
@@ -659,18 +661,22 @@ async function stepDrive() {
   const d = drive;
   if (!d || !s.transportId) return;
   const before = d.at;
-  if (FIXED_LOCATION) d.at = moveToward(d.at, d.target, SPEED_MPS * STEP_SEC);
+  // 시연 위치는 입구까지 DEMO_DRIVE_SEC(기본 30초) 안에 도착하게 한 번에 더 많이 움직인다 (시연에서 길찾기를 빨리 넘기려고)
+  const demoStep = Math.max(SPEED_MPS * STEP_SEC, d.startM / Math.max(1, DEMO_DRIVE_SEC / STEP_SEC));
+  if (FIXED_LOCATION) d.at = moveToward(d.at, d.target, demoStep);
   else d.at = (await currentLocation(3000)) ?? d.at;
   const left = distanceM(d.at, d.target);
   s.remainingM = Math.round(left);
   // 시연 위치면 흉내 낸 속도, 실제 위치면 5초 동안 움직인 거리로 잰다
-  s.speedKmh = FIXED_LOCATION ? (left > 5 ? SPEED_MPS * 3.6 : 0) : Math.round((distanceM(before, d.at) / STEP_SEC) * 3.6);
+  // 시연 속도는 화면·서버 검사용으로만 쓰니 시속 80km 를 넘기지 않는다 (서버는 300 까지 받음)
+  s.speedKmh = FIXED_LOCATION ? (left > 5 ? Math.min(80, Math.round((demoStep / STEP_SEC) * 3.6)) : 0) : Math.round((distanceM(before, d.at) / STEP_SEC) * 3.6);
   // 시연 위치는 직선으로 빠르게 달리는 흉내라, 남은 시간은 출발 때 길찾기 값을 남은 거리 비율로 줄인다.
   // 그래야 병원 화면·팀원 화면의 시간이 확정 때 값(예: 6분)에서 이어져 내려간다. 실제 위치는 그대로 계산
   const etaMin = FIXED_LOCATION ? demoEtaMin(left, d.startM, d.startEta) : Math.ceil(left / SPEED_MPS / 60);
   emit();
   // 남은 분은 1분에 한 번만 실어 보낸다 (그 사이는 서버가 지난 시간을 뺀다)
-  const sendEta = now() - d.minuteSent >= 60_000 || etaMin === 0;
+  // 시연 위치는 빨리 달리므로 5초마다 보내야 병원 화면 시간도 같이 내려간다
+  const sendEta = FIXED_LOCATION || now() - d.minuteSent >= 60_000 || etaMin === 0;
   try {
     await api("POST", `/transports/${s.transportId}/locations`, {
       body: {
