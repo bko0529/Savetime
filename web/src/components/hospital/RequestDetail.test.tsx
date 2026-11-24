@@ -145,16 +145,27 @@ describe('요청 상세 (SFR-118)', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('근무를 먼저 시작해 주세요');
   });
 
-  it('요청이 없어도 환자 평가 정보·우리 병원 칸은 그대로, 값은 — 이고 버튼은 누를 수 없다', () => {
-    renderWithQuery(<EmptyRequestDetail />);
+  it('요청이 없어도 환자 평가 정보·우리 병원 칸은 그대로: 환자 값은 —, 병상은 지금 값, 승인·거절 자리는 안내만', () => {
+    renderWithQuery(<EmptyRequestDetail beds={{ er: '3/12', icu: '2/10', or: '1/4' }} />);
     expect(screen.getByText('환자 평가 정보')).toBeTruthy();
     expect(screen.getByText('우리 병원')).toBeTruthy();
-    expect(screen.getByText('응급실')).toBeTruthy();
+    expect(screen.getByText('3/12')).toBeTruthy();
+    expect(screen.getByText('1/4')).toBeTruthy();
     expect(screen.getAllByText('—').length).toBeGreaterThan(5);
-    expect(screen.getByRole('button', { name: '승인' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: '거절 (사유 선택)' })).toHaveProperty(
-      'disabled',
-      true,
+    expect(screen.getByText('요청이 오면 여기서 승인·거절해요')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
+  });
+
+  it('요청 상세에 병상이 없으면 근무 화면의 병상을 쓴다', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({ ourHospital: { capability: null, beds: null } }),
+      },
+    });
+    renderWithQuery(
+      <RequestDetail requestId={102} nowMs={NOW} beds={{ er: '7/20', icu: null, or: null }} />,
     );
+    expect(await screen.findByText('7/20')).toBeTruthy();
   });
 });

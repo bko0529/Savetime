@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { INCOMING_KEY, type HwIncoming } from '@/app/hospital/useIncoming';
-import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import {
@@ -34,15 +33,21 @@ const STATUS_TEXT: Record<string, string> = {
 
 export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
 
+// 우리 병원 병상 '가용/전체' (GET /hw/session). 요청이 없어도 '우리 병원' 칸에 쓴다
+export type OurBeds = { er?: string | null; icu?: string | null; or?: string | null };
+
 // 요청 상세 (SFR-118, H-02). 열 때마다 서버가 열람 기록을 남기므로(SFR-137)
 // 창을 다시 누르거나 다른 창에서 돌아올 때 저절로 다시 받지 않는다. 요청이 바뀌었다는 알림이 올 때만 다시 받는다
 export function RequestDetail({
   requestId,
   nowMs,
+  beds = null,
 }: {
   requestId: number;
   nowMs: number;
   onClose?: () => void;
+  // 요청 상세에 병상이 없을 때 쓰는 근무 화면의 병상
+  beds?: OurBeds | null;
 }) {
   const detail = useQuery({
     queryKey: detailKey(requestId),
@@ -96,12 +101,12 @@ export function RequestDetail({
           </span>
         )}
       </div>
-      {detail.isPending && <DetailGrid />}
+      {detail.isPending && <DetailGrid beds={beds} />}
       {/* 다시 받다가 실패하면(요청이 끝남 등) 예전 환자 정보는 남기지 않는다 (SER-014) */}
       {detail.isError ? (
         <DetailError error={detail.error} />
       ) : (
-        d && <DetailBody detail={d} incomingItem={incomingItem} />
+        d && <DetailBody detail={d} incomingItem={incomingItem} beds={beds} />
       )}
       {/* 응답 결과 문구(다른 PC 가 먼저 응답 등)는 요청이 끝나 상세가 닫혀도 남아 있어야 해서 본문 밖에 둔다 */}
       {d && (
@@ -132,8 +137,9 @@ export function RequestDetail({
   );
 }
 
-// 요청을 고르지 않았거나 아직 없을 때도 칸 모양은 그대로 둔다. 값 자리는 '—', 버튼은 누를 수 없다
-export function EmptyRequestDetail() {
+// 요청을 고르지 않았거나 아직 없을 때도 칸 모양은 그대로 둔다. 환자 값 자리는 '—',
+// 우리 병원 병상은 지금 값을 보여 준다. 승인·거절 자리에는 무엇을 하는 곳인지 안내만 둔다
+export function EmptyRequestDetail({ beds = null }: { beds?: OurBeds | null }) {
   return (
     <section aria-label="요청 상세" className="flex flex-col gap-4">
       <div>
@@ -142,27 +148,12 @@ export function EmptyRequestDetail() {
           새 요청을 기다리는 중
         </h2>
       </div>
-      <DetailGrid />
-      <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
-        승인 메모 (선택 · 최대 50자 · 환자 이름 쓰지 않기)
-        <input
-          disabled
-          placeholder="예: 3번 출입구로 오세요"
-          className="h-[52px] w-full rounded-[12px] border border-line bg-card px-4 text-[18px] font-normal"
-        />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <Button size="lg" disabled className="h-[64px] rounded-[14px] text-[22px] font-extrabold">
-          승인
-        </Button>
-        <Button
-          size="lg"
-          variant="destructive"
-          disabled
-          className="h-[64px] rounded-[14px] text-[22px] font-extrabold"
-        >
-          거절 (사유 선택)
-        </Button>
+      <DetailGrid beds={beds} />
+      <div className="rounded-[16px] border-2 border-dashed border-line bg-card px-6 py-6 text-center">
+        <p className="text-[18px] font-bold">요청이 오면 여기서 승인·거절해요</p>
+        <p className="mt-1 text-[15px] text-muted-foreground">
+          승인할 때 메모(예: 3번 출입구로 오세요)를 함께 보낼 수 있어요
+        </p>
       </div>
     </section>
   );
@@ -228,7 +219,15 @@ function Row({ label, value, warn }: { label: string; value: string | null; warn
 }
 
 // 환자 평가 정보 · 우리 병원 두 칸. 요청이 없으면(detail 없음) 같은 칸에 '—' 만 보인다
-function DetailGrid({ detail, incomingItem }: { detail?: Detail; incomingItem?: HwIncoming }) {
+function DetailGrid({
+  detail,
+  incomingItem,
+  beds: fallbackBeds = null,
+}: {
+  detail?: Detail;
+  incomingItem?: HwIncoming;
+  beds?: OurBeds | null;
+}) {
   const a = (detail?.assessment ?? {}) as Assessment;
   const abnormal = new Set(detail?.abnormalFields ?? []);
   const t = (f: keyof Assessment) => (detail ? fieldText(a, f) : null);
@@ -243,7 +242,7 @@ function DetailGrid({ detail, incomingItem }: { detail?: Detail; incomingItem?: 
         .filter(Boolean)
         .join(' · ') || null
     : null;
-  const beds = detail?.ourHospital?.beds;
+  const beds = detail?.ourHospital?.beds ?? fallbackBeds;
   const cap = detail?.ourHospital?.capability;
   const eta = detail ? etaLine(detail, incomingItem) : null;
   // 기본 칸 말고 값이 있을 때만 보이는 칸
@@ -299,13 +298,15 @@ function DetailGrid({ detail, incomingItem }: { detail?: Detail; incomingItem?: 
 function DetailBody({
   detail,
   incomingItem,
+  beds,
 }: {
   detail: Detail;
   incomingItem: HwIncoming | undefined;
+  beds: OurBeds | null;
 }) {
   return (
     <>
-      <DetailGrid detail={detail} incomingItem={incomingItem} />
+      <DetailGrid detail={detail} incomingItem={incomingItem} beds={beds} />
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
         <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[18px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}

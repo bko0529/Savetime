@@ -89,6 +89,6 @@ describe('요청 목록 (SFR-135)', () => {
 
   it('요청이 없으면 안내 문구', () => {
     render(<RequestList items={[]} nowMs={NOW} selectedId={null} onOpen={() => {}} />);
-    expect(screen.getByText('지금 응답할 요청이 없어요.')).toBeTruthy();
+    expect(screen.getByText('지금 응답할 요청이 없어요')).toBeTruthy();
   });
 });

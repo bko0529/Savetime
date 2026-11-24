@@ -32,9 +32,12 @@ type Props = {
 export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
   if (items.length === 0) {
     return (
-      <p className="rounded-[16px] border border-dashed border-line bg-card px-5 py-8 text-center text-[17px] text-muted-foreground">
-        지금 응답할 요청이 없어요.
-      </p>
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed border-line bg-card px-5 py-10 text-center">
+        <p className="text-[20px] font-bold">지금 응답할 요청이 없어요</p>
+        <p className="text-[16px] text-muted-foreground">
+          구급대원이 요청을 보내면 여기에 카드로 쌓이고, 알림음이 울려요.
+        </p>
+      </div>
     );
   }
   return (

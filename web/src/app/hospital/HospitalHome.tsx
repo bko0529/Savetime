@@ -61,6 +61,8 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
         </div>
       }
       hospitalName={hospital?.name ?? undefined}
+      // 우리 병원 병상: 요청이 없어도 오른쪽 '우리 병원' 칸에 보여 준다 (SFR-118)
+      beds={session.data.beds ?? null}
       // 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168)
       notice={shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
       shift={shift ?? null}

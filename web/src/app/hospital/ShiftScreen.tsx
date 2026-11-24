@@ -11,7 +11,11 @@ import { EndShiftButton } from '@/components/hospital/EndShiftButton';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
-import { EmptyRequestDetail, RequestDetail } from '@/components/hospital/RequestDetail';
+import {
+  EmptyRequestDetail,
+  RequestDetail,
+  type OurBeds,
+} from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { cn } from '@/lib/utils';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
@@ -98,6 +102,7 @@ export function ShiftScreen({
   brand,
   notice,
   hospitalName,
+  beds = null,
   createSocket,
 }: {
   shift: Shift | null;
@@ -106,6 +111,7 @@ export function ShiftScreen({
   notice?: ReactNode;
   // 탭 줄 오른쪽 '새 이송 요청 n건 · 병원 이름'
   hospitalName?: string;
+  beds?: OurBeds | null;
   // 병원 전체의 잠시 요청 중지 상태 (GET /hw/session, SFR-139)
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
@@ -188,7 +194,7 @@ export function ShiftScreen({
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
+      <div className="flex w-full flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
         {notice}
         {turnOn.isError && (
           <p role="alert" className="text-right text-[15px] font-bold text-destructive">
@@ -233,6 +239,15 @@ export function ShiftScreen({
                 >
                   도착 예정 ({arriving.items.length})
                 </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                {incoming.waiting.length > 0 && (
+                  <p className="flex items-center gap-2 text-[18px] font-extrabold">
+                    <span aria-hidden className="size-3 rounded-full bg-destructive" />새 이송 요청{' '}
+                    {incoming.waiting.length}건{hospitalName ? ` · ${hospitalName}` : ''}
+                  </p>
+                )}
+                {/* 잠시 요청 중지는 화면을 바꾸는 탭이 아니라 확인 창을 여는 동작이라 탭과 떨어뜨려 오른쪽에 둔다 */}
                 {!pause.paused && (
                   <PauseControl
                     paused={pause.paused}
@@ -242,12 +257,6 @@ export function ShiftScreen({
                   />
                 )}
               </div>
-              {incoming.waiting.length > 0 && (
-                <p className="flex items-center gap-2 text-[18px] font-extrabold">
-                  <span aria-hidden className="size-3 rounded-full bg-destructive" />새 이송 요청{' '}
-                  {incoming.waiting.length}건{hospitalName ? ` · ${hospitalName}` : ''}
-                </p>
-              )}
             </div>
             {/* 중지 중이면 탭 아래에 크게 (요청 다시 받기 버튼 포함) */}
             {pause.paused && (
@@ -261,7 +270,7 @@ export function ShiftScreen({
 
             {tab === 'requests' ? (
               // 왼쪽 요청 카드, 오른쪽 상세. 좁으면 상세가 아래로 내려간다
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(320px,420px)_1fr]">
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(0,2fr)]">
                 <section aria-label="요청 목록" className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="flex items-center gap-2 text-[18px] font-extrabold">
@@ -289,9 +298,14 @@ export function ShiftScreen({
                 </section>
                 <div className="min-w-0">
                   {shownId !== null ? (
-                    <RequestDetail key={shownId} requestId={shownId} nowMs={incoming.nowMs} />
+                    <RequestDetail
+                      key={shownId}
+                      requestId={shownId}
+                      nowMs={incoming.nowMs}
+                      beds={beds}
+                    />
                   ) : (
-                    <EmptyRequestDetail />
+                    <EmptyRequestDetail beds={beds} />
                   )}
                 </div>
               </div>
