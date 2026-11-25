@@ -602,7 +602,7 @@ export const CLOSE_LABEL: Record<CloseReason, string> = {
 // 시연(고정 위치)에서는 병원 입구 쪽으로 시속 약 40km 로 움직이는 것처럼 흉내 내고, 남은 분을 1분마다 같이 보낸다.
 const SPEED_MPS = 11;
 /** 시연 위치일 때 입구까지 걸리는 시간(초). VITE_DEMO_DRIVE_SEC 로 바꿀 수 있다 */
-const DEMO_DRIVE_SEC = Number(import.meta.env["VITE_DEMO_DRIVE_SEC"]) || 30;
+const DEMO_DRIVE_SEC = Number(import.meta.env["VITE_DEMO_DRIVE_SEC"]) || 10;
 const STEP_SEC = 5;
 let drive: {
   timer: ReturnType<typeof setInterval>; at: LatLng; target: LatLng; minuteSent: number;
@@ -661,7 +661,7 @@ async function stepDrive() {
   const d = drive;
   if (!d || !s.transportId) return;
   const before = d.at;
-  // 시연 위치는 입구까지 DEMO_DRIVE_SEC(기본 30초) 안에 도착하게 한 번에 더 많이 움직인다 (시연에서 길찾기를 빨리 넘기려고)
+  // 시연 위치는 입구까지 DEMO_DRIVE_SEC(기본 10초) 안에 도착하게 한 번에 더 많이 움직인다 (시연에서 길찾기를 빨리 넘기려고)
   const demoStep = Math.max(SPEED_MPS * STEP_SEC, d.startM / Math.max(1, DEMO_DRIVE_SEC / STEP_SEC));
   if (FIXED_LOCATION) d.at = moveToward(d.at, d.target, demoStep);
   else d.at = (await currentLocation(3000)) ?? d.at;
