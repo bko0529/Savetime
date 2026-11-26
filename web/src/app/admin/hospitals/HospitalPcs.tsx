@@ -49,9 +49,9 @@ export function HospitalPcs({
   const items = pcs.data ?? [];
 
   return (
-    <section aria-labelledby="pcs-title" className="tile flex flex-col gap-4 p-6">
+    <section aria-labelledby="pcs-title" className="panel border-border-strong">
       <div className="flex items-center justify-between gap-4">
-        <h2 id="pcs-title" className="section-title text-2xl">
+        <h2 id="pcs-title" className="section-title panel-title">
           {hospital.name} 등록 PC
         </h2>
         <Button variant="outline" onClick={onClose}>
@@ -65,37 +65,41 @@ export function HospitalPcs({
         </p>
       )}
       {pcs.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">등록된 PC가 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          등록된 PC가 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="data-table text-lg">
-          <thead>
-            <tr className="text-left">
-              <th className="p-3">PC 이름</th>
-              <th className="p-3">등록 시각</th>
-              <th className="p-3">마지막 사용</th>
-              <th className="p-3">접속</th>
-              <th className="p-3">
-                <span className="sr-only">작업</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((pc) => (
-              <tr key={pc.id} className="border-b">
-                <td className="p-3 font-bold">{pc.name}</td>
-                <td className="p-3 tabular-nums">{timeText(pc.registeredAt)}</td>
-                <td className="p-3 tabular-nums">{timeText(pc.lastUsedAt)}</td>
-                <td className="p-3">{pc.online ? '접속 중' : '—'}</td>
-                <td className="p-3 text-right">
-                  <Button variant="destructive" onClick={() => setPending(pc)}>
-                    해제
-                  </Button>
-                </td>
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">PC 이름</th>
+                <th className="px-3 py-3.5">등록 시각</th>
+                <th className="px-3 py-3.5">마지막 사용</th>
+                <th className="px-3 py-3.5">접속</th>
+                <th className="px-3 py-3.5">
+                  <span className="sr-only">작업</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((pc) => (
+                <tr key={pc.id}>
+                  <td className="px-3 py-4 font-extrabold">{pc.name}</td>
+                  <td className="px-3 py-4 tabular-nums">{timeText(pc.registeredAt)}</td>
+                  <td className="px-3 py-4 tabular-nums">{timeText(pc.lastUsedAt)}</td>
+                  <td className="px-3 py-4">{pc.online ? '접속 중' : '—'}</td>
+                  <td className="px-3 py-4 text-right">
+                    <Button variant="destructive" onClick={() => setPending(pc)}>
+                      해제
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <Dialog

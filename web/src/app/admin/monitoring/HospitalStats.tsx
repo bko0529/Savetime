@@ -51,9 +51,9 @@ export function HospitalStats() {
   const hospitals = stats.data?.hospitals ?? [];
 
   return (
-    <section aria-labelledby="stats-title" className="flex flex-col gap-4">
+    <section aria-labelledby="stats-title" className="panel">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id="stats-title" className="section-title text-2xl">
+        <h2 id="stats-title" className="section-title panel-title">
           병원 응답 통계
         </h2>
         <div role="group" aria-label="기간" className="flex gap-2">
@@ -79,94 +79,97 @@ export function HospitalStats() {
         </p>
       )}
       {stats.isSuccess && (
-        <p className="text-xl">
+        <p className="well w-fit px-4 py-2.5 text-lg font-semibold">
           평균 요청 → 출발{' '}
           <strong className="tabular-nums">{durationText(stats.data.avgRequestToDepartSec)}</strong>
         </p>
       )}
       {stats.isSuccess && hospitals.length === 0 && (
-        <p className="text-lg text-muted-foreground">이 기간에 요청을 받은 병원이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          이 기간에 요청을 받은 병원이 없어요.
+        </p>
       )}
       {hospitals.length > 0 && (
-        <table className="data-table text-lg">
-          <thead>
-            <tr className="text-left">
-              <th className="p-3">병원</th>
-              <th className="p-3">요청</th>
-              <th className="p-3">응답률</th>
-              <th className="p-3">평균 응답</th>
-              <th className="p-3">승인 취소율</th>
-              <th className="p-3">요청→첫 승인</th>
-              <th className="p-3">요청→출발</th>
-              <th className="p-3">거절 사유</th>
-            </tr>
-          </thead>
-          <tbody>
-            {hospitals.map((h) => {
-              const open = openId === h.hospitalId;
-              return (
-                <Fragment key={h.hospitalId}>
-                  <tr
-                    className={cn('border-b', h.rejectSpike && 'bg-brand-soft font-bold')}
-                    aria-label={h.name}
-                  >
-                    <td className="p-3 font-bold">
-                      {h.name}
-                      {h.rejectSpike && (
-                        <span className="ml-2 rounded-full bg-brand px-2.5 py-0.5 text-base text-white">
-                          거절 급증
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 tabular-nums">{h.requests}</td>
-                    {h.sampleTooSmall ? (
-                      <td colSpan={5} className="p-3 text-muted-foreground">
-                        표본 부족 (요청 10건 미만)
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">병원</th>
+                <th className="px-3 py-3.5">요청</th>
+                <th className="px-3 py-3.5">응답률</th>
+                <th className="px-3 py-3.5">평균 응답</th>
+                <th className="px-3 py-3.5">승인 취소율</th>
+                <th className="px-3 py-3.5">요청→첫 승인</th>
+                <th className="px-3 py-3.5">요청→출발</th>
+                <th className="px-3 py-3.5">거절 사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hospitals.map((h) => {
+                const open = openId === h.hospitalId;
+                return (
+                  <Fragment key={h.hospitalId}>
+                    <tr className={cn(h.rejectSpike && 'bg-urgent font-bold')} aria-label={h.name}>
+                      <td className="px-3 py-4 font-extrabold">
+                        {h.name}
+                        {h.rejectSpike && (
+                          <span className="ml-2 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
+                            거절 급증
+                          </span>
+                        )}
                       </td>
-                    ) : (
-                      <>
-                        <td className="p-3 tabular-nums">{percent(h.responseRate)}</td>
-                        <td className="p-3 tabular-nums">{durationText(h.avgResponseSec)}</td>
-                        <td className="p-3 tabular-nums">
-                          {percent(h.approvalCancelRate)}
-                          {(h.unacceptableCount ?? 0) > 0 && (
-                            <span className="ml-1 text-base text-muted-foreground">
-                              (수용 불가 {h.unacceptableCount})
-                            </span>
-                          )}
+                      <td className="px-3 py-4 tabular-nums">{h.requests}</td>
+                      {h.sampleTooSmall ? (
+                        <td colSpan={5} className="px-3 py-4 text-muted-foreground">
+                          표본 부족 (요청 10건 미만)
                         </td>
-                        <td className="p-3 tabular-nums">
-                          {durationText(h.avgRequestToFirstApprovalSec)}
-                        </td>
-                        <td className="p-3 tabular-nums">
-                          {durationText(h.avgRequestToDepartSec)}
-                        </td>
-                      </>
-                    )}
-                    <td className="p-3">
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-lg"
-                        aria-expanded={open}
-                        aria-label={`${h.name} 거절 사유 ${open ? '접기' : '보기'}`}
-                        onClick={() => setOpenId(open ? null : (h.hospitalId ?? null))}
-                      >
-                        {h.topRejectReason ? REASON_LABEL[h.topRejectReason] : '—'}
-                      </Button>
-                    </td>
-                  </tr>
-                  {open && (
-                    <tr className="border-b bg-muted">
-                      <td colSpan={8} className="p-4">
-                        <RejectBreakdown stat={h} />
+                      ) : (
+                        <>
+                          <td className="px-3 py-4 tabular-nums">{percent(h.responseRate)}</td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgResponseSec)}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {percent(h.approvalCancelRate)}
+                            {(h.unacceptableCount ?? 0) > 0 && (
+                              <span className="ml-1 text-base text-muted-foreground">
+                                (수용 불가 {h.unacceptableCount})
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgRequestToFirstApprovalSec)}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgRequestToDepartSec)}
+                          </td>
+                        </>
+                      )}
+                      <td className="px-3 py-4">
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 text-lg"
+                          aria-expanded={open}
+                          aria-label={`${h.name} 거절 사유 ${open ? '접기' : '보기'}`}
+                          onClick={() => setOpenId(open ? null : (h.hospitalId ?? null))}
+                        >
+                          {h.topRejectReason ? REASON_LABEL[h.topRejectReason] : '—'}
+                        </Button>
                       </td>
                     </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    {open && (
+                      <tr className="border-b bg-muted">
+                        <td colSpan={8} className="p-4">
+                          <RejectBreakdown stat={h} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

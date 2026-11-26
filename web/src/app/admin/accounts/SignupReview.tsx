@@ -136,9 +136,14 @@ export function SignupReview() {
   const countText = `${items.length}건${list.hasNextPage ? ' 이상' : ''}`;
 
   return (
-    <section aria-labelledby="signups-title" className="flex flex-col gap-4">
-      <h2 id="signups-title" className="section-title text-2xl">
-        가입 승인 대기 {list.isSuccess && <span className="tabular-nums">{countText}</span>}
+    <section aria-labelledby="signups-title" className="panel">
+      <h2 id="signups-title" className="section-title panel-title">
+        가입 승인 대기{' '}
+        {list.isSuccess && (
+          <span className="rounded-full border border-brand/25 bg-brand-soft px-3 py-0.5 text-sm font-extrabold text-brand-deep tabular-nums">
+            {countText}
+          </span>
+        )}
       </h2>
       {list.isError && (
         <p role="alert" className="text-lg font-bold text-destructive">
@@ -146,44 +151,50 @@ export function SignupReview() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">기다리는 가입 신청이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          기다리는 가입 신청이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="data-table text-lg">
-          <thead>
-            <tr className="text-left">
-              <th className="p-3">이름</th>
-              <th className="p-3">소속</th>
-              <th className="p-3">사번</th>
-              <th className="p-3">신청 시각</th>
-              <th className="p-3">
-                <span className="sr-only">작업</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((s) => (
-              <tr key={s.id} className="border-b">
-                <td className="p-3 font-bold">
-                  {s.name} <span className="font-normal">{s.rank}</span>
-                  {s.resubmitted && (
-                    <span className="ml-2 text-base font-bold text-destructive">다시 신청</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  {s.agencyName} · {s.safetyCenter}
-                </td>
-                <td className="p-3 tabular-nums">{s.employeeNo}</td>
-                <td className="p-3 tabular-nums">{timeText(s.createdAt)}</td>
-                <td className="p-3 text-right">
-                  <Button onClick={() => setOpen(s)} aria-label={`${s.name} 신청 확인`}>
-                    사진 보고 확인
-                  </Button>
-                </td>
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">이름</th>
+                <th className="px-3 py-3.5">소속</th>
+                <th className="px-3 py-3.5">사번</th>
+                <th className="px-3 py-3.5">신청 시각</th>
+                <th className="px-3 py-3.5">
+                  <span className="sr-only">작업</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-3 py-4 font-extrabold">
+                    {s.name} <span className="font-medium text-muted-foreground">{s.rank}</span>
+                    {s.resubmitted && (
+                      <span className="ml-2 rounded-full border border-danger-line bg-danger-soft px-2.5 py-0.5 text-xs font-bold text-danger-strong">
+                        다시 신청
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-4">
+                    {s.agencyName} · {s.safetyCenter}
+                  </td>
+                  <td className="px-3 py-4 tabular-nums">{s.employeeNo}</td>
+                  <td className="px-3 py-4 tabular-nums">{timeText(s.createdAt)}</td>
+                  <td className="px-3 py-4 text-right">
+                    <Button onClick={() => setOpen(s)} aria-label={`${s.name} 신청 확인`}>
+                      사진 보고 확인
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {list.hasNextPage && (
         <Button

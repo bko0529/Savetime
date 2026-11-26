@@ -51,6 +51,14 @@
   --color-warning-soft: var(--warning-soft);
   --color-surface: var(--surface);
   --color-border-strong: var(--border-strong);
+  --color-line-soft: var(--line-soft);
+  --color-canvas: var(--canvas);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-urgent: var(--urgent);
+  --color-success-strong: var(--success-strong);
+  --color-danger-line: var(--danger-line);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-strong: var(--danger-strong);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -90,6 +98,15 @@
   --destructive: oklch(0.505 0.19 27);
   --border: oklch(0.89 0.008 250);
   --border-strong: oklch(0.8 0.012 250);
+  /* 대원 앱 시안의 보조 색: 표 줄 선, 관리자 바탕, 꺼짐 칩, 급한 줄, 진한 초록, 빨강 칩 */
+  --line-soft: oklch(0.935 0.006 250);
+  --canvas: oklch(0.972 0.006 242);
+  --neutral-soft: oklch(0.945 0.008 250);
+  --urgent: oklch(0.978 0.018 27);
+  --success-strong: oklch(0.42 0.105 175);
+  --danger-line: oklch(0.82 0.095 27);
+  --danger-soft: oklch(0.955 0.03 27);
+  --danger-strong: oklch(0.47 0.18 27);
   --input: oklch(0.8 0.012 250);
   --ring: oklch(0.565 0.215 27);
   --surface: oklch(0.968 0.007 245);
@@ -198,10 +215,71 @@
   }
   .section-title::before {
     content: '';
+    flex-shrink: 0;
     width: 4px;
     height: 1em;
-    border-radius: 2px;
+    border-radius: 999px;
     background: var(--color-brand);
+    box-shadow: var(--shadow-brand);
+  }
+  /* 관리자 화면의 카드 하나(섹션). 안의 표는 .panel-table 로 카드 양옆 끝까지 채운다 (대원 앱 시안) */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow: hidden;
+    padding: 1.5rem;
+    border-radius: var(--radius-2xl);
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    box-shadow: var(--shadow-card);
+  }
+  /* 카드 제목 (22px) */
+  .panel-title {
+    font-size: 1.375rem;
+    letter-spacing: -0.02em;
+  }
+  .panel-table {
+    margin-inline: -1.5rem;
+    overflow-x: auto;
+  }
+  .panel-table .data-table {
+    font-size: 1.0625rem;
+  }
+  .panel-table .data-table thead th {
+    border-top: 1px solid var(--color-line-soft);
+  }
+  /* 살짝 들어간 회색 상자 (빈 목록 안내·설정 한 줄 등) */
+  .well {
+    border-radius: var(--radius-md);
+    border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+    background: var(--color-surface);
+  }
+  /* 입력칸: 누르면 빨간 테두리 + 연한 빨강 바탕 */
+  .field {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-input);
+    background: var(--color-card);
+    color: var(--color-foreground);
+    outline: none;
+    padding: 0.9rem 1.05rem;
+    box-shadow: 0 1px 2px oklch(0.3 0.03 262 / 0.03);
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s,
+      background 0.15s;
+  }
+  .field::placeholder {
+    color: oklch(0.68 0.02 260);
+  }
+  .field:hover {
+    border-color: var(--color-border-strong);
+  }
+  .field:focus {
+    border-color: var(--color-brand);
+    background: color-mix(in oklab, var(--color-brand-soft) 40%, var(--color-card));
+    box-shadow: 0 0 0 3.5px color-mix(in oklab, var(--color-brand) 18%, transparent);
   }
   /* 둥근 칩(메뉴·상태 표시) */
   .chip {
@@ -238,23 +316,40 @@
   }
   .data-table th,
   .data-table td {
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-line-soft);
   }
   .data-table tbody tr:last-child > td {
     border-bottom: 0;
   }
+  .data-table tbody tr {
+    transition: background-color 0.15s;
+  }
+  .data-table tbody tr:hover {
+    background: color-mix(in oklab, var(--color-surface) 65%, transparent);
+  }
+  /* 머리줄은 작은 회색 글자 (14px) */
   .data-table thead th {
     background: var(--color-surface);
     color: var(--color-muted-foreground);
+    font-size: 0.875rem;
     font-weight: 700;
   }
+  /* 칸마다 붙은 p-3 같은 여백 클래스가 이 규칙을 덮어써서, 표 양 끝 여백만은 !important 로 지킨다 */
   .data-table th:first-child,
   .data-table td:first-child {
-    padding-left: 1.25rem;
+    padding-left: 1.25rem !important;
   }
   .data-table th:last-child,
   .data-table td:last-child {
-    padding-right: 1.25rem;
+    padding-right: 1.25rem !important;
+  }
+  .panel-table .data-table th:first-child,
+  .panel-table .data-table td:first-child {
+    padding-left: 1.5rem !important;
+  }
+  .panel-table .data-table th:last-child,
+  .panel-table .data-table td:last-child {
+    padding-right: 1.5rem !important;
   }
   /* 이미 카드 안에 있는 표: 바깥 테두리·그림자·둥근 모서리를 빼고 카드에 맡긴다 */
   .data-table-flush {

@@ -32,8 +32,10 @@ export function UnreadBadge() {
       href="/admin/monitoring#notifications"
       aria-label={`읽지 않은 알림 ${n}개`}
       className={cn(
-        'rounded-full border px-3 py-1 text-lg font-bold tabular-nums',
-        n > 0 ? 'btn-solid-brand border-transparent text-white' : 'border-border-strong bg-card',
+        'rounded-full border px-3.5 py-1.5 text-sm font-extrabold tabular-nums transition',
+        n > 0
+          ? 'btn-solid-brand border-transparent text-white'
+          : 'border-border-strong bg-card text-muted-foreground hover:bg-surface',
       )}
     >
       알림 {n}
@@ -63,12 +65,8 @@ export function Notifications() {
   const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
 
   return (
-    <section
-      id="notifications"
-      aria-labelledby="notifications-title"
-      className="flex flex-col gap-4"
-    >
-      <h2 id="notifications-title" className="section-title text-2xl">
+    <section id="notifications" aria-labelledby="notifications-title" className="panel">
+      <h2 id="notifications-title" className="section-title panel-title">
         관리자 알림
       </h2>
       {(list.isError || read.isError) && (
@@ -77,7 +75,7 @@ export function Notifications() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">알림이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">알림이 없어요.</p>
       )}
       {items.length > 0 && (
         <ul className="flex flex-col gap-2">
@@ -88,10 +86,10 @@ export function Notifications() {
                 onClick={() => !i.read && i.id !== undefined && read.mutate(i.id)}
                 aria-label={`${i.text}${i.read ? '' : ' (안 읽음)'}`}
                 className={cn(
-                  'flex w-full items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 text-left text-lg shadow-[var(--shadow-card)]',
+                  'flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3.5 text-left text-base transition',
                   i.read
-                    ? 'border-border text-muted-foreground'
-                    : 'border-brand/40 bg-brand-soft font-bold',
+                    ? 'border-border bg-surface/60 text-muted-foreground'
+                    : 'border-brand/40 bg-brand-soft/45 font-bold text-foreground hover:bg-brand-soft/75',
                 )}
               >
                 <span>

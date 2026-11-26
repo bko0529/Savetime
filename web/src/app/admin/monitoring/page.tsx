@@ -8,7 +8,7 @@ import { Notifications } from './Notifications';
 export default function MonitoringPage() {
   return (
     <AdminShell>
-      <h1 className="section-title text-3xl">모니터링</h1>
+      <h1 className="text-[28px] font-extrabold tracking-[-0.02em]">모니터링</h1>
       <Notifications />
       <HospitalStats />
       <FeatureFlags />

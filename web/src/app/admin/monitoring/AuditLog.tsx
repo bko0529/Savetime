@@ -26,8 +26,8 @@ export function AuditLog() {
   const items = logs.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <section aria-labelledby="audit-title" className="flex flex-col gap-4">
-      <h2 id="audit-title" className="section-title text-2xl">
+    <section aria-labelledby="audit-title" className="panel">
+      <h2 id="audit-title" className="section-title panel-title">
         관리자 작업 이력
       </h2>
       {logs.isError && (
@@ -36,31 +36,35 @@ export function AuditLog() {
         </p>
       )}
       {logs.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">아직 기록된 작업이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          아직 기록된 작업이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="data-table text-lg">
-          <thead>
-            <tr className="text-left">
-              <th className="p-3">시각</th>
-              <th className="p-3">관리자</th>
-              <th className="p-3">작업</th>
-              <th className="p-3">대상</th>
-              <th className="p-3">사유</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i, n) => (
-              <tr key={`${i.at}-${n}`} className="border-b">
-                <td className="p-3 tabular-nums">{i.at ? timeText(i.at) : '—'}</td>
-                <td className="p-3">{i.admin}</td>
-                <td className="p-3 font-bold">{i.action}</td>
-                <td className="p-3">{i.target}</td>
-                <td className="p-3">{i.reason ?? '—'}</td>
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">시각</th>
+                <th className="px-3 py-3.5">관리자</th>
+                <th className="px-3 py-3.5">작업</th>
+                <th className="px-3 py-3.5">대상</th>
+                <th className="px-3 py-3.5">사유</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((i, n) => (
+                <tr key={`${i.at}-${n}`} className="border-b">
+                  <td className="px-3 py-4 tabular-nums">{i.at ? timeText(i.at) : '—'}</td>
+                  <td className="px-3 py-4">{i.admin}</td>
+                  <td className="px-3 py-4 font-bold">{i.action}</td>
+                  <td className="px-3 py-4">{i.target}</td>
+                  <td className="px-3 py-4">{i.reason ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {logs.hasNextPage && (
         <Button
