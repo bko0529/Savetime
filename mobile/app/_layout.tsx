@@ -17,6 +17,8 @@ import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
 import { startTransportSync } from '../src/transport/engine';
+import { loadPatient } from '../src/transport/patientStore';
+import { TransportRouter } from '../src/transport/ui/TransportRouter';
 import { useStore } from '../src/state/store';
 import { color } from '../src/ui/theme';
 
@@ -49,6 +51,7 @@ function Gate() {
   // 서버 설정(최소 버전·기능 토글): 켜질 때와 1분마다 (SFR-142, QUR-013)
   useEffect(() => {
     void loadConsent();
+    void loadPatient();
     void loadConfig();
     const t = setInterval(() => void loadConfig(), 60_000);
     return () => clearInterval(t);
@@ -63,36 +66,41 @@ function Gate() {
   if (target === 'loading') return <Splash />;
   // Stack.Protected: guard 가 true 인 화면만 열린다. 지금 화면이 닫히면 열린 화면으로 자동 이동
   return (
-    <Stack
-      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }}
-    >
-      <Stack.Protected guard={target === 'update'}>
-        <Stack.Screen name="update" />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'welcome'}>
-        <Stack.Screen name="welcome" />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'permissions'}>
-        <Stack.Screen name="permissions" />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'login'}>
-        <Stack.Screen name="login" />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'pending'}>
-        <Stack.Screen name="pending" />
-      </Stack.Protected>
-      <Stack.Protected guard={canSignup(input, target)}>
-        <Stack.Screen name="signup" />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'duty'}>
-        <Stack.Screen name="duty" />
-        <Stack.Screen name="invite" />
-        <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={target === 'home'}>
-        <Stack.Screen name="index" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {target === 'home' ? <TransportRouter /> : null}
+      <Stack
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }}
+      >
+        <Stack.Protected guard={target === 'update'}>
+          <Stack.Screen name="update" />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'welcome'}>
+          <Stack.Screen name="welcome" />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'permissions'}>
+          <Stack.Screen name="permissions" />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'login'}>
+          <Stack.Screen name="login" />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'pending'}>
+          <Stack.Screen name="pending" />
+        </Stack.Protected>
+        <Stack.Protected guard={canSignup(input, target)}>
+          <Stack.Screen name="signup" />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'duty'}>
+          <Stack.Screen name="duty" />
+          <Stack.Screen name="invite" />
+          <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={target === 'home'}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="patient" />
+          <Stack.Screen name="request" />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 
