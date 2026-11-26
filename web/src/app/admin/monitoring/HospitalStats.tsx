@@ -8,6 +8,7 @@ import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
 import { cn } from '@/lib/utils';
+import { ShowMoreButtons, useShowMore } from '../ShowMore';
 import { useAdminApi } from '../useAdminApi';
 
 type Stats =
@@ -49,6 +50,8 @@ export function HospitalStats() {
     queryFn: () => api<Stats>(`/admin/stats/hospitals?days=${days}`),
   });
   const hospitals = stats.data?.hospitals ?? [];
+  // 처음엔 5곳만, '병원 더 보기'로 10곳씩
+  const shown = useShowMore(hospitals);
 
   return (
     <section aria-labelledby="stats-title" className="panel">
@@ -105,7 +108,7 @@ export function HospitalStats() {
               </tr>
             </thead>
             <tbody>
-              {hospitals.map((h) => {
+              {shown.visible.map((h) => {
                 const open = openId === h.hospitalId;
                 return (
                   <Fragment key={h.hospitalId}>
@@ -171,6 +174,13 @@ export function HospitalStats() {
           </table>
         </div>
       )}
+      <ShowMoreButtons
+        hasMore={shown.hasMore}
+        canCollapse={shown.canCollapse}
+        onMore={shown.more}
+        onCollapse={shown.collapse}
+        label="병원 더 보기"
+      />
     </section>
   );
 }

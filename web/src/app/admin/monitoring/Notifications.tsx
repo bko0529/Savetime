@@ -2,10 +2,10 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { cn } from '@/lib/utils';
+import { ShowMoreButtons, useShowMore } from '../ShowMore';
 import { useAdminApi } from '../useAdminApi';
 
 type NotificationList =
@@ -63,6 +63,11 @@ export function Notifications() {
   });
 
   const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+  // 처음엔 5개만, '알림 더 보기'로 10개씩 (받아 둔 게 모자라면 서버에서 다음 쪽)
+  const shown = useShowMore(items, {
+    hasNextPage: list.hasNextPage,
+    fetchNextPage: list.fetchNextPage,
+  });
 
   return (
     <section id="notifications" aria-labelledby="notifications-title" className="panel">
@@ -79,7 +84,7 @@ export function Notifications() {
       )}
       {items.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {items.map((i) => (
+          {shown.visible.map((i) => (
             <li key={i.id}>
               <button
                 type="button"
@@ -107,17 +112,14 @@ export function Notifications() {
           ))}
         </ul>
       )}
-      {list.hasNextPage && (
-        <Button
-          variant="outline"
-          size="lg"
-          className="self-start"
-          disabled={list.isFetchingNextPage}
-          onClick={() => void list.fetchNextPage()}
-        >
-          {list.isFetchingNextPage ? '불러오는 중…' : '알림 더 보기'}
-        </Button>
-      )}
+      <ShowMoreButtons
+        hasMore={shown.hasMore}
+        canCollapse={shown.canCollapse}
+        loading={list.isFetchingNextPage}
+        onMore={shown.more}
+        onCollapse={shown.collapse}
+        label="알림 더 보기"
+      />
     </section>
   );
 }

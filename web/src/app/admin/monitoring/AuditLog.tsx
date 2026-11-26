@@ -1,9 +1,9 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { ShowMoreButtons, useShowMore } from '../ShowMore';
 import { useAdminApi } from '../useAdminApi';
 
 type AuditList =
@@ -24,6 +24,11 @@ export function AuditLog() {
   });
 
   const items = logs.data?.pages.flatMap((p) => p.items) ?? [];
+  // 처음엔 5개만, '더 보기'로 10개씩 (받아 둔 게 모자라면 서버에서 다음 쪽)
+  const shown = useShowMore(items, {
+    hasNextPage: logs.hasNextPage,
+    fetchNextPage: logs.fetchNextPage,
+  });
 
   return (
     <section aria-labelledby="audit-title" className="panel">
@@ -53,7 +58,7 @@ export function AuditLog() {
               </tr>
             </thead>
             <tbody>
-              {items.map((i, n) => (
+              {shown.visible.map((i, n) => (
                 <tr key={`${i.at}-${n}`} className="border-b">
                   <td className="px-3 py-4 tabular-nums">{i.at ? timeText(i.at) : '—'}</td>
                   <td className="px-3 py-4">{i.admin}</td>
@@ -66,17 +71,13 @@ export function AuditLog() {
           </table>
         </div>
       )}
-      {logs.hasNextPage && (
-        <Button
-          variant="outline"
-          size="lg"
-          className="self-start"
-          disabled={logs.isFetchingNextPage}
-          onClick={() => void logs.fetchNextPage()}
-        >
-          {logs.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
-        </Button>
-      )}
+      <ShowMoreButtons
+        hasMore={shown.hasMore}
+        canCollapse={shown.canCollapse}
+        loading={logs.isFetchingNextPage}
+        onMore={shown.more}
+        onCollapse={shown.collapse}
+      />
     </section>
   );
 }
