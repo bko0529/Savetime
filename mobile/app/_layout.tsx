@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../src/auth/AuthProvider';
-import { gateTarget } from '../src/gate';
+import { canSignup, gateTarget } from '../src/gate';
 import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
 import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
@@ -47,13 +47,8 @@ function Gate() {
     return () => clearInterval(t);
   }, []);
 
-  const target = gateTarget({
-    appVersion: APP_VERSION,
-    minAppVersion,
-    consent,
-    permissions,
-    auth: state,
-  });
+  const input = { appVersion: APP_VERSION, minAppVersion, consent, permissions, auth: state };
+  const target = gateTarget(input);
   if (target === 'loading') return <Splash />;
   // Stack.Protected: guard 가 true 인 화면만 열린다. 지금 화면이 닫히면 열린 화면으로 자동 이동
   return (
@@ -71,6 +66,12 @@ function Gate() {
       </Stack.Protected>
       <Stack.Protected guard={target === 'login'}>
         <Stack.Screen name="login" />
+      </Stack.Protected>
+      <Stack.Protected guard={target === 'pending'}>
+        <Stack.Screen name="pending" />
+      </Stack.Protected>
+      <Stack.Protected guard={canSignup(input, target)}>
+        <Stack.Screen name="signup" />
       </Stack.Protected>
       <Stack.Protected guard={target === 'home'}>
         <Stack.Screen name="index" />

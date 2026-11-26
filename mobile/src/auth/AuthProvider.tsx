@@ -15,7 +15,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, refreshTokens, setTokenHooks, type Me, type Tokens } from '../api/client';
+import { ApiError, api, refreshTokens, setTokenHooks, type Me, type Tokens } from '../api/client';
+import { toSignupFormData, type SignupForm } from './signupForm';
 import { clearRefreshToken, getDeviceId, loadRefreshToken, saveRefreshToken } from './storage';
 
 type State =
@@ -25,6 +26,12 @@ type AuthValue = {
   state: State;
   /** 성공하면 null, 실패하면 화면에 보여 줄 문구 */
   login: (loginId: string, password: string) => Promise<string | null>;
+  /** 가입 신청(SFR-017) · 반려 후 다시 신청(SFR-083). 성공하면 null */
+  signup: (f: SignupForm) => Promise<string | null>;
+  /** 서버에서 내 정보를 다시 받는다 (승인 결과 확인) */
+  refreshMe: () => Promise<void>;
+  /** 서버 로그아웃 + 이 기기 토큰 지우기 */
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -84,7 +91,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ state, login }), [state, login]);
+  const refreshMe = useCallback(async () => {
+    try {
+      const me = await api<Me>('GET', '/me');
+      setState({ status: 'signedIn', me });
+    } catch {
+      /* 오프라인이면 지금 화면 그대로 (토큰이 끝났으면 lost() 가 로그인 화면으로 보냄) */
+    }
+  }, []);
+
+  const signup = useCallback(
+    async (f: SignupForm) => {
+      const reapply = state.status === 'signedIn' && state.me.status === 'rejected';
+      try {
+        if (reapply) {
+          // 반려된 뒤 다시 신청: 같은 계정이라 아이디·비밀번호 없이 내용·사진만 새로 (PUT /me/signup)
+          const me = await api<Me>('PUT', '/me/signup', { form: toSignupFormData(f, false) });
+          setState({ status: 'signedIn', me });
+          return null;
+        }
+        await api('POST', '/auth/signup', { auth: false, form: toSignupFormData(f, true) });
+        // 통과하면 같은 아이디로 로그인 → me.status = pending → 승인 대기 화면
+        return await login(f.loginId, f.password);
+      } catch (e) {
+        return e instanceof ApiError ? e.message : '가입 신청을 보내지 못했어요';
+      }
+    },
+    [state, login],
+  );
+
+  const logout = useCallback(async () => {
+    // 승인 전 계정은 팀이 없어 확인 없이 끝난다. 근무 중 로그아웃(진행 중 이송 확인)은 8단계 설정 화면에서
+    await api('POST', '/auth/logout').catch(() => undefined);
+    await signOutLocal();
+  }, [signOutLocal]);
+
+  const value = useMemo(
+    () => ({ state, login, signup, refreshMe, logout }),
+    [state, login, signup, refreshMe, logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

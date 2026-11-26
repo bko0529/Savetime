@@ -4,10 +4,12 @@
  * 틀린 횟수·잠금은 서버가 판단하고 문구도 서버가 준다 → 앱은 그 문구를 그대로 보여 준다.
  */
 import { ChevronRight, UserPlus } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -21,6 +23,7 @@ import { color, font, radius, shadow, text } from '../src/ui/theme';
 
 export default function LoginScreen() {
   const { state, login } = useAuth();
+  const router = useRouter();
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -103,19 +106,24 @@ export default function LoginScreen() {
             </Txt>
           </Tile>
 
-          {/* 가입 신청 화면은 2단계에서 붙인다 */}
-          <Tile style={s.signup}>
-            <IconTile tone="accent" size={40}>
-              <UserPlus size={20} color={color.accentDeep} />
-            </IconTile>
-            <View style={{ flex: 1 }}>
-              <Txt style={{ fontFamily: font.bold, fontSize: 15 }}>처음이세요? 가입 신청</Txt>
-              <Txt style={[text.caption, { marginTop: 2, color: color.muted }]}>
-                이름 · 소속 소방서 · 공무원증으로 신청해요
-              </Txt>
-            </View>
-            <ChevronRight size={16} color={color.muted} />
-          </Tile>
+          <Pressable
+            onPress={() => router.push('/signup')}
+            accessibilityRole="button"
+            accessibilityLabel="가입 신청"
+          >
+            <Tile style={s.signup}>
+              <IconTile tone="accent" size={40}>
+                <UserPlus size={20} color={color.accentDeep} />
+              </IconTile>
+              <View style={{ flex: 1 }}>
+                <Txt style={{ fontFamily: font.bold, fontSize: 15 }}>처음이세요? 가입 신청</Txt>
+                <Txt style={[text.caption, { marginTop: 2, color: color.muted }]}>
+                  이름 · 소속 소방서 · 공무원증으로 신청해요
+                </Txt>
+              </View>
+              <ChevronRight size={16} color={color.muted} />
+            </Tile>
+          </Pressable>
 
           <Txt style={[text.caption, s.footer]}>
             비밀번호를 잊으면 소속 관리자에게 초기화를 요청하세요 · 5번 틀리면 10분 동안 잠겨요

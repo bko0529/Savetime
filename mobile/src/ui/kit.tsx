@@ -3,13 +3,16 @@
  * 모든 화면이 이 부품을 쓰므로 여기서 색·여백을 고치면 전체가 같이 바뀐다.
  */
 import type { ReactNode } from 'react';
+import { Check } from 'lucide-react-native';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  type TextInputProps,
   type StyleProp,
   type TextProps,
   type TextStyle,
@@ -387,7 +390,147 @@ export function CenterMessage({
   );
 }
 
+/** 입력 칸 */
+export function Field({ style, ...props }: TextInputProps) {
+  return (
+    <TextInput placeholderTextColor={color.borderStrong} {...props} style={[s.field, style]} />
+  );
+}
+
+/** 구역 제목: 빨간 막대 + 제목 + 설명 한 줄 */
+export function SectionTitle({
+  children,
+  hint,
+  first,
+}: {
+  children: ReactNode;
+  hint?: string;
+  first?: boolean;
+}) {
+  return (
+    <View style={{ marginTop: first ? 0 : 32, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ width: 3.5, height: 14, borderRadius: 2, backgroundColor: color.accent }} />
+        {typeof children === 'string' ? (
+          <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>{children}</Txt>
+        ) : (
+          children
+        )}
+      </View>
+      {hint ? (
+        <Txt style={[text.caption, { marginTop: 6, paddingLeft: 11, color: color.muted }]}>
+          {hint}
+        </Txt>
+      ) : null}
+    </View>
+  );
+}
+
+/** 체크 상자 + 문구 (필수 동의 등) */
+export function CheckRow({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      onPress={() => onChange(!checked)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      style={s.checkRow}
+    >
+      <View style={[s.checkBox, checked && s.checkBoxOn]}>
+        {checked ? <Check size={14} color={color.accentText} /> : null}
+      </View>
+      <View style={{ flex: 1 }}>{children}</View>
+    </Pressable>
+  );
+}
+
+/** 여러 개 중 하나 고르기 (계급 · 역할) */
+export function Chips<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: readonly T[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {options.map((o) => {
+        const on = o === value;
+        return (
+          <Pressable
+            key={o}
+            onPress={() => onChange(o)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            style={[s.chip, on && s.chipOn]}
+          >
+            <Txt
+              style={{
+                fontFamily: font.bold,
+                fontSize: 14,
+                color: on ? color.primaryText : color.foreground,
+              }}
+            >
+              {o}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  field: {
+    height: 52,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.card,
+    fontFamily: font.regular,
+    fontSize: 16,
+    color: color.foreground,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: radius.md,
+    backgroundColor: color.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  checkBox: {
+    width: 20,
+    height: 20,
+    marginTop: 1,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: color.borderStrong,
+    backgroundColor: color.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkBoxOn: { backgroundColor: color.accent, borderColor: color.accent },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.card,
+  },
+  chipOn: { backgroundColor: color.primary, borderColor: color.primary },
   screen: { flex: 1, backgroundColor: color.background },
   header: {
     overflow: 'hidden',

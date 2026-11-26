@@ -75,7 +75,12 @@ export function refreshTokens(): Promise<boolean> {
   return refreshing;
 }
 
-type Options = { body?: unknown; auth?: boolean };
+type Options = {
+  body?: unknown;
+  /** 사진을 보내는 multipart 요청 (가입 신청). Content-Type 은 fetch 가 경계값과 함께 직접 붙인다 */
+  form?: FormData;
+  auth?: boolean;
+};
 
 export async function api<T = unknown>(
   method: string,
@@ -94,7 +99,7 @@ export async function api<T = unknown>(
     res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
       method,
       headers,
-      body: opt.body !== undefined ? JSON.stringify(opt.body) : undefined,
+      body: opt.form ?? (opt.body !== undefined ? JSON.stringify(opt.body) : undefined),
     });
   } catch {
     throw new ApiError(0, 'NETWORK', '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요');
