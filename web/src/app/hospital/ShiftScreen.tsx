@@ -8,7 +8,6 @@ import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { Chip } from '@/components/hospital/Chip';
 import { EndShiftButton } from '@/components/hospital/EndShiftButton';
-import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
@@ -175,16 +174,6 @@ export function ShiftScreen({
         {shift !== null && notificationBlocked && (
           <NotificationPermissionGuide reason={notificationBlocked} />
         )}
-        <NewRequestOverlay
-          request={incoming.overlay}
-          pendingCount={incoming.waiting.length}
-          nowMs={incoming.nowMs}
-          onConfirm={(id) => {
-            // '확인'을 누르면 덮개를 닫고 그 요청의 상세를 바로 연다
-            incoming.confirm(id);
-            setSelectedId(id);
-          }}
-        />
 
         {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
         {shift !== null && alarm.kind !== 'on' && (

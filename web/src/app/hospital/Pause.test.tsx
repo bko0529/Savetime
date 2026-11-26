@@ -66,11 +66,8 @@ afterEach(() => {
 describe('잠시 요청 중지 (SFR-139)', () => {
   it('대기 요청이 있으면 몇 건이 거절되는지 확인받고, 확인하면 중지를 보낸다', async () => {
     const { server } = open(false, [waiting(101), waiting(102)]);
-    // 새 요청 창(덮개)을 먼저 확인한다. 실제 화면에서도 덮개가 다른 버튼을 가린다
-    for (let i = 0; i < 2; i += 1) {
-      fireEvent.click(await screen.findByRole('button', { name: '확인' }));
-    }
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // 대기 요청 2건이 목록에 뜬 뒤에 누른다
+    await screen.findByText('새 이송 요청 2건');
     fireEvent.click(screen.getByRole('button', { name: '잠시 요청 중지' }));
     const dialog = await screen.findByRole('dialog');
     expect(

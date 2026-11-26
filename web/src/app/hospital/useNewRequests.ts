@@ -63,9 +63,6 @@ export function useNewRequests(socket: HospitalSocket | null) {
     };
   }, [socket, queryClient]);
 
-  // '확인'을 누른 요청. 덮개 창만 닫고, 응답 대기는 그대로라 소리·탭 제목은 계속된다
-  const [confirmed, setConfirmed] = useState<ReadonlySet<number>>(new Set());
-
   const waiting = useMemo(
     () =>
       (requests.data?.items ?? [])
@@ -75,7 +72,6 @@ export function useNewRequests(socket: HospitalSocket | null) {
         .sort((a, b) => Date.parse(a.respondUntil) - Date.parse(b.respondUntil)),
     [requests.data],
   );
-  const overlay = waiting.find((r) => !confirmed.has(r.id)) ?? null;
 
   useTabTitleAlert(waiting.length);
 
@@ -111,9 +107,5 @@ export function useNewRequests(socket: HospitalSocket | null) {
     return () => clearInterval(timer);
   }, [hasItems, offsetMs]);
 
-  function confirm(id: number) {
-    setConfirmed((prev) => new Set(prev).add(id));
-  }
-
-  return { items, waiting, overlay, nowMs, confirm };
+  return { items, waiting, nowMs };
 }

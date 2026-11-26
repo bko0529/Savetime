@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as alarm from '@/lib/alarm/browserAlarm';
 import { envelope, FakeSocket } from '@/testing/fakeSocket';
@@ -72,7 +72,7 @@ function newRequest(id: number) {
 }
 
 describe('새 요청 받기 (SFR-117·135·161)', () => {
-  it('받자마자 ack 를 보내고, 목록을 다시 받아 덮개 창·소리·탭 제목·브라우저 알림을 띄운다', async () => {
+  it('받자마자 ack 를 보내고, 목록을 다시 받아 목록 카드·소리·탭 제목·브라우저 알림으로 알린다 (빨간 덮개 창은 없음)', async () => {
     server.set(LIST, list(item(101, 110)));
     const before = server.callsTo(LIST).length;
     const ack = newRequest(101);
@@ -80,9 +80,9 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     // 목록을 받기 전에 이미 ack 를 보냈어야 한다
     expect(ack).toHaveBeenCalledWith({ received: true });
 
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog.textContent).toContain('R-101');
-    expect(dialog.textContent).toContain('흉통');
+    const cards = await screen.findByRole('list', { name: '요청 목록' });
+    await waitFor(() => expect(cards.textContent).toContain('R-101 · 흉통'));
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(server.callsTo(LIST).length).toBeGreaterThan(before);
     expect(screen.getByText('새 이송 요청 1건')).toBeDefined();
     expect(document.title).toBe('🔴 새 이송 요청 1건');
@@ -90,41 +90,26 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     expect(alarm.showRequestNotification).toHaveBeenCalledWith(101, 'R-101');
   });
 
-  it('여러 건이 와도 소리는 하나만, 브라우저 알림은 요청마다 1번, 창은 마감이 빠른 것부터', async () => {
+  it('여러 건이 와도 소리는 하나만, 브라우저 알림은 요청마다 1번, 목록에 둘 다', async () => {
     server.set(LIST, list(item(101, 110)));
     newRequest(101);
-    await screen.findByRole('dialog');
+    await screen.findByText('새 이송 요청 1건');
 
     server.set(LIST, list(item(101, 110), item(102, 60)));
     newRequest(102);
-    await waitFor(() => expect(screen.getByRole('dialog').textContent).toContain('대기 2건'));
+    await screen.findByText('새 이송 요청 2건');
 
-    expect(screen.getByRole('dialog').textContent).toContain('R-102');
+    const cards = within(screen.getByRole('list', { name: '요청 목록' })).getAllByRole('listitem');
+    expect(cards.map((c) => c.textContent?.slice(0, 5))).toEqual(['R-101', 'R-102']);
     expect(alarm.startAlarmLoop).toHaveBeenCalledTimes(1);
     expect(alarm.showRequestNotification).toHaveBeenCalledTimes(2);
     expect(document.title).toBe('🔴 새 이송 요청 2건');
   });
 
-  it("'확인'을 누르면 다음 요청 창으로, 다 확인해도 응답 전까지 소리·건수는 남는다", async () => {
-    server.set(LIST, list(item(101, 110), item(102, 60)));
-    newRequest(102);
-    await screen.findByRole('dialog');
-    // 처음 화면(대기 0건)에서 '멈춤'이 한 번 불린 건 빼고 센다
-    const stopsBefore = vi.mocked(alarm.stopAlarmLoop).mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    await waitFor(() => expect(screen.getByRole('dialog').textContent).toContain('R-101'));
-
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(alarm.stopAlarmLoop).toHaveBeenCalledTimes(stopsBefore);
-    expect(screen.getByText('새 이송 요청 2건')).toBeDefined();
-  });
-
-  it('다른 PC 응답·만료로 요청이 끝나면(request.changed) 창·소리·제목이 멈춘다', async () => {
+  it('다른 PC 응답·만료로 요청이 끝나면(request.changed) 소리·제목·건수가 멈춘다', async () => {
     server.set(LIST, list(item(101, 110)));
     newRequest(101);
-    await screen.findByRole('dialog');
+    await screen.findByText('새 이송 요청 1건');
 
     server.set(LIST, list(item(101, 110, 'approved')));
     socket.fire(
@@ -138,9 +123,8 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
       }),
     );
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/새 이송 요청 \d+건/)).toBeNull());
     expect(alarm.stopAlarmLoop).toHaveBeenCalled();
-    expect(screen.queryByText(/새 이송 요청 \d+건/)).toBeNull();
     expect(document.title).toBe('세이브타임');
   });
 
@@ -168,27 +152,22 @@ describe('요청 목록·상세 (SFR-135·118)', () => {
     ourHospital: { capability: null, beds: { er: '5/20', icu: null, or: null } },
   };
 
-  it("목록에 요청이 보이고, 덮개 '확인'을 누르면 그 요청 상세가 열린다", async () => {
+  it('목록에 요청 카드가 보이고, 누르면 그 요청 상세가 열린다', async () => {
     server.set(LIST, list(item(102, 60)));
     server.set(DETAIL, { status: 200, body: detailBody });
     newRequest(102);
-    await screen.findByRole('dialog');
-
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'R-102' }));
 
     const panel = await screen.findByRole('region', { name: '요청 상세' });
     await waitFor(() => expect(panel.textContent).toContain('⚠ 85%'));
     expect(server.callsTo(DETAIL)).toHaveLength(1);
-    // 덮개가 닫히면 목록에서도 그 요청을 다시 열 수 있다
-    expect(screen.getByRole('button', { name: 'R-102' })).toBeDefined();
   });
 
   it('열어 둔 요청이 다른 PC 응답으로 끝나면 상세도 끝난 요청으로 바뀐다', async () => {
     server.set(LIST, list(item(102, 60)));
     server.set(DETAIL, { status: 200, body: detailBody });
     newRequest(102);
-    await screen.findByRole('dialog');
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'R-102' }));
     await screen.findByText('⚠ 85%');
 
     server.set(LIST, list());
@@ -221,8 +200,7 @@ describe('남은 시간은 서버 시각 기준', () => {
       },
     });
     newRequest(101);
-    const dialog = await screen.findByRole('dialog');
     // PC 시계로 계산했다면 11분 넘게 남았다고 나온다
-    expect(dialog.textContent).toMatch(/응답 남은 시간 1분 (2\d|30)초/);
+    expect(await screen.findByText(/^1:(2\d|30)$/)).toBeTruthy();
   });
 });
