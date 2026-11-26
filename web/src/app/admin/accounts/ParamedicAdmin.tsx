@@ -1,6 +1,5 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -126,8 +125,12 @@ export function ParamedicAdmin() {
           boxClassName="panel-table max-h-[340px]"
         >
           {(expanded) => (
-            <table className="data-table data-table-flush">
-              <thead className={cn('sticky z-10 bg-surface', expanded ? 'top-[68px]' : 'top-0')}>
+            <table className="data-table data-table-flush overflow-visible">
+              <thead
+                className={
+                  expanded ? 'sticky -top-8 z-10 bg-surface' : 'sticky top-0 z-10 bg-surface'
+                }
+              >
                 <tr className="text-left">
                   <th className="px-3 py-3.5">이름</th>
                   <th className="px-3 py-3.5">사번</th>

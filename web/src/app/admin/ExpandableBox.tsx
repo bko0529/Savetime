@@ -61,17 +61,16 @@ export function ExpandableBox({
       )}
       {open && (
         <Dialog open onOpenChange={(o) => !o && setOpen(false)}>
-          {/* 창 자체가 스크롤된다 (창 안에 스크롤 상자를 한 겹 더 두면 마우스 휠이 먹지 않음). 제목은 위에 고정 */}
+          {/* 창 자체가 스크롤된다 (창 안에 스크롤 상자를 한 겹 더 두면 마우스 휠이 먹지 않음).
+              항목이 적어도 화면의 대부분을 쓰는 큰 창으로 연다 */}
           <DialogContent
             onScroll={onScroll}
             data-testid={`${title} 큰 창`}
-            className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto p-6 pt-0 sm:max-w-6xl"
+            className="h-[min(88dvh,960px)] max-h-[calc(100dvh-2rem)] content-start gap-4 overflow-y-auto p-8 sm:max-w-[min(96vw,1400px)]"
           >
-            <div className="sticky top-0 z-20 -mx-6 bg-card px-6 pt-6 pb-3">
-              <DialogTitle className="text-2xl font-extrabold">{title}</DialogTitle>
-            </div>
+            <DialogTitle className="text-[28px] font-extrabold">{title}</DialogTitle>
             <DialogDescription className="sr-only">{title} 전체 목록</DialogDescription>
-            {children(true)}
+            <div className="text-[17px]">{children(true)}</div>
             {loading}
           </DialogContent>
         </Dialog>
