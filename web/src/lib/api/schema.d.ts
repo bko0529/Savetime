@@ -4,5976 +4,5903 @@
  */
 
 export interface paths {
-  '/health': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 서버 상태 점검
-     * @description 로드밸런서와 외부 상태 점검이 쓴다. DB·Redis 연결을 확인하고 하나라도 실패하면 503 (QUR-009, COR-016)
-     */
-    get: operations['getHealth'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/agencies/{code}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 소속기관 코드 확인
-     * @description **요구사항**: SFR-017
-     *     **화면**: S-02 가입 신청
-     *     **오류 코드**: AGENCY_NOT_FOUND
-     */
-    get: operations['get_agencies__code'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/auth/signup': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 가입 신청 (공무원증 사진)
-     * @description 관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상·영문+숫자(SER-006), 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).
-     *
-     *     **요구사항**: SFR-017, SER-015, DAR-012
-     *     **화면**: S-02 가입 신청
-     *     **오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED, TOO_MANY_REQUESTS, PHOTO_STORAGE_UNAVAILABLE
-     */
-    post: operations['post_auth_signup'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/me/signup': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 반려 후 다시 신청
-     * @description me.status가 rejected일 때만. 반려 사유(me.rejectReason)를 보고 고쳐서 다시 낸다 → pending.
-     *
-     *     **요구사항**: SFR-083, SFR-017
-     *     **화면**: S-02 승인 대기
-     *     **오류 코드**: SIGNUP_NOT_REJECTED, CONSENT_REQUIRED, AGENCY_NOT_FOUND
-     */
-    put: operations['put_me_signup'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/auth/login': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 로그인
-     * @description 5번 틀리면 10분 잠금(ACCOUNT_LOCKED, details.retryAfterSeconds = 남은 초). 정지 여부는 비밀번호가 맞을 때만 알려 준다. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려' 화면만 연다 (SFR-022·083).
-     *
-     *     **요구사항**: SFR-018, SER-011
-     *     **화면**: S-02 로그인
-     *     **오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_SUSPENDED
-     */
-    post: operations['post_auth_login'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/auth/refresh': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 토큰 재발급
-     * @description **요구사항**: SER-016
-     *     **화면**: (모든 화면)
-     *     **오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED, ACCOUNT_SUSPENDED
-     */
-    post: operations['post_auth_refresh'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/auth/logout': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 로그아웃 (팀에서 빠짐)
-     * @description 팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport{id,status,hospitalName}. 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝내고 열린·확정 병원 요청을 닫고 팀을 해제한다. 근무 종료와 같은 처리이며, 다른 기기의 토큰까지 모두 끊는다(SER-016). 승인 전 계정도 쓸 수 있다.
-     *
-     *     **요구사항**: SFR-070, SFR-113
-     *     **화면**: S-12 설정
-     *     **오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED
-     *     **상태 전이 사건**: CANCEL
-     */
-    post: operations['post_auth_logout'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/me': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 내 정보
-     * @description 앱을 다시 열 때 이 응답으로 화면을 정한다 (근무 중이면 로그인을 묻지 않음).
-     *
-     *     **요구사항**: SFR-018, SFR-022, SFR-083
-     *     **화면**: S-02 승인 대기 · 앱 시작
-     */
-    get: operations['get_me'];
-    put?: never;
-    post?: never;
-    /**
-     * 회원 탈퇴
-     * @description 탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인을 받고, 마지막 1명이면 이송 건을 취소(withdrawal)로 끝낸 뒤 계정·프로필 즉시 삭제.
-     *
-     *     **요구사항**: SFR-071, SFR-113
-     *     **화면**: S-12 설정
-     *     **오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED
-     *     **상태 전이 사건**: CANCEL
-     */
-    delete: operations['delete_me'];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/me/password': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 비밀번호 변경 (임시 비밀번호 후 필수)
-     * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·영문+숫자(SER-006)·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
-     *
-     *     **요구사항**: SFR-021, SER-011
-     *     **화면**: (비밀번호 변경)
-     *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED, ACCOUNT_LOCKED
-     */
-    put: operations['put_me_password'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/me/push-device': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 푸시 토큰 등록
-     * @description web은 구급대원 웹앱의 브라우저 푸시 토큰(FCM 웹, CR-010).
-     *
-     *     **요구사항**: SFR-130, COR-009, CR-010
-     *     **화면**: 앱 시작
-     */
-    put: operations['put_me_push_device'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 팀 만들기 (근무 시작)
-     * @description 14시간 자동 근무 종료 타이머가 걸린다.
-     *
-     *     **요구사항**: SFR-113
-     *     **화면**: S-03 근무 시작
-     *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED, PASSWORD_CHANGE_REQUIRED
-     */
-    post: operations['post_teams'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams/join': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 코드·QR로 참여
-     * @description code와 qrToken 중 하나만 보낸다. 운전은 팀에 1명. 이 시점 이후 이벤트만 받는다(joined_seq).
-     *
-     *     **요구사항**: SFR-113
-     *     **화면**: S-03 근무 시작
-     *     **오류 코드**: TEAM_NOT_FOUND, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM
-     */
-    post: operations['post_teams_join'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams/current': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 내 팀 보기
-     * @description **요구사항**: SFR-113
-     *     **화면**: S-03 근무 시작
-     *     **오류 코드**: NOT_IN_TEAM
-     */
-    get: operations['get_teams_current'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams/current/members/me': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * 내 역할 바꾸기
-     * @description **요구사항**: SFR-113
-     *     **화면**: S-03 근무 시작
-     *     **오류 코드**: DRIVER_TAKEN, ACTIVE_TRANSPORT_EXISTS
-     */
-    patch: operations['patch_teams_current_members_me'];
-    trace?: never;
-  };
-  '/teams/current/leave': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 근무 종료 (나만 팀에서 빠짐)
-     * @description 진행 중 이송이 있으면 확인 필요. 마지막 1명이면 이송 건을 취소(duty_end)로 끝내고 팀 해제.
-     *
-     *     **요구사항**: SFR-113
-     *     **화면**: S-03 · S-12
-     *     **오류 코드**: NOT_IN_TEAM, ACTIVE_TRANSPORT_CONFIRM_REQUIRED
-     *     **상태 전이 사건**: CANCEL
-     */
-    post: operations['post_teams_current_leave'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/paramedics/on-duty': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 같은 소방서 근무 중 대원 목록·이름 검색
-     * @description 근무 중 = 로그인해 있음(로그인이 곧 근무 시작). q가 없으면 같은 소방서의 근무 중 승인 대원만, q가 있으면 소방서 전체에서 이름 검색. 근무 중 → 이름 순.
-     *
-     *     **요구사항**: SFR-159, SFR-143
-     *     **화면**: S-03 팀원 목록 초대
-     *     **오류 코드**: VALIDATION_FAILED
-     */
-    get: operations['get_paramedics_on_duty'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams/current/invites': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 팀 초대 보내기 (5분 만료)
-     * @description 받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.
-     *     아직 답이 없는 같은 초대가 있으면 새로 만들지 않고 그 초대를 돌려준다. 다른 소방서·승인 전 대원은 NOT_FOUND.
-     *
-     *     **요구사항**: SFR-159
-     *     **화면**: S-03 팀원 목록 초대
-     *     **오류 코드**: NOT_IN_TEAM, TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND
-     */
-    post: operations['post_teams_current_invites'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/invites/{inviteId}/accept': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 초대 수락 (역할 선택)
-     * @description 나에게 온 초대가 아니면 404.
-     *
-     *     **요구사항**: SFR-159, SFR-113
-     *     **화면**: (초대 알림)
-     *     **오류 코드**: NOT_FOUND, INVITE_EXPIRED, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM
-     */
-    post: operations['post_invites__inviteId__accept'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/invites/{inviteId}/decline': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 초대 거절
-     * @description **요구사항**: SFR-159
-     *     **화면**: (초대 알림)
-     *     **오류 코드**: NOT_FOUND, INVITE_EXPIRED
-     */
-    post: operations['post_invites__inviteId__decline'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/memos/{paramedicId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 나만 보는 한 줄 메모
-     * @description 쓴 대원만 본다(GET /paramedics/on-duty 의 myMemo). 같은 대원에게 다시 쓰면 덮어쓰고, 빈 글(공백만)이면 지운다. 앞뒤 공백은 뺀다. 같은 소방서의 승인된 다른 대원에게만 쓸 수 있고, 그 밖(나 자신·없는 대원·다른 소방서)은 404.
-     *
-     *     **요구사항**: SFR-143
-     *     **화면**: S-03 팀원 목록 초대
-     *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
-     */
-    put: operations['put_memos__paramedicId'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/teams/current/draft': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 팀 작성 중 환자 정보 불러오기
-     * @description **요구사항**: SFR-114, SFR-157
-     *     **화면**: S-04 환자 정보 입력
-     *     **오류 코드**: NOT_IN_TEAM
-     */
-    get: operations['get_teams_current_draft'];
-    put?: never;
-    post?: never;
-    /**
-     * 직전 환자 정보 지우기
-     * @description 팀 작성 중 정보를 비우고 팀원에게 draft.updated(version 0). 이미 비어 있으면 그대로 204.
-     *
-     *     **요구사항**: SFR-157, SFR-114
-     *     **화면**: S-04 직전 환자 정보
-     *     **오류 코드**: NOT_IN_TEAM
-     */
-    delete: operations['delete_teams_current_draft'];
-    options?: never;
-    head?: never;
-    /**
-     * 팀 작성 중 환자 정보 고치기 (항목 단위 병합)
-     * @description 버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated(바뀐 칸 이름만, 값은 GET으로). 운전 역할이 주행 중(시속 10km 이상)이면 DRIVER_INPUT_LOCKED: 단말이 보낸 speedKmh, 없으면 진행 중 이송 건의 최근 15초 위치 기록 속도로 본다.
-     *
-     *     **요구사항**: SFR-114, SFR-115
-     *     **화면**: S-04 환자 정보 입력
-     *     **오류 코드**: NOT_IN_TEAM, DRIVER_INPUT_LOCKED, VALIDATION_FAILED
-     */
-    patch: operations['patch_teams_current_draft'];
-    trace?: never;
-  };
-  '/geocode': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 주소 → 좌표 (위치 실패·미동의)
-     * @description 카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 주소 검색 → 0건이면 장소 이름 검색(예: 천안역), 후보 최대 5개, 대한민국 밖 좌표는 뺀다. 3초 안에 못 받거나 카카오 장애·한도 초과면 503 GEOCODE_UNAVAILABLE. 입력 주소는 로그·DB·캐시에 남기지 않는다 (SER-012).
-     *
-     *     **요구사항**: SFR-009, INR-004
-     *     **화면**: S-04 · S-06 주소 입력
-     *     **오류 코드**: VALIDATION_FAILED, ADDRESS_NOT_FOUND, GEOCODE_UNAVAILABLE
-     */
-    get: operations['get_geocode'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hospitals/nearby': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 주변 병원 (지도·오프라인 저장용)
-     * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고(진료가능 항목 포함), 통신이 끊기면 '참고용 정보 · 기준 HH:MM'(collectedAt)으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
-     *
-     *     **요구사항**: SFR-001, SFR-027, SFR-059, SFR-061, SFR-064, SFR-087
-     *     **화면**: S-06 지도 · S-11 오프라인
-     *     **오류 코드**: VALIDATION_FAILED
-     */
-    get: operations['get_hospitals_nearby'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hospitals/{hospitalId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 병원 상세
-     * @description **요구사항**: SFR-007, SFR-081
-     *     **화면**: S-07 병원 상세
-     *     **오류 코드**: NOT_FOUND
-     */
-    get: operations['get_hospitals__hospitalId'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 이송 건 만들기 + 병원에 동시 요청
-     * @description 요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님 · requestedGrade를 보냈으면 그 등급 이상)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이 API를 부르지 않는다 (SFR-109). 보낸 환자 평가로 팀 작성 중 정보를 맞추고 draft.updated를 보낸다 ('변경 사항 보내기(n)'가 0에서 시작, SFR-105).
-     *
-     *     **요구사항**: SFR-109, SFR-162, SFR-104, SFR-129, SFR-157, SFR-161
-     *     **화면**: S-04 → S-05 응답 대기 / S-06
-     *     **오류 코드**: ACTIVE_TRANSPORT_EXISTS, ASSESSMENT_INCOMPLETE, NOT_IN_TEAM, VALIDATION_FAILED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
-     *     **상태 전이 사건**: CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS
-     */
-    post: operations['post_transports'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/current': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 진행 중 이송 불러오기 (앱 재실행 복구)
-     * @description 상태별 화면으로 바로 이동: requesting→S-05, fallback→S-06, phone_check→S-08, moving→S-09.
-     *
-     *     **요구사항**: SFR-133
-     *     **화면**: 앱 시작 · 모든 이송 화면
-     *     **오류 코드**: NO_ACTIVE_TRANSPORT
-     */
-    get: operations['get_transports_current'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 이송 건 보기
-     * @description 우리 팀 이송 건이 아니면 404.
-     *
-     *     **요구사항**: SFR-110
-     *     **화면**: S-05 · S-09
-     *     **오류 코드**: NOT_FOUND
-     */
-    get: operations['get_transports__transportId'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/confirm': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 승인 병원 확정
-     * @description Idempotency-Key 헤더 필수. 첫 시도가 서버에 도착한 시각으로 5분을 판정. 성공하면 나머지 대기·승인 요청은 닫히고(other_hospital) 경로 안내 담당 단말을 정한다(운전 단말 10초).
-     *
-     *     **요구사항**: SFR-111, SFR-134, SFR-160, SFR-125
-     *     **화면**: S-05 확정 확인
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, APPROVAL_EXPIRED, APPROVAL_CANCELLED, REQUEST_NOT_APPROVED
-     *     **상태 전이 사건**: CONFIRM
-     */
-    post: operations['post_transports__transportId__confirm'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/recommendations': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 추천 목록 (요청 화면·예비 추천 공용, 거리순)
-     * @description 요청 중에도 부를 수 있음 (v1.5, D-127·128). 등급 이상 먼저, 그 안에서 직선거리순.
-     *
-     *     **요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002
-     *     **화면**: S-05 요청 화면
-     *     **오류 코드**: NOT_FOUND, LOCATION_REQUIRED
-     */
-    get: operations['get_transports__transportId__recommendations'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/fallback-radius': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 예비 추천 반경 넓히기 (요청은 안 보냄)
-     * @description 추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.
-     *
-     *     **요구사항**: SFR-029, SFR-012
-     *     **화면**: S-06 예비 추천
-     *     **오류 코드**: NOT_FOUND, MAX_RADIUS, INVALID_TRANSITION
-     */
-    put: operations['put_transports__transportId__fallback_radius'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/rounds': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 다시 요청 (반경 넓히기 · 승인 취소 후)
-     * @description expand (fallback→requesting): 반경 한 단계, 이번 이송에서 아직 요청하지 않은 병원에만. 대상 0곳이면 422 NO_REQUEST_TARGET(상태 그대로). re_request (moving→requesting): 확정 병원이 승인 취소한 경우만, 현재 위치 기준·현재 반경, 제외 병원만 빼고, 직전 승인 병원에 '재확인' 표시. 경로 안내 유지.
-     *
-     *     **요구사항**: SFR-131, SFR-128, SFR-156
-     *     **화면**: S-06 · S-09 승인 취소 경보
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, NO_REQUEST_TARGET, MAX_RADIUS, RE_REQUEST_NOT_ALLOWED
-     *     **상태 전이 사건**: EXPAND_ROUND, RE_REQUEST
-     */
-    post: operations['post_transports__transportId__rounds'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/phone-check/start': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 추천 병원으로 전화 확인 시작
-     * @description requesting·fallback → phone_check, 대상 병원 기록. 요청 중이면 병원 요청은 닫지 않음 (v1.5, D-127). 팀원 화면에 transport.phone_target.
-     *
-     *     **요구사항**: SFR-032, SFR-031
-     *     **화면**: S-05 요청 화면 추천 목록 → S-08 전화 확인
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
-     *     **상태 전이 사건**: START_PHONE_CHECK
-     */
-    post: operations['post_transports__transportId__phone_check_start'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/phone-checks': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 전화 확인 결과 기록
-     * @description accepted → moving / no_answer·skipped(사유) → moving / rejected → 제외 병원 추가 후 다음 후보가 있으면 phone_check 유지(phoneTarget 바뀜), 없으면 fallback / dismissed(결과 미선택으로 닫기) → fallback. 통신 두절 중 기록은 /transports/sync로.
-     *
-     *     **요구사항**: SFR-032, SFR-033, SFR-034, SFR-074, SFR-075
-     *     **화면**: S-08 전화 확인
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED
-     *     **상태 전이 사건**: PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED
-     */
-    post: operations['post_transports__transportId__phone_checks'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/nav-device': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 경로 안내 담당 단말 응답
-     * @description 확정 뒤 운전 단말이 10초 안에 부르면 담당이 된다. 10초가 지나 서버가 확정한 대원 단말로 넘겼으면 NAV_DEVICE_ASSIGNED(보기 전용). 결과는 transport.nav_device.
-     *
-     *     **요구사항**: SFR-132, SFR-133
-     *     **화면**: S-09 경로 안내
-     *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, NOT_NAV_DEVICE, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
-     *
-     *     담당 정하기: 확정(confirm·전화 확인 수용) 때 팀에 운전 역할이 없거나 확정한 사람이 운전자면 그 단말이 바로 담당 (transport.confirmed.navDeviceId + transport.nav_device). 운전자가 따로 있으면 navDeviceId null로 두고 운전 단말을 10초(DB 시각) 기다린다. 그 사이 운전 역할 대원만 자기 로그인 단말(deviceId)로 부를 수 있고(아니면 403 NOT_NAV_DEVICE, 남의 단말 ID면 400), 10초가 지나면 서버 작업이 확정한 대원 단말로 넘긴다. 이미 담당이 있으면 같은 단말은 200(isMe true), 다른 단말은 409 NAV_DEVICE_ASSIGNED(details.navDeviceId). 담당을 정하면 이송 건 version +1. 목적지 변경·다시 요청 뒤 다시 확정해도 담당은 그대로. 출발 전이면 409 INVALID_TRANSITION.
-     */
-    post: operations['post_transports__transportId__nav_device'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/assessments': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 변경 사항 보내기
-     * @description requesting·phone_check·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.
-     *
-     *     **요구사항**: SFR-121, SFR-105
-     *     **화면**: S-05 · S-09
-     *     **오류 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
-     *     **상태 전이 사건**: ASSESSMENT_UPDATED
-     *
-     *     작성 중 정보 전체를 assessment 새 행(seq+1)으로 저장해 이전 행과 함께 전후 값·시각이 남는다. 이송 건 version은 그대로. 받는 병원: 요청 중·전화 확인 중이면 2분 안 대기·5분 안 승인 병원(request.updated), 이동 중이면 확정 병원(incoming.updated). 팀에는 assessment.sent. 이벤트에는 바뀐 칸 이름만. 주 증상을 지운 채면 400 VALIDATION_FAILED(chiefComplaint).
-     */
-    post: operations['post_transports__transportId__assessments'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/locations': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 위치 올리기 (5초마다, 담당 단말만)
-     * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안에 처음 들어오면 병원 웹에 incoming.near 한 번 (SFR-144). etaMin = 앱 안 내비(KNSDK)가 계산한 남은 분, 1분마다 한 번 실어 보내면 된다. 보여 줄 값이 바뀔 때만 팀에 transport.eta, 병원에 incoming.updated (SFR-121·132).
-     *
-     *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
-     *     **화면**: S-09 경로 안내
-     *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE, INVALID_TRANSITION, VALIDATION_FAILED
-     */
-    post: operations['post_transports__transportId__locations'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/destination': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 목적지 변경 (이송 건당 1번)
-     * @description moving → requesting. 새 병원을 고르는 API가 아니다: 이전 목적지는 닫힘(dest_changed)·제외 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미 바꿨으면 '이송 취소 후 새로 요청' 안내.
-     *
-     *     **요구사항**: SFR-077, SFR-156
-     *     **화면**: S-09 경로 안내
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED, NO_REQUEST_TARGET, LOCATION_REQUIRED, VALIDATION_FAILED
-     *     **상태 전이 사건**: CHANGE_DESTINATION
-     *
-     *     location이 없으면 출발 위치 기준. 확정 병원(confirmed_hospital_id)은 비우고 이전 목적지·사유·시각(dest_changed_*)을 남긴다. 새 대상이 0곳이면 422 NO_REQUEST_TARGET이고 아무것도 바뀌지 않는다.
-     */
-    post: operations['post_transports__transportId__destination'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/arrive': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 도착 처리
-     * @description 원본 위치 삭제, 익명 소요시간만 저장. 10분 동안 팀 작성 중 정보에 이번 환자 정보를 남긴다 (SFR-157).
-     *
-     *     **요구사항**: SFR-038, SFR-080, SFR-039, SFR-144
-     *     **화면**: S-10 도착 처리
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
-     *     **상태 전이 사건**: ARRIVE
-     */
-    post: operations['post_transports__transportId__arrive'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/cancel': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 이송 취소
-     * @description 진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'. 대원이 고른 미이송 사유(선택)는 구급활동일지 초안의 미이송 사유 칸이 된다(SFR-164).
-     *
-     *     **요구사항**: SFR-076, SFR-164
-     *     **화면**: S-05 · S-06 · S-08 · S-09
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
-     *     **상태 전이 사건**: CANCEL
-     */
-    post: operations['post_transports__transportId__cancel'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/sync': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 통신 두절 중 기록 올리기
-     * @description 오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든 건은 offlineCreated=true, fallbackReason=offline.
-     *
-     *     처리: 보낸 순서대로 기록마다 트랜잭션을 따로 쓴다(한 건이 거절돼도 나머지는 계속). create_fallback = 예비 추천 건 등록(병원 요청은 보내지 않음), 같은 ID면 duplicate, 팀에 다른 진행 중 건이 있으면 cancelled(offline_superseded)로 넣고 history_only. phone_check = 온라인 전화 확인과 같은 함수로 반영(서버가 아직 전화 확인 중이 아니면 그 병원으로 시작, 대상이 다르면 대상만 바꿈). 서버에 유효 승인(5분 안)이나 확정(이동 중)이 있거나 끝난 건이면 phone_check 행(offline)만 남기고 history_only. 같은 clientRecordId면 duplicate. arrive = 이동 중이면 도착, 이미 도착이면 duplicate, 그 밖이면 이력만(history_only). 판정은 DB 시각, 기록 시각(전화 결과·도착·생성)만 occurredAt을 이송 건 생성(도착은 출발)~지금 사이로 맞춰 쓴다. 기록 하나가 상태 전이표·검사에 막히면 outcome rejected + code(예: REASON_REQUIRED, NOT_FOUND). 형식 오류는 요청 전체 400. transport = 마지막 기록의 이송 건 최신 상태(복구 뒤 자동 재조회, SFR-068), 내 팀 건이 아니면 null.
-     *
-     *     **요구사항**: SFR-099, SFR-068, SFR-160
-     *     **화면**: S-11 오프라인 → 복구
-     *     **상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE
-     */
-    post: operations['post_transports_sync'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/pc/register': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 라이선스 키로 PC 등록
-     * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict · Path=/, 실시간 연결에도 씀), 1년. PC_LIMIT_REACHED는 details.pcs[{id, name, lastUsedAt}]를 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds. 관리자 알림(pc_change) 발생.
-     *
-     *     **요구사항**: SFR-116, SFR-147, COR-012
-     *     **화면**: H-01 PC 등록
-     *     **오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, ACCOUNT_SUSPENDED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED
-     */
-    post: operations['post_hw_pc_register'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/session': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 현재 PC·병원 정보
-     * @description 병원 계정이 정지됐으면 ACCOUNT_SUSPENDED (등록 PC를 쓰는 모든 /hw API 공통, SFR-123).
-     *
-     *     **요구사항**: SFR-116, SFR-146, SFR-139
-     *     **화면**: H-01 · 상단 바
-     *     **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED, ACCOUNT_SUSPENDED
-     */
-    get: operations['get_hw_session'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/shifts': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 근무 시작 (담당자 이름)
-     * @description PC 1대에 진행 중 근무는 1개. 앞 근무가 남아 있으면 끝내고 새로 시작하고, 그 PC 탭들에 hospital.alarm_off{shift_ended}. 새 근무는 알림이 꺼진 채로 시작한다.
-     *
-     *     **요구사항**: SFR-117
-     *     **화면**: H-01 근무 시작
-     */
-    post: operations['post_hw_shifts'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/shifts/current/alarm-on': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 알림 켜기 (이때부터 요청 대상)
-     * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다. 진행 중 근무가 없거나 socketId가 이 PC의 /hospital 연결이 아니면 NOT_FOUND.
-     *
-     *     **요구사항**: SFR-117, SFR-136
-     *     **화면**: H-01 근무 시작
-     *     **오류 코드**: NOT_FOUND
-     */
-    post: operations['post_hw_shifts_current_alarm_on'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/shifts/current/end': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 근무 종료
-     * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}. 진행 중 근무가 없으면 NOT_FOUND.
-     *
-     *     **요구사항**: SFR-117
-     *     **화면**: H-02
-     */
-    post: operations['post_hw_shifts_current_end'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/pause': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 잠시 요청 중지 / 다시 받기
-     * @description 병원 전체에 적용(병원 행 FOR UPDATE). 중지하면 응답 마감(2분) 전인 대기 요청은 '요청 중지'로 자동 거절(reason paused, 통계 제외, 제외 병원 아님) — 대원 앱에 request.rejected{reason: paused}, 회차에 남은 요청이 없으면 역방향 연쇄로 예비 추천. 이미 승인한 요청은 그대로. 병원 전체 PC에 hospital.pause_changed{paused, byPcName, byName, pausedAt}. 이미 같은 상태면 아무것도 바꾸지 않고 204. 중지 2시간째(paused_at 기준, DB now()) 1분 주기 작업이 hospital.pause_reminder를 같은 중지에 한 번만. 근무 전 PC는 SHIFT_REQUIRED.
-     *
-     *     **요구사항**: SFR-139
-     *     **화면**: H-02 탭
-     *     **오류 코드**: SHIFT_REQUIRED, VALIDATION_FAILED
-     *     **상태 전이 사건**: PAUSE_AUTO_REJECT
-     */
-    put: operations['put_hw_pause'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 요청 목록 (남은 시간 짧은 순)
-     * @description 우리 병원 요청만. all의 닫힌·만료·거절 건은 결과만 주고 환자 정보 칸은 null.
-     *
-     *     **요구사항**: SFR-135, SFR-155, SER-014
-     *     **화면**: H-02 요청 목록
-     */
-    get: operations['get_hw_requests'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 요청 상세 (열람 기록 남김)
-     * @description 다른 병원 요청이면 404. 열람 기록에 담당자 이름을 남겨야 해서 근무를 시작하지 않은 PC는 SHIFT_REQUIRED. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.
-     *
-     *     **요구사항**: SFR-118, SFR-137, SER-014
-     *     **화면**: H-02 요청 상세
-     *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, REQUEST_CLOSED
-     */
-    get: operations['get_hw_requests__requestId'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/approve': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 승인 (+메모)
-     * @description 두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName·status·version. 응답자 이름은 그 PC의 진행 중 근무 담당자라서 근무 전 PC는 SHIFT_REQUIRED. 우리 병원 유효 승인 수 ≥ 응급실 가용 병상이면 OVER_APPROVAL_CONFIRM_REQUIRED + details.validApprovals·erAvail (병상 정보가 없으면 막지 않음). 대원 앱에 request.approved{firstApproval}, 같은 병원 PC에 request.changed{byName, pcName}.
-     *
-     *     **요구사항**: SFR-119, SFR-140, SFR-154, SFR-153, SFR-160
-     *     **화면**: H-02 요청 상세
-     *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED
-     *     **상태 전이 사건**: APPROVE
-     */
-    post: operations['post_hw_requests__requestId__approve'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/reject': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 거절 (사유 필수)
-     * @description 제외 병원에 추가, 통계에 들어감. etc는 etcText까지 있어야 사유로 본다 (없으면 REASON_REQUIRED). 근무 전 PC는 SHIFT_REQUIRED. 이번 회차에 대기·유효 승인이 하나도 안 남으면 이송 건은 예비 추천(NO_OPEN_REQUEST, all_rejected). 대원 앱에 request.rejected, 같은 병원 PC에 request.changed.
-     *
-     *     **요구사항**: SFR-119, SFR-126
-     *     **화면**: H-02 거절 사유
-     *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, REASON_REQUIRED
-     *     **상태 전이 사건**: REJECT
-     */
-    post: operations['post_hw_requests__requestId__reject'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/cancel-approval': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 승인 취소 (사유 필수)
-     * @description approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음. 그 병원은 excluded_hospital(approval_cancelled)에 들어가 '다시 요청'에서도 빠진다. 선택 전이면 회차에 대기·유효 승인이 남았는지 보고 이송 건은 그대로 또는 예비 추천(approvals_cancelled). 같은 병원 PC에 request.changed{closed, approval_cancelled, byName}, 확정 병원이면 incoming.removed{approval_cancelled}. 승인한 담당자·메모는 그대로 남긴다. 근무 전 PC는 SHIFT_REQUIRED, version이 다르면 ALREADY_RESPONDED.
-     *
-     *     **요구사항**: SFR-128, SFR-130
-     *     **화면**: H-02 · H-03
-     *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REASON_REQUIRED, REQUEST_NOT_APPROVED, REQUEST_CLOSED
-     *     **상태 전이 사건**: CANCEL_APPROVAL
-     */
-    post: operations['post_hw_requests__requestId__cancel_approval'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/incoming': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 도착 예정 환자
-     * @description 우리 병원으로 확정된 이송 건(이동 중) + 도착 1시간 안의 건(도착·수용 불가). 구급차 위치·거리·구급대 소속은 주지 않는다. etaMin = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분. summary는 도착 후 1시간까지만.
-     *
-     *     **요구사항**: SFR-121, SFR-105, SFR-158
-     *     **화면**: H-03 도착 예정
-     */
-    get: operations['get_hw_incoming'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/extra-memo': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 추가 메모 (1번)
-     * @description 확정 요청에만, 1번만 (상태는 바뀌지 않고 version만 +1). 대원 앱에 경보 hospital.extra_memo {transportId, hospitalRequestId, hospitalName} — 메모 글은 이벤트에 넣지 않고(절대 규칙 5) 앱이 GET /transports/current 의 extraMemo로 받는다. 같은 병원 PC에 request.changed·incoming.updated. 확정 전(대기·승인) 요청은 INVALID_TRANSITION, 끝난 요청은 REQUEST_CLOSED.
-     *
-     *     **요구사항**: SFR-140
-     *     **화면**: H-03 도착 예정, H-02 요청 상세
-     *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT, VERSION_REQUIRED, INVALID_TRANSITION, SHIFT_REQUIRED
-     */
-    post: operations['post_hw_requests__requestId__extra_memo'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/confirm-arrival': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 병원에서 도착 확인
-     * @description 위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital). version은 병원 요청(hospital_request)의 version. 위치 동의 건인데 위치 기록이 아직 없으면 판단할 수 없어 AMBULANCE_NOT_NEAR. 병원 웹에는 위치·거리를 주지 않는다. 근무 중인 PC만 (SHIFT_REQUIRED).
-     *
-     *     **요구사항**: SFR-144
-     *     **화면**: H-03 도착 예정
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR, SHIFT_REQUIRED
-     *     **상태 전이 사건**: ARRIVE
-     */
-    post: operations['post_hw_requests__requestId__confirm_arrival'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/hw/requests/{requestId}/unacceptable': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 도착 후 수용 불가 (10분 안)
-     * @description 대원 앱에 경보 transport.unacceptable {transportId, hospitalName, reason 코드} + 푸시('A병원 수용 불가 · 해당 전문의 부재'). 기타 글(etcText)은 병원 요청에만 저장하고 이벤트·푸시에는 넣지 않는다. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev). 거절 원장에 출처 unacceptable 1줄(SFR-126·106). version은 병원 요청 version. 근무 중인 PC만(SHIFT_REQUIRED).
-     *
-     *     **요구사항**: SFR-158
-     *     **화면**: H-03 도착 예정
-     *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED, SHIFT_REQUIRED
-     *     **상태 전이 사건**: UNACCEPTABLE
-     */
-    post: operations['post_hw_requests__requestId__unacceptable'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/auth/login': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 관리자 로그인 (비밀번호 + OTP)
-     * @description OTP를 아직 연결하지 않은 관리자(초기 데이터)는 403 OTP_SETUP_REQUIRED + details{setupToken(5분), otpauthUrl} → QR을 보여주고 /admin/auth/otp/enroll.
-     *
-     *     **요구사항**: SFR-082, SFR-152
-     *     **화면**: A-01 로그인
-     *     **오류 코드**: INVALID_CREDENTIALS, INVALID_OTP, ACCOUNT_LOCKED, OTP_SETUP_REQUIRED, ORIGIN_NOT_ALLOWED
-     */
-    post: operations['post_admin_auth_login'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/auth/otp/enroll': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 첫 로그인 OTP 앱 연결
-     * @description 성공하면 otp_enrolled_at 기록 후 바로 로그인.
-     *
-     *     **요구사항**: SFR-152
-     *     **화면**: A-01 로그인
-     *     **오류 코드**: INVALID_OTP, TOKEN_EXPIRED
-     */
-    post: operations['post_admin_auth_otp_enroll'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/signups': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 가입 승인 대기 목록
-     * @description **요구사항**: SFR-083
-     *     **화면**: A-01 가입 승인
-     */
-    get: operations['get_admin_signups'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/signups/{id}/photo': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 공무원증 사진 보기 (열람 기록)
-     * @description 응답 image/jpeg 또는 image/png(가입 때 올린 형식 그대로), `Cache-Control: no-store`. 작업 이력에 열람 1건.
-     *
-     *     **요구사항**: SFR-083, DAR-012, SER-015
-     *     **화면**: A-01 가입 승인
-     *     **오류 코드**: NOT_FOUND, PHOTO_DELETED
-     */
-    get: operations['get_admin_signups__id__photo'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/signups/{id}/approve': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 가입 승인
-     * @description 사진 즉시 삭제, 대원에게 account.signup_result + 푸시. 이미 승인·반려한 신청은 409 ALREADY_RESPONDED.
-     *
-     *     **요구사항**: SFR-083, SFR-091
-     *     **화면**: A-01 가입 승인
-     *     **오류 코드**: NOT_FOUND, ALREADY_RESPONDED
-     */
-    post: operations['post_admin_signups__id__approve'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/signups/{id}/reject': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 가입 반려
-     * @description 사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유는 etcText 필수(없으면 422 REASON_REQUIRED), 작업 이력에만 남음(대원에게는 사유 코드만). 이미 처리한 신청은 409 ALREADY_RESPONDED.
-     *
-     *     **요구사항**: SFR-083
-     *     **화면**: A-01 가입 승인
-     *     **오류 코드**: NOT_FOUND, REASON_REQUIRED, ALREADY_RESPONDED
-     */
-    post: operations['post_admin_signups__id__reject'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/paramedics': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 대원 계정 검색
-     * @description **요구사항**: SFR-151
-     *     **화면**: A-01 대원 계정
-     */
-    get: operations['get_admin_paramedics'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/paramedics/{id}/suspend': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 대원 계정 정지 (즉시 로그아웃)
-     * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended). 승인된 계정만 정지(승인 대기·반려는 409 INVALID_TRANSITION), 이미 정지된 계정은 204로 아무것도 바꾸지 않음.
-     *
-     *     **요구사항**: SFR-151, SER-016
-     *     **화면**: A-01 대원 계정
-     *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED, INVALID_TRANSITION
-     *     **상태 전이 사건**: CANCEL
-     */
-    post: operations['post_admin_paramedics__id__suspend'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/paramedics/{id}/unsuspend': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 정지 해제
-     * @description **요구사항**: SFR-151
-     *     **화면**: A-01 대원 계정
-     *     **오류 코드**: NOT_FOUND
-     */
-    post: operations['post_admin_paramedics__id__unsuspend'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/paramedics/{id}/reset-password': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 비밀번호 초기화
-     * @description 임시 비밀번호(10자)를 이 응답에서 한 번만 준다(Cache-Control: no-store). mustChangePassword를 켜고, 로그인 잠금을 풀고, 다른 기기의 로그인을 모두 끝낸다. 작업 이력 1건(임시 비밀번호는 남기지 않음). 탈퇴·없는 계정은 404.
-     *
-     *     **요구사항**: SFR-021
-     *     **화면**: A-01 대원 계정
-     *     **오류 코드**: NOT_FOUND
-     */
-    post: operations['post_admin_paramedics__id__reset_password'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 병원 검색 (공공 데이터)
-     * @description **요구사항**: SFR-123
-     *     **화면**: A-03 병원 관리
-     */
-    get: operations['get_admin_hospitals'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals/{id}/account': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 병원 계정 + 라이선스 키 발급
-     * @description **요구사항**: SFR-123, COR-013
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND, ACCOUNT_EXISTS
-     */
-    post: operations['post_admin_hospitals__id__account'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals/{id}/license-keys': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 키 재발급 (사유)
-     * @description 이전 키 폐기 → 그 키로 등록한 PC 전부 pc.revoked{key_revoked}.
-     *
-     *     **요구사항**: SFR-146
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND, REASON_REQUIRED
-     */
-    post: operations['post_admin_hospitals__id__license_keys'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/license-keys/{id}/revoke': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 키 폐기 (사유)
-     * @description 키와 등록 PC 전부 즉시 무효, pc.revoked{key_revoked}. 작업 이력에 사유.
-     *
-     *     **요구사항**: SFR-146
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND, REASON_REQUIRED
-     */
-    post: operations['post_admin_license_keys__id__revoke'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals/{id}/suspend': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 병원 계정 정지 (모든 PC 차단)
-     * @description pc.revoked{account_suspended}. 대기 요청은 요청 대상에서 빠짐.
-     *
-     *     **요구사항**: SFR-123
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND
-     */
-    post: operations['post_admin_hospitals__id__suspend'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals/{id}/pcs': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 등록 PC 목록
-     * @description **요구사항**: SFR-147
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND
-     */
-    get: operations['get_admin_hospitals__id__pcs'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/pcs/{id}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * PC 해제
-     * @description 그 PC에 pc.revoked{pc_released}.
-     *
-     *     **요구사항**: SFR-147
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND
-     */
-    delete: operations['delete_admin_pcs__id'];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/hospitals/{id}/entrance': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * 응급실 입구 좌표 지정
-     * @description 지도에서 찍은 좌표 저장. 앱 목적지·병원 웹 도착 확인(200m)이 이 좌표를 먼저 쓴다. 작업 이력 1건(좌표 값은 남기지 않음). 대한민국 밖 좌표는 400.
-     *
-     *     **요구사항**: SFR-145
-     *     **화면**: A-03 병원 관리
-     *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
-     */
-    put: operations['put_admin_hospitals__id__entrance'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/notifications': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 관리자 알림
-     * @description **요구사항**: SFR-100, SFR-148
-     *     **화면**: A-02 모니터링
-     *
-     *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota(80% 도달·한도 초과를 따로, SFR-090) · integrity(일 단위 정합성 점검, 문구에 발견 건수, QUR-014)
-     */
-    get: operations['get_admin_notifications'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/notifications/{id}/read': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * 알림 읽음
-     * @description **요구사항**: SFR-100
-     *     **화면**: A-02 모니터링
-     *     **오류 코드**: NOT_FOUND
-     */
-    post: operations['post_admin_notifications__id__read'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/audit-logs': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 작업 이력 (수정·삭제 불가)
-     * @description **요구사항**: SFR-091
-     *     **화면**: A-02 모니터링
-     */
-    get: operations['get_admin_audit_logs'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/stats/hospitals': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 병원 응답 통계
-     * @description 기간 안에 요청이 간 병원만, 이름순. 응답률·응답 시간은 병원 웹에서 직접 누른 응답만(요청 중지 자동 거절·전달 실패·아직 2분이 안 끝난 대기는 뺌). 요청 10건 미만이면 sampleTooSmall=true 이고 수치 칸은 null. 거절률 급등(rejectSpike)은 고른 기간과 상관없이 7일 vs 30일, 둘 다 10건 이상일 때만. 대원·이송 건 정보는 없음(DAR-004).
-     *
-     *     **요구사항**: SFR-106, SFR-126
-     *     **화면**: A-02 모니터링
-     */
-    get: operations['get_admin_stats_hospitals'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/request-targets/preview': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 요청 대상 미리보기
-     * @description '병원에 요청'을 누르기 전에 지금 조건으로 요청이 갈 병원 수. 0곳이면 앱은 요청 버튼 대신 '등급 바꾸기'·'반경 넓히기'를 보여준다.
-     *
-     *     **요구사항**: SFR-163, SFR-109
-     *     **화면**: S-04 하단
-     */
-    get: operations['get_request_targets_preview'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/transports/{transportId}/journal-draft': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 구급활동일지 초안 (자동 항목)
-     * @description 이송 종료(도착·취소) 후 10분 안에 팀원이 부른다(종료 뒤 팀 연결을 기억하는 시간, DAR-013). 앱은 받은 초안을 단말에 7일 보관하고 그 뒤 다시 부르지 않는다. 종료 전이면 409 TRANSPORT_NOT_ENDED, 10분이 지나면 404.
-     *
-     *     **요구사항**: SFR-164, DAR-015
-     *     **화면**: S-13 구급활동일지
-     *     **오류 코드**: NOT_FOUND, TRANSPORT_NOT_ENDED
-     */
-    get: operations['get_transports__transportId__journal_draft'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/journal/ai-organize': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * AI 일지 정리 (제안)
-     * @description 대원 메모 글을 일지 항목별로 나눈 제안을 돌려준다(음성 입력은 CR-007로 삭제). 서버가 식별정보(names로 받은 이름 칸 값·전화번호·주민번호 형태·주소 모양)를 [삭제]로 바꾼 뒤 AI(OpenAI)로 보내고, AI 답에서도 한 번 더 지운다. 원문·응답은 저장·로그하지 않는다(SER-017). 제한시간 AI_TIMEOUT_MS(기본 10초) 넘거나 제공사 오류·키 없음이면 503 AI_UNAVAILABLE(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED. 응답은 Cache-Control no-store. 앱은 제안만 보여 주고 '적용'을 눌러야 초안에 넣는다.
-     *
-     *     **요구사항**: SFR-167, SER-017, INR-006, QUR-013
-     *     **화면**: S-13
-     *     **오류 코드**: FEATURE_DISABLED, AI_UNAVAILABLE, VALIDATION_FAILED
-     */
-    post: operations['post_journal_ai_organize'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/config': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 앱·웹 설정 (기능 토글)
-     * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013). featureFlags 는 feature_flag 표(없는 키는 false), minAppVersion 은 서버 환경 변수 MIN_APP_VERSION(숫자 3개, 기본 1.0.0). 앱은 자기 버전이 더 낮으면 기능을 막고 '업데이트가 필요해요'만 보여 준다 (SFR-142). 대원·병원 서버(main)에만 있다.
-     *
-     *     **요구사항**: QUR-013, SFR-142
-     */
-    get: operations['get_config'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/admin/feature-flags': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * 기능 토글 보기
-     * @description **요구사항**: QUR-013
-     *     **화면**: A-02
-     */
-    get: operations['get_admin_feature_flags'];
-    /**
-     * 기능 토글 바꾸기
-     * @description 바꿀 칸만 보낸다(둘 다 없거나 모르는 칸이면 400). 값이 실제로 바뀐 기능만 작업 이력에 1줄씩 (기능 켜기·기능 끄기). 앱·웹은 GET /config 를 1분마다 읽어 1분 안 반영. 응답은 바꾼 뒤 전체 값.
-     *
-     *     **요구사항**: QUR-013, SFR-091
-     *     **화면**: A-02
-     *     **오류 코드**: VALIDATION_FAILED
-     */
-    put: operations['put_admin_feature_flags'];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 서버 상태 점검
+         * @description 로드밸런서와 외부 상태 점검이 쓴다. DB·Redis 연결을 확인하고 하나라도 실패하면 503 (QUR-009, COR-016)
+         */
+        get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agencies/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 소속기관 코드 확인
+         * @description **요구사항**: SFR-017
+         *     **화면**: S-02 가입 신청
+         *     **오류 코드**: AGENCY_NOT_FOUND
+         */
+        get: operations["get_agencies__code"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가입 신청 (공무원증 사진)
+         * @description 관리자 알림 '신규 가입 신청'이 생긴다. 사진은 jpg·png 1장 5MB 이하(파일 앞부분으로 확인), 서버가 AES-256-GCM으로 암호화해 객체 저장소에 올린다(원본은 디스크·로그에 남기지 않음). DB 저장이 실패하면 올린 사진을 지운다. 비밀번호 8자 이상·영문+숫자(SER-006), 아이디 영문·숫자·._- 4~40자. 같은 주소에서 10분에 5번까지(429).
+         *
+         *     **요구사항**: SFR-017, SER-015, DAR-012
+         *     **화면**: S-02 가입 신청
+         *     **오류 코드**: VALIDATION_FAILED, AGENCY_NOT_FOUND, LOGIN_ID_TAKEN, CONSENT_REQUIRED, TOO_MANY_REQUESTS, PHOTO_STORAGE_UNAVAILABLE
+         */
+        post: operations["post_auth_signup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 반려 후 다시 신청
+         * @description me.status가 rejected일 때만. 반려 사유(me.rejectReason)를 보고 고쳐서 다시 낸다 → pending.
+         *
+         *     **요구사항**: SFR-083, SFR-017
+         *     **화면**: S-02 승인 대기
+         *     **오류 코드**: SIGNUP_NOT_REJECTED, CONSENT_REQUIRED, AGENCY_NOT_FOUND
+         */
+        put: operations["put_me_signup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 로그인
+         * @description 5번 틀리면 10분 잠금(ACCOUNT_LOCKED, details.retryAfterSeconds = 남은 초). 정지 여부는 비밀번호가 맞을 때만 알려 준다. 승인 대기·반려 계정도 로그인은 되며 me.status로 '승인 대기 중'·'반려' 화면만 연다 (SFR-022·083).
+         *
+         *     **요구사항**: SFR-018, SER-011
+         *     **화면**: S-02 로그인
+         *     **오류 코드**: INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_SUSPENDED
+         */
+        post: operations["post_auth_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 토큰 재발급
+         * @description **요구사항**: SER-016
+         *     **화면**: (모든 화면)
+         *     **오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED, ACCOUNT_SUSPENDED
+         */
+        post: operations["post_auth_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 로그아웃 (팀에서 빠짐)
+         * @description 팀에 진행 중 이송이 있는데 confirmCancelActive가 없으면 409 + details.activeTransport{id,status,hospitalName}. 확인 후 내가 마지막 1명이면 이송 건을 취소(logout)로 끝내고 열린·확정 병원 요청을 닫고 팀을 해제한다. 근무 종료와 같은 처리이며, 다른 기기의 토큰까지 모두 끊는다(SER-016). 승인 전 계정도 쓸 수 있다.
+         *
+         *     **요구사항**: SFR-070, SFR-113
+         *     **화면**: S-12 설정
+         *     **오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+         *     **상태 전이 사건**: CANCEL
+         */
+        post: operations["post_auth_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 정보
+         * @description 앱을 다시 열 때 이 응답으로 화면을 정한다 (근무 중이면 로그인을 묻지 않음).
+         *
+         *     **요구사항**: SFR-018, SFR-022, SFR-083
+         *     **화면**: S-02 승인 대기 · 앱 시작
+         */
+        get: operations["get_me"];
+        put?: never;
+        post?: never;
+        /**
+         * 회원 탈퇴
+         * @description 탈퇴는 막지 않는다. 진행 중 이송이 있으면 확인을 받고, 마지막 1명이면 이송 건을 취소(withdrawal)로 끝낸 뒤 계정·프로필 즉시 삭제.
+         *
+         *     **요구사항**: SFR-071, SFR-113
+         *     **화면**: S-12 설정
+         *     **오류 코드**: ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+         *     **상태 전이 사건**: CANCEL
+         */
+        delete: operations["delete_me"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 비밀번호 변경 (임시 비밀번호 후 필수)
+         * @description 관리자가 초기화한 임시 비밀번호로 로그인하면(me.mustChangePassword=true) 이걸 하기 전에는 승인 계정 API가 403 PASSWORD_CHANGE_REQUIRED. 새 비밀번호는 8자 이상·영문+숫자(SER-006)·지금 비밀번호와 달라야 함. 바꾸면 같은 토큰으로 바로 다른 기능이 열린다. 지금 비밀번호를 틀린 횟수는 로그인과 같이 세서 5번째면 10분 잠금(423 ACCOUNT_LOCKED, 로그인도 막힘).
+         *
+         *     **요구사항**: SFR-021, SER-011
+         *     **화면**: (비밀번호 변경)
+         *     **오류 코드**: INVALID_CREDENTIALS, VALIDATION_FAILED, ACCOUNT_LOCKED
+         */
+        put: operations["put_me_password"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/push-device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 푸시 토큰 등록
+         * @description web은 구급대원 웹앱의 브라우저 푸시 토큰(FCM 웹, CR-010).
+         *
+         *     **요구사항**: SFR-130, COR-009, CR-010
+         *     **화면**: 앱 시작
+         */
+        put: operations["put_me_push_device"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 팀 만들기 (근무 시작)
+         * @description 14시간 자동 근무 종료 타이머가 걸린다.
+         *
+         *     **요구사항**: SFR-113
+         *     **화면**: S-03 근무 시작
+         *     **오류 코드**: ALREADY_IN_TEAM, NOT_APPROVED, PASSWORD_CHANGE_REQUIRED
+         */
+        post: operations["post_teams"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 코드·QR로 참여
+         * @description code와 qrToken 중 하나만 보낸다. 운전은 팀에 1명. 이 시점 이후 이벤트만 받는다(joined_seq).
+         *
+         *     **요구사항**: SFR-113
+         *     **화면**: S-03 근무 시작
+         *     **오류 코드**: TEAM_NOT_FOUND, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM
+         */
+        post: operations["post_teams_join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 팀 보기
+         * @description **요구사항**: SFR-113
+         *     **화면**: S-03 근무 시작
+         *     **오류 코드**: NOT_IN_TEAM
+         */
+        get: operations["get_teams_current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/members/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 내 역할 바꾸기
+         * @description **요구사항**: SFR-113
+         *     **화면**: S-03 근무 시작
+         *     **오류 코드**: DRIVER_TAKEN, ACTIVE_TRANSPORT_EXISTS
+         */
+        patch: operations["patch_teams_current_members_me"];
+        trace?: never;
+    };
+    "/teams/current/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 근무 종료 (나만 팀에서 빠짐)
+         * @description 진행 중 이송이 있으면 확인 필요. 마지막 1명이면 이송 건을 취소(duty_end)로 끝내고 팀 해제.
+         *
+         *     **요구사항**: SFR-113
+         *     **화면**: S-03 · S-12
+         *     **오류 코드**: NOT_IN_TEAM, ACTIVE_TRANSPORT_CONFIRM_REQUIRED
+         *     **상태 전이 사건**: CANCEL
+         */
+        post: operations["post_teams_current_leave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/paramedics/on-duty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 같은 소방서 근무 중 대원 목록·이름 검색
+         * @description 근무 중 = 로그인해 있음(로그인이 곧 근무 시작). q가 없으면 같은 소방서의 근무 중 승인 대원만, q가 있으면 소방서 전체에서 이름 검색. 근무 중 → 이름 순.
+         *
+         *     **요구사항**: SFR-159, SFR-143
+         *     **화면**: S-03 팀원 목록 초대
+         *     **오류 코드**: VALIDATION_FAILED
+         */
+        get: operations["get_paramedics_on_duty"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 팀 초대 보내기 (5분 만료)
+         * @description 받는 사람에게 team.invited + 푸시. 수락·거절·만료는 보낸 사람에게 team.invite_result.
+         *     아직 답이 없는 같은 초대가 있으면 새로 만들지 않고 그 초대를 돌려준다. 다른 소방서·승인 전 대원은 NOT_FOUND.
+         *
+         *     **요구사항**: SFR-159
+         *     **화면**: S-03 팀원 목록 초대
+         *     **오류 코드**: NOT_IN_TEAM, TEAM_FULL, TARGET_IN_TEAM, NOT_FOUND
+         */
+        post: operations["post_teams_current_invites"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{inviteId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 수락 (역할 선택)
+         * @description 나에게 온 초대가 아니면 404.
+         *
+         *     **요구사항**: SFR-159, SFR-113
+         *     **화면**: (초대 알림)
+         *     **오류 코드**: NOT_FOUND, INVITE_EXPIRED, TEAM_FULL, DRIVER_TAKEN, ALREADY_IN_TEAM
+         */
+        post: operations["post_invites__inviteId__accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{inviteId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 거절
+         * @description **요구사항**: SFR-159
+         *     **화면**: (초대 알림)
+         *     **오류 코드**: NOT_FOUND, INVITE_EXPIRED
+         */
+        post: operations["post_invites__inviteId__decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memos/{paramedicId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 나만 보는 한 줄 메모
+         * @description 쓴 대원만 본다(GET /paramedics/on-duty 의 myMemo). 같은 대원에게 다시 쓰면 덮어쓰고, 빈 글(공백만)이면 지운다. 앞뒤 공백은 뺀다. 같은 소방서의 승인된 다른 대원에게만 쓸 수 있고, 그 밖(나 자신·없는 대원·다른 소방서)은 404.
+         *
+         *     **요구사항**: SFR-143
+         *     **화면**: S-03 팀원 목록 초대
+         *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
+         */
+        put: operations["put_memos__paramedicId"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 팀 작성 중 환자 정보 불러오기
+         * @description **요구사항**: SFR-114, SFR-157
+         *     **화면**: S-04 환자 정보 입력
+         *     **오류 코드**: NOT_IN_TEAM
+         */
+        get: operations["get_teams_current_draft"];
+        put?: never;
+        post?: never;
+        /**
+         * 직전 환자 정보 지우기
+         * @description 팀 작성 중 정보를 비우고 팀원에게 draft.updated(version 0). 이미 비어 있으면 그대로 204.
+         *
+         *     **요구사항**: SFR-157, SFR-114
+         *     **화면**: S-04 직전 환자 정보
+         *     **오류 코드**: NOT_IN_TEAM
+         */
+        delete: operations["delete_teams_current_draft"];
+        options?: never;
+        head?: never;
+        /**
+         * 팀 작성 중 환자 정보 고치기 (항목 단위 병합)
+         * @description 버전이 달라도 거절하지 않고 보낸 항목만 저장한다(나중에 입력한 값으로, SFR-114). 팀원에게 draft.updated(바뀐 칸 이름만, 값은 GET으로). 운전 역할이 주행 중(시속 10km 이상)이면 DRIVER_INPUT_LOCKED: 단말이 보낸 speedKmh, 없으면 진행 중 이송 건의 최근 15초 위치 기록 속도로 본다.
+         *
+         *     **요구사항**: SFR-114, SFR-115
+         *     **화면**: S-04 환자 정보 입력
+         *     **오류 코드**: NOT_IN_TEAM, DRIVER_INPUT_LOCKED, VALIDATION_FAILED
+         */
+        patch: operations["patch_teams_current_draft"];
+        trace?: never;
+    };
+    "/geocode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 주소 → 좌표 (위치 실패·미동의)
+         * @description 카카오 로컬 API를 서버가 대신 부른다 (키를 앱에 넣지 않음). 주소 검색 → 0건이면 장소 이름 검색(예: 천안역), 후보 최대 5개, 대한민국 밖 좌표는 뺀다. 3초 안에 못 받거나 카카오 장애·한도 초과면 503 GEOCODE_UNAVAILABLE. 입력 주소는 로그·DB·캐시에 남기지 않는다 (SER-012).
+         *
+         *     **요구사항**: SFR-009, INR-004
+         *     **화면**: S-04 · S-06 주소 입력
+         *     **오류 코드**: VALIDATION_FAILED, ADDRESS_NOT_FOUND, GEOCODE_UNAVAILABLE
+         */
+        get: operations["get_geocode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hospitals/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 주변 병원 (지도·오프라인 저장용)
+         * @description 반경 안 전체 병원(지도용, 거리순, rank는 null). 환자 정보를 입력하는 동안 미리 불러오고(SFR-001), 앱이 받아 저장해 두고(진료가능 항목 포함), 통신이 끊기면 '참고용 정보 · 기준 HH:MM'(collectedAt)으로 보여준다. 좌표가 대한민국 밖이면 400 VALIDATION_FAILED(details.reason = coords_out_of_korea, SFR-087).
+         *
+         *     **요구사항**: SFR-001, SFR-027, SFR-059, SFR-061, SFR-064, SFR-087
+         *     **화면**: S-06 지도 · S-11 오프라인
+         *     **오류 코드**: VALIDATION_FAILED
+         */
+        get: operations["get_hospitals_nearby"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hospitals/{hospitalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 병원 상세
+         * @description **요구사항**: SFR-007, SFR-081
+         *     **화면**: S-07 병원 상세
+         *     **오류 코드**: NOT_FOUND
+         */
+        get: operations["get_hospitals__hospitalId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이송 건 만들기 + 병원에 동시 요청
+         * @description 요청 대상(반경 안 · 알림 켠 PC 있음 · 요청 중지 아님 · 제외 병원 아님 · requestedGrade를 보냈으면 그 등급 이상)이 1곳 이상이면 status=requesting, request.new 전송. **0곳이면 오류가 아니라 201 + status=fallback(fallbackReason=no_target)**. 팀에 진행 중 건이 있으면 409 ACTIVE_TRANSPORT_EXISTS + details.activeTransport. 그 건이 moving이면 앱이 '이전 이송(○○병원)을 도착으로 끝내고 새로 요청할까요?'를 묻고 finishPrevious=true로 다시 보낸다 → 같은 트랜잭션에서 이전 건 arrived(finish_previous). 같은 id로 다시 보내면 처음 결과를 돌려준다. 통신 두절 시 앱은 이 API를 부르지 않는다 (SFR-109). 보낸 환자 평가로 팀 작성 중 정보를 맞추고 draft.updated를 보낸다 ('변경 사항 보내기(n)'가 0에서 시작, SFR-105).
+         *
+         *     **요구사항**: SFR-109, SFR-162, SFR-104, SFR-129, SFR-157, SFR-161
+         *     **화면**: S-04 → S-05 응답 대기 / S-06
+         *     **오류 코드**: ACTIVE_TRANSPORT_EXISTS, ASSESSMENT_INCOMPLETE, NOT_IN_TEAM, VALIDATION_FAILED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
+         *     **상태 전이 사건**: CREATE_WITH_TARGETS, CREATE_NO_TARGET, FINISH_PREVIOUS
+         */
+        post: operations["post_transports"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 진행 중 이송 불러오기 (앱 재실행 복구)
+         * @description 상태별 화면으로 바로 이동: requesting→S-05, fallback→S-06, phone_check→S-08, moving→S-09.
+         *
+         *     **요구사항**: SFR-133
+         *     **화면**: 앱 시작 · 모든 이송 화면
+         *     **오류 코드**: NO_ACTIVE_TRANSPORT
+         */
+        get: operations["get_transports_current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 이송 건 보기
+         * @description 우리 팀 이송 건이 아니면 404.
+         *
+         *     **요구사항**: SFR-110
+         *     **화면**: S-05 · S-09
+         *     **오류 코드**: NOT_FOUND
+         */
+        get: operations["get_transports__transportId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 승인 병원 확정
+         * @description Idempotency-Key 헤더 필수. 첫 시도가 서버에 도착한 시각으로 5분을 판정. 성공하면 나머지 대기·승인 요청은 닫히고(other_hospital) 경로 안내 담당 단말을 정한다(운전 단말 10초).
+         *
+         *     **요구사항**: SFR-111, SFR-134, SFR-160, SFR-125
+         *     **화면**: S-05 확정 확인
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, APPROVAL_EXPIRED, APPROVAL_CANCELLED, REQUEST_NOT_APPROVED
+         *     **상태 전이 사건**: CONFIRM
+         */
+        post: operations["post_transports__transportId__confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 추천 목록 (요청 화면·예비 추천 공용, 거리순)
+         * @description 요청 중에도 부를 수 있음 (v1.5, D-127·128). 등급 이상 먼저, 그 안에서 직선거리순.
+         *
+         *     **요구사항**: SFR-112, SFR-098, SFR-027, SFR-030, SFR-002
+         *     **화면**: S-05 요청 화면
+         *     **오류 코드**: NOT_FOUND, LOCATION_REQUIRED
+         */
+        get: operations["get_transports__transportId__recommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/fallback-radius": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 예비 추천 반경 넓히기 (요청은 안 보냄)
+         * @description 추천 반경(fallbackRadiusKm)만 넓힌다. 상태가 바뀌지 않으므로 version을 올리지 않고, 두 팀원이 같이 눌러도 큰 값 하나로 끝난다(멱등). fallback 상태에서만.
+         *
+         *     **요구사항**: SFR-029, SFR-012
+         *     **화면**: S-06 예비 추천
+         *     **오류 코드**: NOT_FOUND, MAX_RADIUS, INVALID_TRANSITION
+         */
+        put: operations["put_transports__transportId__fallback_radius"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 다시 요청 (반경 넓히기 · 승인 취소 후)
+         * @description expand (fallback→requesting): 반경 한 단계, 이번 이송에서 아직 요청하지 않은 병원에만. 대상 0곳이면 422 NO_REQUEST_TARGET(상태 그대로). re_request (moving→requesting): 확정 병원이 승인 취소한 경우만, 현재 위치 기준·현재 반경, 제외 병원만 빼고, 직전 승인 병원에 '재확인' 표시. 경로 안내 유지.
+         *
+         *     **요구사항**: SFR-131, SFR-128, SFR-156
+         *     **화면**: S-06 · S-09 승인 취소 경보
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, NO_REQUEST_TARGET, MAX_RADIUS, RE_REQUEST_NOT_ALLOWED
+         *     **상태 전이 사건**: EXPAND_ROUND, RE_REQUEST
+         */
+        post: operations["post_transports__transportId__rounds"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/phone-check/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 추천 병원으로 전화 확인 시작
+         * @description requesting·fallback → phone_check, 대상 병원 기록. 요청 중이면 병원 요청은 닫지 않음 (v1.5, D-127). 팀원 화면에 transport.phone_target.
+         *
+         *     **요구사항**: SFR-032, SFR-031
+         *     **화면**: S-05 요청 화면 추천 목록 → S-08 전화 확인
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
+         *     **상태 전이 사건**: START_PHONE_CHECK
+         */
+        post: operations["post_transports__transportId__phone_check_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/phone-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 전화 확인 결과 기록
+         * @description accepted → moving / no_answer·skipped(사유) → moving / rejected → 제외 병원 추가 후 다음 후보가 있으면 phone_check 유지(phoneTarget 바뀜), 없으면 fallback / dismissed(결과 미선택으로 닫기) → fallback. 통신 두절 중 기록은 /transports/sync로.
+         *
+         *     **요구사항**: SFR-032, SFR-033, SFR-034, SFR-074, SFR-075
+         *     **화면**: S-08 전화 확인
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, REASON_REQUIRED
+         *     **상태 전이 사건**: PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED
+         */
+        post: operations["post_transports__transportId__phone_checks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/nav-device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 경로 안내 담당 단말 응답
+         * @description 확정 뒤 운전 단말이 10초 안에 부르면 담당이 된다. 10초가 지나 서버가 확정한 대원 단말로 넘겼으면 NAV_DEVICE_ASSIGNED(보기 전용). 결과는 transport.nav_device.
+         *
+         *     **요구사항**: SFR-132, SFR-133
+         *     **화면**: S-09 경로 안내
+         *     **오류 코드**: NOT_FOUND, NAV_DEVICE_ASSIGNED, NOT_NAV_DEVICE, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
+         *
+         *     담당 정하기: 확정(confirm·전화 확인 수용) 때 팀에 운전 역할이 없거나 확정한 사람이 운전자면 그 단말이 바로 담당 (transport.confirmed.navDeviceId + transport.nav_device). 운전자가 따로 있으면 navDeviceId null로 두고 운전 단말을 10초(DB 시각) 기다린다. 그 사이 운전 역할 대원만 자기 로그인 단말(deviceId)로 부를 수 있고(아니면 403 NOT_NAV_DEVICE, 남의 단말 ID면 400), 10초가 지나면 서버 작업이 확정한 대원 단말로 넘긴다. 이미 담당이 있으면 같은 단말은 200(isMe true), 다른 단말은 409 NAV_DEVICE_ASSIGNED(details.navDeviceId). 담당을 정하면 이송 건 version +1. 목적지 변경·다시 요청 뒤 다시 확정해도 담당은 그대로. 출발 전이면 409 INVALID_TRANSITION.
+         */
+        post: operations["post_transports__transportId__nav_device"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 변경 사항 보내기
+         * @description requesting·phone_check·moving에서. 팀 작성 중 정보와 마지막으로 보낸 값을 서버가 비교해 바뀐 것만 대기·승인·확정 병원에 보낸다. baseSeq가 다르면(다른 팀원이 이미 보냄) VERSION_CONFLICT.
+         *
+         *     **요구사항**: SFR-121, SFR-105
+         *     **화면**: S-05 · S-09
+         *     **오류 코드**: NOT_FOUND, NOTHING_TO_SEND, VERSION_REQUIRED, VERSION_CONFLICT, INVALID_TRANSITION, VALIDATION_FAILED
+         *     **상태 전이 사건**: ASSESSMENT_UPDATED
+         *
+         *     작성 중 정보 전체를 assessment 새 행(seq+1)으로 저장해 이전 행과 함께 전후 값·시각이 남는다. 이송 건 version은 그대로. 받는 병원: 요청 중·전화 확인 중이면 2분 안 대기·5분 안 승인 병원(request.updated), 이동 중이면 확정 병원(incoming.updated). 팀에는 assessment.sent. 이벤트에는 바뀐 칸 이름만. 주 증상을 지운 채면 400 VALIDATION_FAILED(chiefComplaint).
+         */
+        post: operations["post_transports__transportId__assessments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 위치 올리기 (5초마다, 담당 단말만)
+         * @description 위치 미동의 건은 부르지 않는다. 출발(departed_at) 뒤 이송이 끝날 때까지만 받고(다시 요청으로 요청 중이어도 계속), 그 밖이면 409 INVALID_TRANSITION. 담당 단말 1대만: 담당(nav_device_id, POST /nav-device로 정함)이 아닌 단말이거나 아직 담당이 없으면(운전 단말 응답 대기 중) 403 NOT_NAV_DEVICE. 같은 recordedAt 재전송은 한 번만 저장, 출발 1분 전~지금+1분 밖은 버림. 이송이 끝나면(도착·취소·이전 이송 끝내기) 익명 이송 경로(anonymous_route)로 옮기고 원본 즉시 삭제, 이송 건에는 distance_m만. 입구 200m 안에 처음 들어오면 병원 웹에 incoming.near 한 번 (SFR-144). etaMin = 앱 안 내비(KNSDK)가 계산한 남은 분, 1분마다 한 번 실어 보내면 된다. 보여 줄 값이 바뀔 때만 팀에 transport.eta, 병원에 incoming.updated (SFR-121·132).
+         *
+         *     **요구사항**: SFR-037, SFR-079, SFR-039, SFR-041, SER-002
+         *     **화면**: S-09 경로 안내
+         *     **오류 코드**: NOT_FOUND, NOT_NAV_DEVICE, INVALID_TRANSITION, VALIDATION_FAILED
+         */
+        post: operations["post_transports__transportId__locations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/destination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 목적지 변경 (이송 건당 1번)
+         * @description moving → requesting. 새 병원을 고르는 API가 아니다: 이전 목적지는 닫힘(dest_changed)·제외 병원, 현재 위치 기준 반경 안 병원에 새 회차(dest_change). 경로 안내 유지, 소요시간은 처음 출발 시각 기준. 이미 바꿨으면 '이송 취소 후 새로 요청' 안내.
+         *
+         *     **요구사항**: SFR-077, SFR-156
+         *     **화면**: S-09 경로 안내
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, DESTINATION_CHANGE_USED, REASON_REQUIRED, NO_REQUEST_TARGET, LOCATION_REQUIRED, VALIDATION_FAILED
+         *     **상태 전이 사건**: CHANGE_DESTINATION
+         *
+         *     location이 없으면 출발 위치 기준. 확정 병원(confirmed_hospital_id)은 비우고 이전 목적지·사유·시각(dest_changed_*)을 남긴다. 새 대상이 0곳이면 422 NO_REQUEST_TARGET이고 아무것도 바뀌지 않는다.
+         */
+        post: operations["post_transports__transportId__destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 도착 처리
+         * @description 원본 위치 삭제, 익명 소요시간만 저장. 10분 동안 팀 작성 중 정보에 이번 환자 정보를 남긴다 (SFR-157).
+         *
+         *     **요구사항**: SFR-038, SFR-080, SFR-039, SFR-144
+         *     **화면**: S-10 도착 처리
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
+         *     **상태 전이 사건**: ARRIVE
+         */
+        post: operations["post_transports__transportId__arrive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이송 취소
+         * @description 진행 중 4상태 모두에서. 사유는 user로 기록. 병원 웹(확정 병원 포함)에 '이송 취소'. 대원이 고른 미이송 사유(선택)는 구급활동일지 초안의 미이송 사유 칸이 된다(SFR-164).
+         *
+         *     **요구사항**: SFR-076, SFR-164
+         *     **화면**: S-05 · S-06 · S-08 · S-09
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT
+         *     **상태 전이 사건**: CANCEL
+         */
+        post: operations["post_transports__transportId__cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 통신 두절 중 기록 올리기
+         * @description 오프라인 기록은 조작한 단말 1대에서만 올린다. 승인 선택·취소·목적지 변경은 오프라인으로 남기지 않는다. 같은 이송 건에 서버 쪽 유효 승인·확정이 있으면 history_only + 경보(SFR-099). create_fallback으로 만든 건은 offlineCreated=true, fallbackReason=offline.
+         *
+         *     처리: 보낸 순서대로 기록마다 트랜잭션을 따로 쓴다(한 건이 거절돼도 나머지는 계속). create_fallback = 예비 추천 건 등록(병원 요청은 보내지 않음), 같은 ID면 duplicate, 팀에 다른 진행 중 건이 있으면 cancelled(offline_superseded)로 넣고 history_only. phone_check = 온라인 전화 확인과 같은 함수로 반영(서버가 아직 전화 확인 중이 아니면 그 병원으로 시작, 대상이 다르면 대상만 바꿈). 서버에 유효 승인(5분 안)이나 확정(이동 중)이 있거나 끝난 건이면 phone_check 행(offline)만 남기고 history_only. 같은 clientRecordId면 duplicate. arrive = 이동 중이면 도착, 이미 도착이면 duplicate, 그 밖이면 이력만(history_only). 판정은 DB 시각, 기록 시각(전화 결과·도착·생성)만 occurredAt을 이송 건 생성(도착은 출발)~지금 사이로 맞춰 쓴다. 기록 하나가 상태 전이표·검사에 막히면 outcome rejected + code(예: REASON_REQUIRED, NOT_FOUND). 형식 오류는 요청 전체 400. transport = 마지막 기록의 이송 건 최신 상태(복구 뒤 자동 재조회, SFR-068), 내 팀 건이 아니면 null.
+         *
+         *     **요구사항**: SFR-099, SFR-068, SFR-160
+         *     **화면**: S-11 오프라인 → 복구
+         *     **상태 전이 사건**: CREATE_NO_TARGET, PHONE_ACCEPTED, PHONE_PROCEED, PHONE_REJECTED_NEXT, PHONE_REJECTED_LAST, PHONE_DISMISSED, ARRIVE
+         */
+        post: operations["post_transports_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/pc/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 라이선스 키로 PC 등록
+         * @description 성공하면 Set-Cookie `st_pc`(httpOnly · Secure · SameSite=Strict · Path=/, 실시간 연결에도 씀), 1년. PC_LIMIT_REACHED는 details.pcs[{id, name, lastUsedAt}]를 주고, 그중 하나를 replacePcId로 다시 보내면 교체 등록. TOO_MANY_ATTEMPTS는 details.retryAfterSeconds. 관리자 알림(pc_change) 발생.
+         *
+         *     **요구사항**: SFR-116, SFR-147, COR-012
+         *     **화면**: H-01 PC 등록
+         *     **오류 코드**: INVALID_LICENSE, LICENSE_EXPIRED, ACCOUNT_SUSPENDED, PC_LIMIT_REACHED, TOO_MANY_ATTEMPTS, ORIGIN_NOT_ALLOWED
+         */
+        post: operations["post_hw_pc_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 현재 PC·병원 정보
+         * @description 병원 계정이 정지됐으면 ACCOUNT_SUSPENDED (등록 PC를 쓰는 모든 /hw API 공통, SFR-123).
+         *
+         *     **요구사항**: SFR-116, SFR-146, SFR-139
+         *     **화면**: H-01 · 상단 바
+         *     **오류 코드**: PC_NOT_REGISTERED, LICENSE_EXPIRED, ACCOUNT_SUSPENDED
+         */
+        get: operations["get_hw_session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 근무 시작 (담당자 이름)
+         * @description PC 1대에 진행 중 근무는 1개. 앞 근무가 남아 있으면 끝내고 새로 시작하고, 그 PC 탭들에 hospital.alarm_off{shift_ended}. 새 근무는 알림이 꺼진 채로 시작한다.
+         *
+         *     **요구사항**: SFR-117
+         *     **화면**: H-01 근무 시작
+         */
+        post: operations["post_hw_shifts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/shifts/current/alarm-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 알림 켜기 (이때부터 요청 대상)
+         * @description 브라우저 소리 정책 때문에 사람이 버튼을 눌러야 한다. 웹은 shiftId를 메모리에 두고 재연결 때 alarm.resume에 쓴다. 진행 중 근무가 없거나 socketId가 이 PC의 /hospital 연결이 아니면 NOT_FOUND.
+         *
+         *     **요구사항**: SFR-117, SFR-136
+         *     **화면**: H-01 근무 시작
+         *     **오류 코드**: NOT_FOUND
+         */
+        post: operations["post_hw_shifts_current_alarm_on"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/shifts/current/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 근무 종료
+         * @description 이 PC를 :on 방에서 빼고 hospital.alarm_off{shift_ended}. 진행 중 근무가 없으면 NOT_FOUND.
+         *
+         *     **요구사항**: SFR-117
+         *     **화면**: H-02
+         */
+        post: operations["post_hw_shifts_current_end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 잠시 요청 중지 / 다시 받기
+         * @description 병원 전체에 적용(병원 행 FOR UPDATE). 중지하면 응답 마감(2분) 전인 대기 요청은 '요청 중지'로 자동 거절(reason paused, 통계 제외, 제외 병원 아님) — 대원 앱에 request.rejected{reason: paused}, 회차에 남은 요청이 없으면 역방향 연쇄로 예비 추천. 이미 승인한 요청은 그대로. 병원 전체 PC에 hospital.pause_changed{paused, byPcName, byName, pausedAt}. 이미 같은 상태면 아무것도 바꾸지 않고 204. 중지 2시간째(paused_at 기준, DB now()) 1분 주기 작업이 hospital.pause_reminder를 같은 중지에 한 번만. 근무 전 PC는 SHIFT_REQUIRED.
+         *
+         *     **요구사항**: SFR-139
+         *     **화면**: H-02 탭
+         *     **오류 코드**: SHIFT_REQUIRED, VALIDATION_FAILED
+         *     **상태 전이 사건**: PAUSE_AUTO_REJECT
+         */
+        put: operations["put_hw_pause"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 요청 목록 (남은 시간 짧은 순)
+         * @description 우리 병원 요청만. all의 닫힌·만료·거절 건은 결과만 주고 환자 정보 칸은 null.
+         *
+         *     **요구사항**: SFR-135, SFR-155, SER-014
+         *     **화면**: H-02 요청 목록
+         */
+        get: operations["get_hw_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 요청 상세 (열람 기록 남김)
+         * @description 다른 병원 요청이면 404. 열람 기록에 담당자 이름을 남겨야 해서 근무를 시작하지 않은 PC는 SHIFT_REQUIRED. 환자 정보는 대기·승인·확정, 도착 후 1시간까지만. 그 밖은 REQUEST_CLOSED + details.status.
+         *
+         *     **요구사항**: SFR-118, SFR-137, SER-014
+         *     **화면**: H-02 요청 상세
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, REQUEST_CLOSED
+         */
+        get: operations["get_hw_requests__requestId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 승인 (+메모)
+         * @description 두 PC가 동시에 눌러도 먼저 온 것만. 나중 PC는 ALREADY_RESPONDED + details.respondedBy·pcName·status·version. 응답자 이름은 그 PC의 진행 중 근무 담당자라서 근무 전 PC는 SHIFT_REQUIRED. 우리 병원 유효 승인 수 ≥ 응급실 가용 병상이면 OVER_APPROVAL_CONFIRM_REQUIRED + details.validApprovals·erAvail (병상 정보가 없으면 막지 않음). 대원 앱에 request.approved{firstApproval}, 같은 병원 PC에 request.changed{byName, pcName}.
+         *
+         *     **요구사항**: SFR-119, SFR-140, SFR-154, SFR-153, SFR-160
+         *     **화면**: H-02 요청 상세
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, OVER_APPROVAL_CONFIRM_REQUIRED
+         *     **상태 전이 사건**: APPROVE
+         */
+        post: operations["post_hw_requests__requestId__approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 거절 (사유 필수)
+         * @description 제외 병원에 추가, 통계에 들어감. etc는 etcText까지 있어야 사유로 본다 (없으면 REASON_REQUIRED). 근무 전 PC는 SHIFT_REQUIRED. 이번 회차에 대기·유효 승인이 하나도 안 남으면 이송 건은 예비 추천(NO_OPEN_REQUEST, all_rejected). 대원 앱에 request.rejected, 같은 병원 PC에 request.changed.
+         *
+         *     **요구사항**: SFR-119, SFR-126
+         *     **화면**: H-02 거절 사유
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REQUEST_EXPIRED, REQUEST_CLOSED, REASON_REQUIRED
+         *     **상태 전이 사건**: REJECT
+         */
+        post: operations["post_hw_requests__requestId__reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/cancel-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 승인 취소 (사유 필수)
+         * @description approved·confirmed에서. 대원 앱에 경보 request.cancelled(wasConfirmed). 확정 병원이면 이송 건은 moving 유지 + '다시 요청' 버튼. 자동 재요청 없음. 그 병원은 excluded_hospital(approval_cancelled)에 들어가 '다시 요청'에서도 빠진다. 선택 전이면 회차에 대기·유효 승인이 남았는지 보고 이송 건은 그대로 또는 예비 추천(approvals_cancelled). 같은 병원 PC에 request.changed{closed, approval_cancelled, byName}, 확정 병원이면 incoming.removed{approval_cancelled}. 승인한 담당자·메모는 그대로 남긴다. 근무 전 PC는 SHIFT_REQUIRED, version이 다르면 ALREADY_RESPONDED.
+         *
+         *     **요구사항**: SFR-128, SFR-130
+         *     **화면**: H-02 · H-03
+         *     **오류 코드**: NOT_FOUND, SHIFT_REQUIRED, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, ALREADY_RESPONDED, REASON_REQUIRED, REQUEST_NOT_APPROVED, REQUEST_CLOSED
+         *     **상태 전이 사건**: CANCEL_APPROVAL
+         */
+        post: operations["post_hw_requests__requestId__cancel_approval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/incoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 도착 예정 환자
+         * @description 우리 병원으로 확정된 이송 건(이동 중) + 도착 1시간 안의 건(도착·수용 불가). 구급차 위치·거리·구급대 소속은 주지 않는다. etaMin = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분. summary는 도착 후 1시간까지만.
+         *
+         *     **요구사항**: SFR-121, SFR-105, SFR-158
+         *     **화면**: H-03 도착 예정
+         */
+        get: operations["get_hw_incoming"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/extra-memo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 추가 메모 (1번)
+         * @description 확정 요청에만, 1번만 (상태는 바뀌지 않고 version만 +1). 대원 앱에 경보 hospital.extra_memo {transportId, hospitalRequestId, hospitalName} — 메모 글은 이벤트에 넣지 않고(절대 규칙 5) 앱이 GET /transports/current 의 extraMemo로 받는다. 같은 병원 PC에 request.changed·incoming.updated. 확정 전(대기·승인) 요청은 INVALID_TRANSITION, 끝난 요청은 REQUEST_CLOSED.
+         *
+         *     **요구사항**: SFR-140
+         *     **화면**: H-03 도착 예정, H-02 요청 상세
+         *     **오류 코드**: NOT_FOUND, EXTRA_MEMO_USED, REQUEST_CLOSED, VERSION_CONFLICT, VERSION_REQUIRED, INVALID_TRANSITION, SHIFT_REQUIRED
+         */
+        post: operations["post_hw_requests__requestId__extra_memo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/confirm-arrival": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 병원에서 도착 확인
+         * @description 위치 있는 건: 구급차 마지막 위치가 입구 200m 안일 때만 → 이송 건 arrived(method=hospital, 시스템 사건이라 transport version은 서버가 확인). 위치 없는 건: 상태를 바꾸지 않고 대원 앱에 transport.arrive_requested → 대원이 arrive(method=hospital). version은 병원 요청(hospital_request)의 version. 위치 동의 건인데 위치 기록이 아직 없으면 판단할 수 없어 AMBULANCE_NOT_NEAR. 병원 웹에는 위치·거리를 주지 않는다. 근무 중인 PC만 (SHIFT_REQUIRED).
+         *
+         *     **요구사항**: SFR-144
+         *     **화면**: H-03 도착 예정
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, AMBULANCE_NOT_NEAR, SHIFT_REQUIRED
+         *     **상태 전이 사건**: ARRIVE
+         */
+        post: operations["post_hw_requests__requestId__confirm_arrival"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hw/requests/{requestId}/unacceptable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 도착 후 수용 불가 (10분 안)
+         * @description 대원 앱에 경보 transport.unacceptable {transportId, hospitalName, reason 코드} + 푸시('A병원 수용 불가 · 해당 전문의 부재'). 기타 글(etcText)은 병원 요청에만 저장하고 이벤트·푸시에는 넣지 않는다. 이 병원은 직전 건을 이어 쓰는 다음 이송에서 자동 제외(unacceptable_prev). 거절 원장에 출처 unacceptable 1줄(SFR-126·106). version은 병원 요청 version. 근무 중인 PC만(SHIFT_REQUIRED).
+         *
+         *     **요구사항**: SFR-158
+         *     **화면**: H-03 도착 예정
+         *     **오류 코드**: NOT_FOUND, INVALID_TRANSITION, VERSION_REQUIRED, VERSION_CONFLICT, WINDOW_PASSED, REASON_REQUIRED, SHIFT_REQUIRED
+         *     **상태 전이 사건**: UNACCEPTABLE
+         */
+        post: operations["post_hw_requests__requestId__unacceptable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 관리자 로그인 (비밀번호 + OTP)
+         * @description OTP를 아직 연결하지 않은 관리자(초기 데이터)는 403 OTP_SETUP_REQUIRED + details{setupToken(5분), otpauthUrl} → QR을 보여주고 /admin/auth/otp/enroll.
+         *
+         *     **요구사항**: SFR-082, SFR-152
+         *     **화면**: A-01 로그인
+         *     **오류 코드**: INVALID_CREDENTIALS, INVALID_OTP, ACCOUNT_LOCKED, OTP_SETUP_REQUIRED, ORIGIN_NOT_ALLOWED
+         */
+        post: operations["post_admin_auth_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/auth/otp/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 첫 로그인 OTP 앱 연결
+         * @description 성공하면 otp_enrolled_at 기록 후 바로 로그인.
+         *
+         *     **요구사항**: SFR-152
+         *     **화면**: A-01 로그인
+         *     **오류 코드**: INVALID_OTP, TOKEN_EXPIRED
+         */
+        post: operations["post_admin_auth_otp_enroll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/signups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 가입 승인 대기 목록
+         * @description **요구사항**: SFR-083
+         *     **화면**: A-01 가입 승인
+         */
+        get: operations["get_admin_signups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/signups/{id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 공무원증 사진 보기 (열람 기록)
+         * @description 응답 image/jpeg 또는 image/png(가입 때 올린 형식 그대로), `Cache-Control: no-store`. 작업 이력에 열람 1건.
+         *
+         *     **요구사항**: SFR-083, DAR-012, SER-015
+         *     **화면**: A-01 가입 승인
+         *     **오류 코드**: NOT_FOUND, PHOTO_DELETED
+         */
+        get: operations["get_admin_signups__id__photo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/signups/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가입 승인
+         * @description 사진 즉시 삭제, 대원에게 account.signup_result + 푸시. 이미 승인·반려한 신청은 409 ALREADY_RESPONDED.
+         *
+         *     **요구사항**: SFR-083, SFR-091
+         *     **화면**: A-01 가입 승인
+         *     **오류 코드**: NOT_FOUND, ALREADY_RESPONDED
+         */
+        post: operations["post_admin_signups__id__approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/signups/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가입 반려
+         * @description 사진 즉시 삭제, 대원에게 반려 사유와 함께 알림. 대원은 PUT /me/signup으로 재신청. 기타 사유는 etcText 필수(없으면 422 REASON_REQUIRED), 작업 이력에만 남음(대원에게는 사유 코드만). 이미 처리한 신청은 409 ALREADY_RESPONDED.
+         *
+         *     **요구사항**: SFR-083
+         *     **화면**: A-01 가입 승인
+         *     **오류 코드**: NOT_FOUND, REASON_REQUIRED, ALREADY_RESPONDED
+         */
+        post: operations["post_admin_signups__id__reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/paramedics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 대원 계정 검색
+         * @description **요구사항**: SFR-151
+         *     **화면**: A-01 대원 계정
+         */
+        get: operations["get_admin_paramedics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/paramedics/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 대원 계정 정지 (즉시 로그아웃)
+         * @description 모든 토큰 폐기 + account.force_logout + 연결 끊기, 10초 안. 팀에서 빠지고 마지막 1명이면 이송 취소(suspended). 승인된 계정만 정지(승인 대기·반려는 409 INVALID_TRANSITION), 이미 정지된 계정은 204로 아무것도 바꾸지 않음.
+         *
+         *     **요구사항**: SFR-151, SER-016
+         *     **화면**: A-01 대원 계정
+         *     **오류 코드**: NOT_FOUND, ACTIVE_TRANSPORT_CONFIRM_REQUIRED, INVALID_TRANSITION
+         *     **상태 전이 사건**: CANCEL
+         */
+        post: operations["post_admin_paramedics__id__suspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/paramedics/{id}/unsuspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 정지 해제
+         * @description **요구사항**: SFR-151
+         *     **화면**: A-01 대원 계정
+         *     **오류 코드**: NOT_FOUND
+         */
+        post: operations["post_admin_paramedics__id__unsuspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/paramedics/{id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 비밀번호 초기화
+         * @description 임시 비밀번호(10자)를 이 응답에서 한 번만 준다(Cache-Control: no-store). mustChangePassword를 켜고, 로그인 잠금을 풀고, 다른 기기의 로그인을 모두 끝낸다. 작업 이력 1건(임시 비밀번호는 남기지 않음). 탈퇴·없는 계정은 404.
+         *
+         *     **요구사항**: SFR-021
+         *     **화면**: A-01 대원 계정
+         *     **오류 코드**: NOT_FOUND
+         */
+        post: operations["post_admin_paramedics__id__reset_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 병원 검색 (공공 데이터)
+         * @description **요구사항**: SFR-123
+         *     **화면**: A-03 병원 관리
+         */
+        get: operations["get_admin_hospitals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals/{id}/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 병원 계정 + 라이선스 키 발급
+         * @description **요구사항**: SFR-123, COR-013
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND, ACCOUNT_EXISTS
+         */
+        post: operations["post_admin_hospitals__id__account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals/{id}/license-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 키 재발급 (사유)
+         * @description 이전 키 폐기 → 그 키로 등록한 PC 전부 pc.revoked{key_revoked}.
+         *
+         *     **요구사항**: SFR-146
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND, REASON_REQUIRED
+         */
+        post: operations["post_admin_hospitals__id__license_keys"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/license-keys/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 키 폐기 (사유)
+         * @description 키와 등록 PC 전부 즉시 무효, pc.revoked{key_revoked}. 작업 이력에 사유.
+         *
+         *     **요구사항**: SFR-146
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND, REASON_REQUIRED
+         */
+        post: operations["post_admin_license_keys__id__revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 병원 계정 정지 (모든 PC 차단)
+         * @description pc.revoked{account_suspended}. 대기 요청은 요청 대상에서 빠짐.
+         *
+         *     **요구사항**: SFR-123
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND
+         */
+        post: operations["post_admin_hospitals__id__suspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals/{id}/pcs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 등록 PC 목록
+         * @description **요구사항**: SFR-147
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND
+         */
+        get: operations["get_admin_hospitals__id__pcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pcs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * PC 해제
+         * @description 그 PC에 pc.revoked{pc_released}.
+         *
+         *     **요구사항**: SFR-147
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND
+         */
+        delete: operations["delete_admin_pcs__id"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/hospitals/{id}/entrance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 응급실 입구 좌표 지정
+         * @description 지도에서 찍은 좌표 저장. 앱 목적지·병원 웹 도착 확인(200m)이 이 좌표를 먼저 쓴다. 작업 이력 1건(좌표 값은 남기지 않음). 대한민국 밖 좌표는 400.
+         *
+         *     **요구사항**: SFR-145
+         *     **화면**: A-03 병원 관리
+         *     **오류 코드**: NOT_FOUND, VALIDATION_FAILED
+         */
+        put: operations["put_admin_hospitals__id__entrance"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 관리자 알림
+         * @description **요구사항**: SFR-100, SFR-148
+         *     **화면**: A-02 모니터링
+         *
+         *     kind: collect_fail · signup · pc_change · key_expiring(30·7·1일 전) · odd_pc · api_quota(80% 도달·한도 초과를 따로, SFR-090) · integrity(일 단위 정합성 점검, 문구에 발견 건수, QUR-014)
+         */
+        get: operations["get_admin_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 알림 읽음
+         * @description **요구사항**: SFR-100
+         *     **화면**: A-02 모니터링
+         *     **오류 코드**: NOT_FOUND
+         */
+        post: operations["post_admin_notifications__id__read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작업 이력 (수정·삭제 불가)
+         * @description **요구사항**: SFR-091
+         *     **화면**: A-02 모니터링
+         */
+        get: operations["get_admin_audit_logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/stats/hospitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 병원 응답 통계
+         * @description 기간 안에 요청이 간 병원만, 이름순. 응답률·응답 시간은 병원 웹에서 직접 누른 응답만(요청 중지 자동 거절·전달 실패·아직 2분이 안 끝난 대기는 뺌). 요청 10건 미만이면 sampleTooSmall=true 이고 수치 칸은 null. 거절률 급등(rejectSpike)은 고른 기간과 상관없이 7일 vs 30일, 둘 다 10건 이상일 때만. 대원·이송 건 정보는 없음(DAR-004).
+         *
+         *     **요구사항**: SFR-106, SFR-126
+         *     **화면**: A-02 모니터링
+         */
+        get: operations["get_admin_stats_hospitals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/request-targets/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 요청 대상 미리보기
+         * @description '병원에 요청'을 누르기 전에 지금 조건으로 요청이 갈 병원 수. 0곳이면 앱은 요청 버튼 대신 '등급 바꾸기'·'반경 넓히기'를 보여준다.
+         *
+         *     **요구사항**: SFR-163, SFR-109
+         *     **화면**: S-04 하단
+         */
+        get: operations["get_request_targets_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports/{transportId}/journal-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 구급활동일지 초안 (자동 항목)
+         * @description 이송 종료(도착·취소) 후 10분 안에 팀원이 부른다(종료 뒤 팀 연결을 기억하는 시간, DAR-013). 앱은 받은 초안을 단말에 7일 보관하고 그 뒤 다시 부르지 않는다. 종료 전이면 409 TRANSPORT_NOT_ENDED, 10분이 지나면 404.
+         *
+         *     **요구사항**: SFR-164, DAR-015
+         *     **화면**: S-13 구급활동일지
+         *     **오류 코드**: NOT_FOUND, TRANSPORT_NOT_ENDED
+         */
+        get: operations["get_transports__transportId__journal_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/journal/ai-organize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * AI 일지 정리 (제안)
+         * @description 대원 메모 글을 일지 항목별로 나눈 제안을 돌려준다(음성 입력은 CR-007로 삭제). 서버가 식별정보(names로 받은 이름 칸 값·전화번호·주민번호 형태·주소 모양)를 [삭제]로 바꾼 뒤 AI(OpenAI)로 보내고, AI 답에서도 한 번 더 지운다. 원문·응답은 저장·로그하지 않는다(SER-017). 제한시간 AI_TIMEOUT_MS(기본 10초) 넘거나 제공사 오류·키 없음이면 503 AI_UNAVAILABLE(INR-006). 기능 토글 journalAi가 꺼져 있으면 403 FEATURE_DISABLED. 응답은 Cache-Control no-store. 앱은 제안만 보여 주고 '적용'을 눌러야 초안에 넣는다.
+         *
+         *     **요구사항**: SFR-167, SER-017, INR-006, QUR-013
+         *     **화면**: S-13
+         *     **오류 코드**: FEATURE_DISABLED, AI_UNAVAILABLE, VALIDATION_FAILED
+         */
+        post: operations["post_journal_ai_organize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 앱·웹 설정 (기능 토글)
+         * @description 로그인 없이 부름. 앱·웹은 1분마다 다시 읽어 꺼진 기능의 버튼을 숨긴다 (QUR-013). featureFlags 는 feature_flag 표(없는 키는 false), minAppVersion 은 서버 환경 변수 MIN_APP_VERSION(숫자 3개, 기본 1.0.0). 앱은 자기 버전이 더 낮으면 기능을 막고 '업데이트가 필요해요'만 보여 준다 (SFR-142). 대원·병원 서버(main)에만 있다.
+         *
+         *     **요구사항**: QUR-013, SFR-142
+         */
+        get: operations["get_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/feature-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 기능 토글 보기
+         * @description **요구사항**: QUR-013
+         *     **화면**: A-02
+         */
+        get: operations["get_admin_feature_flags"];
+        /**
+         * 기능 토글 바꾸기
+         * @description 바꿀 칸만 보낸다(둘 다 없거나 모르는 칸이면 400). 값이 실제로 바뀐 기능만 작업 이력에 1줄씩 (기능 켜기·기능 끄기). 앱·웹은 GET /config 를 1분마다 읽어 1분 안 반영. 응답은 바꾼 뒤 전체 값.
+         *
+         *     **요구사항**: QUR-013, SFR-091
+         *     **화면**: A-02
+         *     **오류 코드**: VALIDATION_FAILED
+         */
+        put: operations["put_admin_feature_flags"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    Health: {
-      /** @enum {string} */
-      status: 'ok' | 'error';
-      checks: {
-        /** @enum {string} */
-        db?: 'ok' | 'error';
-        /** @enum {string} */
-        redis?: 'ok' | 'error';
-      };
-    };
-    Error: {
-      error: {
-        /** @description 기계용 오류 코드 (오류 코드표) */
-        code: string;
-        /** @description 사람이 읽는 한국어 메시지 */
-        message: string;
-        /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[{id, name, lastUsedAt}], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
-        details?: Record<string, never> | null;
-      };
-    };
-    LatLng: {
-      lat: number;
-      lng: number;
-    };
-    Tokens: {
-      /** @description 15분 유효 JWT */
-      accessToken?: string;
-      /** @description 로그인부터 최대 14시간(근무 단위, SER-007). 서버에 해시만 저장해 폐기 가능(SER-016). 재발급할 때마다 새 값으로 바뀌고 예전 값은 다시 못 쓴다 */
-      refreshToken?: string;
-    };
-    Me: {
-      id?: number;
-      name?: string;
-      rank?: string;
-      /** @description 소방서 이름 */
-      agency?: string;
-      safetyCenter?: string;
-      /** @enum {string} */
-      status?: 'pending' | 'approved' | 'rejected' | 'suspended';
-      /**
-       * @description 반려 사유 (rejected일 때)
-       * @enum {string|null}
-       */
-      rejectReason?:
-        'photo_unclear' | 'info_mismatch' | 'agency_unverified' | 'etc' | 'photo_expired' | null;
-      /**
-       * Format: date-time
-       * @description 가입 신청(재신청) 시각. 신청 없이 만든 계정(개발용)은 null
-       */
-      appliedAt?: string | null;
-      mustChangePassword?: boolean;
-      /** @description 근무 중인 팀, 없으면 null */
-      teamId?: number | null;
-      /** @description 팀에 진행 중 이송 (근무 종료 확인 판단, SFR-113) */
-      hasActiveTransport?: boolean;
-    };
-    Member: {
-      paramedicId?: number;
-      name?: string;
-      rank?: string;
-      /** @enum {string} */
-      role?: 'driver' | 'care';
-      isMe?: boolean;
-    };
-    Team: {
-      id?: number;
-      /** @description 4자리 팀 코드 */
-      code?: string;
-      qrToken?: string;
-      members?: components['schemas']['Member'][];
-      /** @example 4 */
-      maxMembers?: number;
-    };
-    OnDutyParamedic: {
-      paramedicId?: number;
-      name?: string;
-      rank?: string;
-      safetyCenter?: string;
-      /** @description 사번 끝 4자리 (동명이인 구분) */
-      employeeNoTail?: string;
-      /** @description 나만 보는 메모 (SFR-143) */
-      myMemo?: string | null;
-      onDuty?: boolean;
-      /** @description 이미 다른 팀 → 초대 불가 */
-      inTeam?: boolean;
-      /** @enum {string} */
-      inviteStatus?: 'none' | 'sent' | 'accepted';
-    };
-    /** @description 환자 평가 (SFR-108). 이름·주민번호·연락처 필드는 없음 (SER-012) */
-    Assessment: {
-      /** @description 주 증상 (직접 입력, 필수) */
-      chiefComplaint: string;
-      /**
-       * @description U = 확인 불가
-       * @enum {string}
-       */
-      sex?: 'M' | 'F' | 'U';
-      /** @description 예: 60s, under1, 1-14, 15-19, 90plus */
-      ageBand?: string;
-      /** @enum {string} */
-      consciousness?: 'alert' | 'verbal' | 'pain' | 'unresponsive' | 'unknown';
-      /** @description 예: 160/95, 또는 unknown */
-      bp?: string;
-      pulse?: number | null;
-      resp?: number | null;
-      spo2?: number | null;
-      painSite?: string | null;
-      painScore?: number | null;
-      onset?: string | null;
-      /** @enum {string} */
-      trauma?: 'yes' | 'no' | 'unknown';
-      /** @enum {string|null} */
-      traumaCause?: 'traffic' | 'fall_high' | 'fall' | 'penetrating' | 'burn' | 'etc' | null;
-      history?: string | null;
-      temp?: number | null;
-      glucose?: number | null;
-      ktas?: number | null;
-      /** @description '확인 불가'로 보낸 항목 이름 */
-      unknownFields?: string[];
-    };
-    Round: {
-      roundNo?: number;
-      /** @enum {string} */
-      kind?: 'first' | 'expand' | 're_request' | 'dest_change';
-      /** @enum {integer} */
-      radiusKm?: 10 | 20 | 30 | 40;
-      /** Format: date-time */
-      sentAt?: string;
-      /**
-       * Format: date-time
-       * @description sentAt + 2분 (서버 시각)
-       */
-      respondUntil?: string;
-      /**
-       * Format: date-time
-       * @description sentAt + 5분
-       */
-      approvalValidUntil?: string;
-      /** @description 요청을 보낸 병원 수 */
-      targetCount?: number;
-      /** @description '받았음'을 돌려준 병원 수 */
-      deliveredCount?: number;
-      /** @description 5초 판정 끝 */
-      deliveryFinal?: boolean;
-    };
-    /** @description 대원 앱에서 보는 병원 요청 1건 (환자 정보 없음) */
-    AppHospitalRequest: {
-      id?: number;
-      hospitalId?: number;
-      hospitalName?: string;
-      /** @description 지도 표시 (SFR-149) */
-      lat?: number;
-      lng?: number;
-      /** @enum {string} */
-      status?:
-        | 'waiting'
-        | 'delivery_failed'
-        | 'approved'
-        | 'rejected'
-        | 'expired'
-        | 'closed'
-        | 'confirmed'
-        | 'arrived'
-        | 'unacceptable';
-      /** @enum {string|null} */
-      closeReason?:
-        | 'other_hospital'
-        | 'fallback'
-        | 'cancelled'
-        | 'expired_approval'
-        | 'approval_cancelled'
-        | 'dest_changed'
-        | null;
-      etaMin?: number;
-      /**
-       * @description 직선 추정 → 길찾기로 갱신 (SFR-129)
-       * @enum {string}
-       */
-      etaSource?: 'straight' | 'route';
-      /** @description 예: 4/10 */
-      erBeds?: string;
-      /** @description 병원 승인 메모 */
-      memo?: string | null;
-      /** @description 확정 뒤 추가 메모 (SFR-140) */
-      extraMemo?: string | null;
-      /**
-       * @description 거절·승인 취소 사유
-       * @enum {string|null}
-       */
-      reason?: 'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc' | null;
-      /** @description 기타 사유 글 */
-      reasonText?: string | null;
-      /** Format: date-time */
-      approvedAt?: string | null;
-      /** @description 승인 병원 중 가장 가까움 */
-      isClosest?: boolean;
-      /** @description 직전 승인 · 재확인 (SFR-156) */
-      prevApprovedRecheck?: boolean;
-      /** @description hospital_request.version */
-      version?: number;
-    };
-    Transport: {
-      /** Format: uuid */
-      id?: string;
-      /**
-       * @description 상태 전이표 v0.2
-       * @enum {string}
-       */
-      status?: 'requesting' | 'fallback' | 'phone_check' | 'moving' | 'arrived' | 'cancelled';
-      /** @description transport 행이 바뀔 때마다 +1. 바꾸는 요청에 같이 보냄 (SFR-160) */
-      version?: number;
-      /**
-       * Format: date-time
-       * @description 응답 시점 서버 시각 → 남은 시간 계산 기준 (SFR-110)
-       */
-      serverNow?: string;
-      /** @enum {integer} */
-      requestRadiusKm?: 10 | 20 | 30 | 40;
-      /** @enum {integer} */
-      fallbackRadiusKm?: 10 | 20 | 30 | 40;
-      /** @enum {string|null} */
-      fallbackReason?:
-        | 'no_target'
-        | 'offline'
-        | 'all_rejected'
-        | 'expired_no_approval'
-        | 'none_delivered'
-        | 'approvals_cancelled'
-        | 'approval_window'
-        | 'phone_rejected_last'
-        | 'phone_dismissed'
-        | null;
-      currentRound?: components['schemas']['Round'] | null;
-      /** @description 현재 회차 + 확정 요청. 승인은 승인 시각 순 (SFR-110) */
-      requests?: components['schemas']['AppHospitalRequest'][];
-      /** @description 전화 확인 중인 병원 (phone_check일 때) */
-      phoneTarget?: {
-        hospitalId?: number;
-        name?: string;
-        erPhone?: string;
-      } | null;
-      /** @description 이동 중 목적지. requestStatus=closed·closeReason=approval_cancelled면 '다시 요청' 버튼 */
-      confirmedHospital?: {
-        id?: number;
-        name?: string;
-        /** @description 응급실 전화번호. 경로 안내 중 '병원 전화' 버튼 (SFR-097) */
-        erPhone?: string | null;
-        memo?: string | null;
-        extraMemo?: string | null;
-        entrance?: components['schemas']['LatLng'];
-        /**
-         * @description 전화 확인으로 출발한 병원은 병원 요청이 없어 null (SFR-034)
-         * @enum {string|null}
-         */
-        requestStatus?:
-          | 'waiting'
-          | 'delivery_failed'
-          | 'approved'
-          | 'rejected'
-          | 'expired'
-          | 'closed'
-          | 'confirmed'
-          | 'arrived'
-          | 'unacceptable'
-          | null;
-        /** @enum {string|null} */
-        closeReason?:
-          | 'other_hospital'
-          | 'fallback'
-          | 'cancelled'
-          | 'expired_approval'
-          | 'approval_cancelled'
-          | 'dest_changed'
-          | null;
-      } | null;
-      /** @description 확정 병원이 승인 취소함 → 다시 요청 가능 (부록 A20) */
-      canReRequest?: boolean;
-      /** @description 목적지 변경 1번 사용 (SFR-077) */
-      destinationChangeUsed?: boolean;
-      /** @description 경로 안내 담당 단말 */
-      navDeviceId?: string | null;
-      /** @description 이동 중 남은 분 = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분 (SFR-121·132). 이동 중이 아니면 null */
-      etaMin?: number | null;
-      /**
-       * Format: date-time
-       * @description 처음 출발 시각 (SFR-036)
-       */
-      departedAt?: string | null;
-      lastSentAssessmentSeq?: number;
-      /** @description '변경 사항 보내기(n)'의 n. 팀 작성 중 정보와 마지막으로 보낸 값을 칸별로 비교한 수. 끝난 건은 0 (SFR-105) */
-      pendingChanges?: number;
-      excludedHospitalIds?: number[];
-      locationConsent?: boolean;
-      /** @description 위치 미동의 건 주소 */
-      address?: string | null;
-      /** @description 통신 두절 중 만든 건 */
-      offlineCreated?: boolean;
-      /** Format: date-time */
-      createdAt?: string;
-      /**
-       * @description 병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)
-       * @enum {integer|null}
-       */
-      requestedGrade?: 1 | 2 | 3 | null;
-      /** @description 이동 거리 (종료 후, 구급활동일지용, SFR-041) */
-      distanceKm?: number | null;
-    };
-    HospitalCard: {
-      id?: number;
-      name?: string;
-      /** @description 지도 표시 (SFR-027) */
-      lat?: number;
-      lng?: number;
-      address?: string;
-      distanceKm?: number;
-      /** @description 도로 기준 예상 이동시간(분). 게이트를 통과한 후보 중 직선거리 가까운 10곳만 카카오 자동차 길찾기로 구함(SFR-072). 실패·한도 초과·10곳 밖이면 null → '예상 이동시간 없음'(SFR-073). 정렬에는 쓰지 않음 */
-      etaMin?: number | null;
-      beds?: {
-        /** @description 가용/전체, 예: 2/8. 전체가 비면 가용만(예: 3), 가용이 비면 null(정보 없음, SFR-089) */
-        er?: string | null;
-        icu?: string | null;
-        or?: string | null;
-      };
-      /**
-       * Format: date-time
-       * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt
-       */
-      bedsSourceTime?: string | null;
-      /**
-       * Format: date-time
-       * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
-       */
-      collectedAt?: string | null;
-      /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
-      stale?: boolean | null;
-      /** @description 진료가능 항목 (오프라인 저장용, SFR-059). /hospitals/nearby 에만 있고 추천 목록 카드에는 없다(개수만, capabilityCount) */
-      capabilities?: {
-        name?: string;
-        available?: boolean;
-      }[];
-      /** @description 중증질환 진료가능 항목 수 (SFR-002) */
-      capabilityCount?: {
-        available?: number;
-        total?: number;
-      };
-      /** @description false면 '병상 정보 없음' */
-      inRegion?: boolean;
-      erPhone?: string;
-      /** @description 추천 순위 1~5, 추천 카드가 아니면 null */
-      rank?: number | null;
-      /** @description 이번 이송 제외 병원 */
-      excluded?: boolean;
-      /**
-       * @description 병원 등급 (부록 F)
-       * @enum {integer}
-       */
-      grade?: 1 | 2 | 3;
-    };
-    HospitalDetail: {
-      id?: number;
-      name?: string;
-      lat?: number;
-      lng?: number;
-      address?: string | null;
-      departments?: string[];
-      erPhone?: string | null;
-      mainPhone?: string | null;
-      beds?: {
-        er?: {
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          avail?: number | null;
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          total?: number | null;
+    schemas: {
+        Health: {
+            /** @enum {string} */
+            status: "ok" | "error";
+            checks: {
+                /** @enum {string} */
+                db?: "ok" | "error";
+                /** @enum {string} */
+                redis?: "ok" | "error";
+            };
         };
-        icu?: {
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          avail?: number | null;
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          total?: number | null;
+        Error: {
+            error: {
+                /** @description 기계용 오류 코드 (오류 코드표) */
+                code: string;
+                /** @description 사람이 읽는 한국어 메시지 */
+                message: string;
+                /** @description 코드별 추가 정보. VERSION_CONFLICT·INVALID_TRANSITION → current(최신 Transport 또는 요청 상태), ALREADY_RESPONDED → respondedBy·pcName, PC_LIMIT_REACHED → pcs[{id, name, lastUsedAt}], ACTIVE_TRANSPORT_EXISTS → activeTransport{id,status,hospitalName}, OVER_APPROVAL_CONFIRM_REQUIRED → validApprovals·erAvail, VALIDATION_FAILED → fields[] */
+                details?: Record<string, never> | null;
+            };
         };
-        or?: {
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          avail?: number | null;
-          /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
-          total?: number | null;
+        LatLng: {
+            lat: number;
+            lng: number;
         };
-      };
-      /**
-       * Format: date-time
-       * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt. 병상 데이터가 없으면 null
-       */
-      bedsSourceTime?: string | null;
-      /**
-       * Format: date-time
-       * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
-       */
-      collectedAt?: string | null;
-      /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
-      stale?: boolean | null;
-      /** @description 공공 데이터가 '정보미제공'인 항목은 목록에 없음 */
-      capabilities?: {
-        /** @description 공공 데이터 표기 그대로 */
-        name?: string;
-        available?: boolean;
-      }[];
-      /**
-       * @description 병원 등급 (부록 F)
-       * @enum {integer}
-       */
-      grade?: 1 | 2 | 3;
-    };
-    /** @description 병원 웹 요청 목록 1행 (구급대 소속은 표시하지 않음, D-98) */
-    HwRequestItem: {
-      id?: number;
-      /** @description 예: R-102 */
-      label?: string;
-      /** @enum {string} */
-      status?:
-        | 'waiting'
-        | 'delivery_failed'
-        | 'approved'
-        | 'rejected'
-        | 'expired'
-        | 'closed'
-        | 'confirmed'
-        | 'arrived'
-        | 'unacceptable';
-      /** @enum {string|null} */
-      closeReason?:
-        | 'other_hospital'
-        | 'fallback'
-        | 'cancelled'
-        | 'expired_approval'
-        | 'approval_cancelled'
-        | 'dest_changed'
-        | null;
-      /** @description 열 수 있는 요청만. 닫힌 요청은 null (SER-014) */
-      chiefComplaint?: string | null;
-      etaMin?: number | null;
-      /** @enum {string} */
-      etaSource?: 'straight' | 'route';
-      /** Format: date-time */
-      respondUntil?: string;
-      /** @description 정상 범위 밖 항목 수 */
-      abnormalCount?: number | null;
-      prevApprovedRecheck?: boolean;
-      respondedBy?: string | null;
-      /** @description 이 병원이 요청을 받은 뒤 '변경 사항 보내기'로 바뀐 항목 (SFR-105). 환자 정보를 못 여는 건은 빈 목록 */
-      updatedFields?: string[];
-      version?: number;
-    };
-    HwRequestDetail: {
-      id?: number;
-      label?: string;
-      version?: number;
-      /** @enum {string} */
-      status?:
-        | 'waiting'
-        | 'delivery_failed'
-        | 'approved'
-        | 'rejected'
-        | 'expired'
-        | 'closed'
-        | 'confirmed'
-        | 'arrived'
-        | 'unacceptable';
-      /** Format: date-time */
-      respondUntil?: string;
-      /** Format: date-time */
-      serverNow?: string;
-      assessment?: components['schemas']['Assessment'];
-      /** @description 빨간색 강조 대상 (부록 E) */
-      abnormalFields?: string[];
-      updatedFields?: string[];
-      etaMin?: number;
-      /** @enum {string} */
-      etaSource?: 'straight' | 'route';
-      prevApprovedRecheck?: boolean;
-      ourHospital?: {
-        /** @description 증상을 골랐을 때만 */
-        capability?: {
-          name?: string;
-          available?: boolean;
-        } | null;
-        /** @description 가용/전체 (예: 5/20). 수집된 값이 없으면 null */
-        beds?: {
-          er?: string | null;
-          icu?: string | null;
-          or?: string | null;
+        Tokens: {
+            /** @description 15분 유효 JWT */
+            accessToken?: string;
+            /** @description 로그인부터 최대 14시간(근무 단위, SER-007). 서버에 해시만 저장해 폐기 가능(SER-016). 재발급할 때마다 새 값으로 바뀌고 예전 값은 다시 못 쓴다 */
+            refreshToken?: string;
         };
-      };
-      /** @description 우리 병원의 지금 유효한 승인 수 (과승인 경고용) */
-      validApprovals?: number;
-      respondedBy?: string | null;
-      /** @description 승인 메모 (승인할 때 함께 보낸 것) */
-      memo?: string | null;
-      /** @description 확정 뒤 보낸 추가 메모 (SFR-140). 값이 있으면 '추가 메모' 버튼을 숨긴다 */
-      extraMemo?: string | null;
-    };
-    HwIncoming: {
-      id?: number;
-      label?: string;
-      /** @description 예: 남·60대 · S03 두통 (도착 후 1시간까지) */
-      summary?: string | null;
-      /** @enum {string} */
-      status?: 'confirmed' | 'arrived' | 'unacceptable';
-      version?: number;
-      etaMin?: number | null;
-      /** @description 위치 동의 건 → 200m 안에서만 도착 확인 */
-      hasLocation?: boolean;
-      changedFields?: string[];
-      /** Format: date-time */
-      arrivedAt?: string | null;
-      /** @description 위치 있는 건은 입구 200m 안일 때만, 위치 없는 건은 항상 */
-      canConfirmArrival?: boolean;
-      /** @description 도착 후 10분 안 */
-      canMarkUnacceptable?: boolean;
-      extraMemoUsed?: boolean;
-    };
-    SignupItem: {
-      id?: number;
-      name?: string;
-      rank?: string;
-      agencyCode?: string;
-      agencyName?: string;
-      safetyCenter?: string;
-      employeeNo?: string;
-      /** Format: date-time */
-      consentAt?: string;
-      /** Format: date-time */
-      createdAt?: string;
-      /** @description 반려 후 재신청 */
-      resubmitted?: boolean;
-    };
-    AdminHospital: {
-      id?: number;
-      name?: string;
-      accountActive?: boolean;
-      pcCount?: number;
-      /** @example 3 */
-      pcLimit?: number;
-      license?: {
-        id?: number;
-        /** @description 앞 4자리 */
-        prefix?: string;
-        /** Format: date-time */
-        expiresAt?: string;
-        daysLeft?: number;
-      } | null;
-      /** @description 공공 데이터 병원 좌표 (SFR-145 입구 지정 지도의 처음 가운데). 대한민국 밖·없으면 null */
-      location?: components['schemas']['LatLng'] | null;
-      /** @description 응급실 입구 좌표 (SFR-145). null 이면 '입구 좌표 없음', 도착 판정은 location 으로 */
-      entrance?: components['schemas']['LatLng'] | null;
-    };
-    HospitalStat: {
-      hospitalId?: number;
-      name?: string;
-      /** @description 기간 안에 이 병원에 닿은 요청 수 (표본 크기) */
-      requests?: number;
-      /** @description 0~1. 표본 부족이면 null */
-      responseRate?: number | null;
-      avgResponseSec?: number | null;
-      /** @description 이 병원으로 출발한 건의 평균 '요청→출발' */
-      avgRequestToDepartSec?: number | null;
-      /** @enum {string|null} */
-      topRejectReason?:
-        'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc' | null;
-      /** @description (승인 취소 + 수용 불가) ÷ 승인. 표본 부족·승인 0건이면 null */
-      approvalCancelRate?: number | null;
-      unacceptableCount?: number;
-      avgRequestToFirstApprovalSec?: number | null;
-      /** @description 요청 10건 미만 */
-      sampleTooSmall?: boolean;
-      /** @description 최근 7일 거절률이 30일보다 20%p 이상 높음 */
-      rejectSpike?: boolean;
-      /** @description 거절 사유 건수, 출처별 (SFR-106) */
-      rejectBySource?: {
-        hospitalWeb?: {
-          [key: string]: number;
+        Me: {
+            id?: number;
+            name?: string;
+            rank?: string;
+            /** @description 소방서 이름 */
+            agency?: string;
+            safetyCenter?: string;
+            /** @enum {string} */
+            status?: "pending" | "approved" | "rejected" | "suspended";
+            /**
+             * @description 반려 사유 (rejected일 때)
+             * @enum {string|null}
+             */
+            rejectReason?: "photo_unclear" | "info_mismatch" | "agency_unverified" | "etc" | "photo_expired" | null;
+            /**
+             * Format: date-time
+             * @description 가입 신청(재신청) 시각. 신청 없이 만든 계정(개발용)은 null
+             */
+            appliedAt?: string | null;
+            mustChangePassword?: boolean;
+            /** @description 근무 중인 팀, 없으면 null */
+            teamId?: number | null;
+            /** @description 팀에 진행 중 이송 (근무 종료 확인 판단, SFR-113) */
+            hasActiveTransport?: boolean;
         };
-        paused?: {
-          [key: string]: number;
+        Member: {
+            paramedicId?: number;
+            name?: string;
+            rank?: string;
+            /** @enum {string} */
+            role?: "driver" | "care";
+            isMe?: boolean;
         };
-        phoneCheck?: {
-          [key: string]: number;
+        Team: {
+            id?: number;
+            /** @description 4자리 팀 코드 */
+            code?: string;
+            qrToken?: string;
+            members?: components["schemas"]["Member"][];
+            /** @example 4 */
+            maxMembers?: number;
         };
-        approvalCancelled?: {
-          [key: string]: number;
+        OnDutyParamedic: {
+            paramedicId?: number;
+            name?: string;
+            rank?: string;
+            safetyCenter?: string;
+            /** @description 사번 끝 4자리 (동명이인 구분) */
+            employeeNoTail?: string;
+            /** @description 나만 보는 메모 (SFR-143) */
+            myMemo?: string | null;
+            onDuty?: boolean;
+            /** @description 이미 다른 팀 → 초대 불가 */
+            inTeam?: boolean;
+            /** @enum {string} */
+            inviteStatus?: "none" | "sent" | "accepted";
         };
-        unacceptable?: {
-          [key: string]: number;
+        /** @description 환자 평가 (SFR-108). 이름·주민번호·연락처 필드는 없음 (SER-012) */
+        Assessment: {
+            /** @description 주 증상 (직접 입력, 필수) */
+            chiefComplaint: string;
+            /**
+             * @description U = 확인 불가
+             * @enum {string}
+             */
+            sex?: "M" | "F" | "U";
+            /** @description 예: 60s, under1, 1-14, 15-19, 90plus */
+            ageBand?: string;
+            /** @enum {string} */
+            consciousness?: "alert" | "verbal" | "pain" | "unresponsive" | "unknown";
+            /** @description 예: 160/95, 또는 unknown */
+            bp?: string;
+            pulse?: number | null;
+            resp?: number | null;
+            spo2?: number | null;
+            painSite?: string | null;
+            painScore?: number | null;
+            onset?: string | null;
+            /** @enum {string} */
+            trauma?: "yes" | "no" | "unknown";
+            /** @enum {string|null} */
+            traumaCause?: "traffic" | "fall_high" | "fall" | "penetrating" | "burn" | "etc" | null;
+            history?: string | null;
+            temp?: number | null;
+            glucose?: number | null;
+            ktas?: number | null;
+            /** @description '확인 불가'로 보낸 항목 이름 */
+            unknownFields?: string[];
         };
-      };
+        Round: {
+            roundNo?: number;
+            /** @enum {string} */
+            kind?: "first" | "expand" | "re_request" | "dest_change";
+            /** @enum {integer} */
+            radiusKm?: 10 | 20 | 30 | 40;
+            /** Format: date-time */
+            sentAt?: string;
+            /**
+             * Format: date-time
+             * @description sentAt + 2분 (서버 시각)
+             */
+            respondUntil?: string;
+            /**
+             * Format: date-time
+             * @description sentAt + 5분
+             */
+            approvalValidUntil?: string;
+            /** @description 요청을 보낸 병원 수 */
+            targetCount?: number;
+            /** @description '받았음'을 돌려준 병원 수 */
+            deliveredCount?: number;
+            /** @description 5초 판정 끝 */
+            deliveryFinal?: boolean;
+        };
+        /** @description 대원 앱에서 보는 병원 요청 1건 (환자 정보 없음) */
+        AppHospitalRequest: {
+            id?: number;
+            hospitalId?: number;
+            hospitalName?: string;
+            /** @description 지도 표시 (SFR-149) */
+            lat?: number;
+            lng?: number;
+            /** @enum {string} */
+            status?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable";
+            /** @enum {string|null} */
+            closeReason?: "other_hospital" | "fallback" | "cancelled" | "expired_approval" | "approval_cancelled" | "dest_changed" | null;
+            etaMin?: number;
+            /**
+             * @description 직선 추정 → 길찾기로 갱신 (SFR-129)
+             * @enum {string}
+             */
+            etaSource?: "straight" | "route";
+            /** @description 예: 4/10 */
+            erBeds?: string;
+            /** @description 병원 승인 메모 */
+            memo?: string | null;
+            /** @description 확정 뒤 추가 메모 (SFR-140) */
+            extraMemo?: string | null;
+            /**
+             * @description 거절·승인 취소 사유
+             * @enum {string|null}
+             */
+            reason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
+            /** @description 기타 사유 글 */
+            reasonText?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** @description 승인 병원 중 가장 가까움 */
+            isClosest?: boolean;
+            /** @description 직전 승인 · 재확인 (SFR-156) */
+            prevApprovedRecheck?: boolean;
+            /** @description hospital_request.version */
+            version?: number;
+        };
+        Transport: {
+            /** Format: uuid */
+            id?: string;
+            /**
+             * @description 상태 전이표 v0.2
+             * @enum {string}
+             */
+            status?: "requesting" | "fallback" | "phone_check" | "moving" | "arrived" | "cancelled";
+            /** @description transport 행이 바뀔 때마다 +1. 바꾸는 요청에 같이 보냄 (SFR-160) */
+            version?: number;
+            /**
+             * Format: date-time
+             * @description 응답 시점 서버 시각 → 남은 시간 계산 기준 (SFR-110)
+             */
+            serverNow?: string;
+            /** @enum {integer} */
+            requestRadiusKm?: 10 | 20 | 30 | 40;
+            /** @enum {integer} */
+            fallbackRadiusKm?: 10 | 20 | 30 | 40;
+            /** @enum {string|null} */
+            fallbackReason?: "no_target" | "offline" | "all_rejected" | "expired_no_approval" | "none_delivered" | "approvals_cancelled" | "approval_window" | "phone_rejected_last" | "phone_dismissed" | null;
+            currentRound?: components["schemas"]["Round"] | null;
+            /** @description 현재 회차 + 확정 요청. 승인은 승인 시각 순 (SFR-110) */
+            requests?: components["schemas"]["AppHospitalRequest"][];
+            /** @description 전화 확인 중인 병원 (phone_check일 때) */
+            phoneTarget?: {
+                hospitalId?: number;
+                name?: string;
+                erPhone?: string;
+            } | null;
+            /** @description 이동 중 목적지. requestStatus=closed·closeReason=approval_cancelled면 '다시 요청' 버튼 */
+            confirmedHospital?: {
+                id?: number;
+                name?: string;
+                /** @description 응급실 전화번호. 경로 안내 중 '병원 전화' 버튼 (SFR-097) */
+                erPhone?: string | null;
+                memo?: string | null;
+                extraMemo?: string | null;
+                entrance?: components["schemas"]["LatLng"];
+                /**
+                 * @description 전화 확인으로 출발한 병원은 병원 요청이 없어 null (SFR-034)
+                 * @enum {string|null}
+                 */
+                requestStatus?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable" | null;
+                /** @enum {string|null} */
+                closeReason?: "other_hospital" | "fallback" | "cancelled" | "expired_approval" | "approval_cancelled" | "dest_changed" | null;
+            } | null;
+            /** @description 확정 병원이 승인 취소함 → 다시 요청 가능 (부록 A20) */
+            canReRequest?: boolean;
+            /** @description 목적지 변경 1번 사용 (SFR-077) */
+            destinationChangeUsed?: boolean;
+            /** @description 경로 안내 담당 단말 */
+            navDeviceId?: string | null;
+            /** @description 이동 중 남은 분 = 담당 단말 내비 값(없으면 확정 때 값) − 받은 뒤 지난 분 (SFR-121·132). 이동 중이 아니면 null */
+            etaMin?: number | null;
+            /**
+             * Format: date-time
+             * @description 처음 출발 시각 (SFR-036)
+             */
+            departedAt?: string | null;
+            lastSentAssessmentSeq?: number;
+            /** @description '변경 사항 보내기(n)'의 n. 팀 작성 중 정보와 마지막으로 보낸 값을 칸별로 비교한 수. 끝난 건은 0 (SFR-105) */
+            pendingChanges?: number;
+            excludedHospitalIds?: number[];
+            locationConsent?: boolean;
+            /** @description 위치 미동의 건 주소 */
+            address?: string | null;
+            /** @description 통신 두절 중 만든 건 */
+            offlineCreated?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /**
+             * @description 병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)
+             * @enum {integer|null}
+             */
+            requestedGrade?: 1 | 2 | 3 | null;
+            /** @description 이동 거리 (종료 후, 구급활동일지용, SFR-041) */
+            distanceKm?: number | null;
+        };
+        HospitalCard: {
+            id?: number;
+            name?: string;
+            /** @description 지도 표시 (SFR-027) */
+            lat?: number;
+            lng?: number;
+            address?: string;
+            distanceKm?: number;
+            /** @description 도로 기준 예상 이동시간(분). 게이트를 통과한 후보 중 직선거리 가까운 10곳만 카카오 자동차 길찾기로 구함(SFR-072). 실패·한도 초과·10곳 밖이면 null → '예상 이동시간 없음'(SFR-073). 정렬에는 쓰지 않음 */
+            etaMin?: number | null;
+            beds?: {
+                /** @description 가용/전체, 예: 2/8. 전체가 비면 가용만(예: 3), 가용이 비면 null(정보 없음, SFR-089) */
+                er?: string | null;
+                icu?: string | null;
+                or?: string | null;
+            };
+            /**
+             * Format: date-time
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt
+             */
+            bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
+            /** @description 진료가능 항목 (오프라인 저장용, SFR-059). /hospitals/nearby 에만 있고 추천 목록 카드에는 없다(개수만, capabilityCount) */
+            capabilities?: {
+                name?: string;
+                available?: boolean;
+            }[];
+            /** @description 중증질환 진료가능 항목 수 (SFR-002) */
+            capabilityCount?: {
+                available?: number;
+                total?: number;
+            };
+            /** @description false면 '병상 정보 없음' */
+            inRegion?: boolean;
+            erPhone?: string;
+            /** @description 추천 순위 1~5, 추천 카드가 아니면 null */
+            rank?: number | null;
+            /** @description 이번 이송 제외 병원 */
+            excluded?: boolean;
+            /**
+             * @description 병원 등급 (부록 F)
+             * @enum {integer}
+             */
+            grade?: 1 | 2 | 3;
+        };
+        HospitalDetail: {
+            id?: number;
+            name?: string;
+            lat?: number;
+            lng?: number;
+            address?: string | null;
+            departments?: string[];
+            erPhone?: string | null;
+            mainPhone?: string | null;
+            beds?: {
+                er?: {
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    avail?: number | null;
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    total?: number | null;
+                };
+                icu?: {
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    avail?: number | null;
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    total?: number | null;
+                };
+                or?: {
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    avail?: number | null;
+                    /** @description 값이 없으면 null (앱은 '정보 없음'으로 표시, SFR-089) */
+                    total?: number | null;
+                };
+            };
+            /**
+             * Format: date-time
+             * @description 공공 데이터가 붙인 시각 (참고용). 화면의 기준 시각은 collectedAt. 병상 데이터가 없으면 null
+             */
+            bedsSourceTime?: string | null;
+            /**
+             * Format: date-time
+             * @description 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081, C-12). 수집이 실패하면 갱신되지 않는다. 병상 데이터가 없으면 null. 오프라인 저장 데이터의 경과 시간은 응답 헤더 X-Server-Now와의 차이로 계산
+             */
+            collectedAt?: string | null;
+            /** @description 수집한 지 10분이 지났으면 true → '참고용 정보 · 기준 HH:MM' (SFR-081 ②, SFR-008). DB 시각으로 판정. 병상 데이터가 없으면 null */
+            stale?: boolean | null;
+            /** @description 공공 데이터가 '정보미제공'인 항목은 목록에 없음 */
+            capabilities?: {
+                /** @description 공공 데이터 표기 그대로 */
+                name?: string;
+                available?: boolean;
+            }[];
+            /**
+             * @description 병원 등급 (부록 F)
+             * @enum {integer}
+             */
+            grade?: 1 | 2 | 3;
+        };
+        /** @description 병원 웹 요청 목록 1행 (구급대 소속은 표시하지 않음, D-98) */
+        HwRequestItem: {
+            id?: number;
+            /** @description 예: R-102 */
+            label?: string;
+            /** @enum {string} */
+            status?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable";
+            /** @enum {string|null} */
+            closeReason?: "other_hospital" | "fallback" | "cancelled" | "expired_approval" | "approval_cancelled" | "dest_changed" | null;
+            /** @description 열 수 있는 요청만. 닫힌 요청은 null (SER-014) */
+            chiefComplaint?: string | null;
+            etaMin?: number | null;
+            /** @enum {string} */
+            etaSource?: "straight" | "route";
+            /** Format: date-time */
+            respondUntil?: string;
+            /** @description 정상 범위 밖 항목 수 */
+            abnormalCount?: number | null;
+            prevApprovedRecheck?: boolean;
+            respondedBy?: string | null;
+            /** @description 이 병원이 요청을 받은 뒤 '변경 사항 보내기'로 바뀐 항목 (SFR-105). 환자 정보를 못 여는 건은 빈 목록 */
+            updatedFields?: string[];
+            version?: number;
+        };
+        HwRequestDetail: {
+            id?: number;
+            label?: string;
+            version?: number;
+            /** @enum {string} */
+            status?: "waiting" | "delivery_failed" | "approved" | "rejected" | "expired" | "closed" | "confirmed" | "arrived" | "unacceptable";
+            /** Format: date-time */
+            respondUntil?: string;
+            /** Format: date-time */
+            serverNow?: string;
+            assessment?: components["schemas"]["Assessment"];
+            /** @description 빨간색 강조 대상 (부록 E) */
+            abnormalFields?: string[];
+            updatedFields?: string[];
+            etaMin?: number;
+            /** @enum {string} */
+            etaSource?: "straight" | "route";
+            prevApprovedRecheck?: boolean;
+            ourHospital?: {
+                /** @description 증상을 골랐을 때만 */
+                capability?: {
+                    name?: string;
+                    available?: boolean;
+                } | null;
+                /** @description 가용/전체 (예: 5/20). 수집된 값이 없으면 null */
+                beds?: {
+                    er?: string | null;
+                    icu?: string | null;
+                    or?: string | null;
+                };
+            };
+            /** @description 우리 병원의 지금 유효한 승인 수 (과승인 경고용) */
+            validApprovals?: number;
+            respondedBy?: string | null;
+            /** @description 승인 메모 (승인할 때 함께 보낸 것) */
+            memo?: string | null;
+            /** @description 확정 뒤 보낸 추가 메모 (SFR-140). 값이 있으면 '추가 메모' 버튼을 숨긴다 */
+            extraMemo?: string | null;
+        };
+        HwIncoming: {
+            id?: number;
+            label?: string;
+            /** @description 예: 남·60대 · S03 두통 (도착 후 1시간까지) */
+            summary?: string | null;
+            /** @enum {string} */
+            status?: "confirmed" | "arrived" | "unacceptable";
+            version?: number;
+            etaMin?: number | null;
+            /** @description 위치 동의 건 → 200m 안에서만 도착 확인 */
+            hasLocation?: boolean;
+            changedFields?: string[];
+            /** Format: date-time */
+            arrivedAt?: string | null;
+            /** @description 위치 있는 건은 입구 200m 안일 때만, 위치 없는 건은 항상 */
+            canConfirmArrival?: boolean;
+            /** @description 도착 후 10분 안 */
+            canMarkUnacceptable?: boolean;
+            extraMemoUsed?: boolean;
+        };
+        SignupItem: {
+            id?: number;
+            name?: string;
+            rank?: string;
+            agencyCode?: string;
+            agencyName?: string;
+            safetyCenter?: string;
+            employeeNo?: string;
+            /** Format: date-time */
+            consentAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** @description 반려 후 재신청 */
+            resubmitted?: boolean;
+        };
+        AdminHospital: {
+            id?: number;
+            name?: string;
+            accountActive?: boolean;
+            pcCount?: number;
+            /** @example 3 */
+            pcLimit?: number;
+            license?: {
+                id?: number;
+                /** @description 앞 4자리 */
+                prefix?: string;
+                /** Format: date-time */
+                expiresAt?: string;
+                daysLeft?: number;
+            } | null;
+            /** @description 공공 데이터 병원 좌표 (SFR-145 입구 지정 지도의 처음 가운데). 대한민국 밖·없으면 null */
+            location?: components["schemas"]["LatLng"] | null;
+            /** @description 응급실 입구 좌표 (SFR-145). null 이면 '입구 좌표 없음', 도착 판정은 location 으로 */
+            entrance?: components["schemas"]["LatLng"] | null;
+        };
+        HospitalStat: {
+            hospitalId?: number;
+            name?: string;
+            /** @description 기간 안에 이 병원에 닿은 요청 수 (표본 크기) */
+            requests?: number;
+            /** @description 0~1. 표본 부족이면 null */
+            responseRate?: number | null;
+            avgResponseSec?: number | null;
+            /** @description 이 병원으로 출발한 건의 평균 '요청→출발' */
+            avgRequestToDepartSec?: number | null;
+            /** @enum {string|null} */
+            topRejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
+            /** @description (승인 취소 + 수용 불가) ÷ 승인. 표본 부족·승인 0건이면 null */
+            approvalCancelRate?: number | null;
+            unacceptableCount?: number;
+            avgRequestToFirstApprovalSec?: number | null;
+            /** @description 요청 10건 미만 */
+            sampleTooSmall?: boolean;
+            /** @description 최근 7일 거절률이 30일보다 20%p 이상 높음 */
+            rejectSpike?: boolean;
+            /** @description 거절 사유 건수, 출처별 (SFR-106) */
+            rejectBySource?: {
+                hospitalWeb?: {
+                    [key: string]: number;
+                };
+                paused?: {
+                    [key: string]: number;
+                };
+                phoneCheck?: {
+                    [key: string]: number;
+                };
+                approvalCancelled?: {
+                    [key: string]: number;
+                };
+                unacceptable?: {
+                    [key: string]: number;
+                };
+            };
+        };
+        /** @description 구급활동일지 초안의 자동 항목 (부록 G). 서버는 따로 저장하지 않고 이송 건 기록에서 그때 만든다. 환자 성명·주소 등은 없음 — 앱이 단말에서만 입력·보관 (DAR-015) */
+        JournalDraft: {
+            /** Format: uuid */
+            transportId?: string;
+            agencyName?: string;
+            safetyCenter?: string;
+            /** @description 이송이 진행되는 동안 팀에 있었던 대원 (끝난 뒤 들어온 사람은 빼고) */
+            crew?: {
+                name?: string;
+                rank?: string;
+                /** @enum {string} */
+                role?: "driver" | "care";
+            }[];
+            /** Format: date-time */
+            departedAt?: string | null;
+            /** Format: date-time */
+            arrivedAt?: string | null;
+            /** @description 이동 거리. 위치 기록이 없으면(위치 미동의·통신 두절 중 도착) null → 대원이 직접 입력 */
+            distanceKm?: number | null;
+            /**
+             * @description 확인 불가면 null (대원이 직접 입력)
+             * @enum {string|null}
+             */
+            sex?: "M" | "F" | null;
+            ageBand?: string | null;
+            chiefComplaint?: string | null;
+            onsetAt?: string | null;
+            /**
+             * @description 앱 평가의 의식 수준(alert·verbal·pain·unresponsive)을 AVPU로. 확인 불가면 null
+             * @enum {string|null}
+             */
+            consciousness?: "A" | "V" | "P" | "U" | null;
+            /** @description 마지막으로 보낸 평가의 활력징후. 없는 값은 null. 혈압은 '150/90'을 나눈 값 */
+            vitals?: {
+                sbp?: number | null;
+                dbp?: number | null;
+                pulse?: number | null;
+                resp?: number | null;
+                temp?: number | null;
+                spo2?: number | null;
+                glucose?: number | null;
+            };
+            history?: string | null;
+            ktas?: number | null;
+            /** @description 이송 기관 = 도착한 확정 병원. 취소된 건은 null */
+            hospitalName?: string | null;
+            /** @description 재이송 사유. 이 이송 건에서 병원 거절·승인 취소·수용 불가와 전화 확인 거절 (잠시 요청 중지 자동 거절은 뺌) */
+            reTransferReasons?: {
+                hospitalName?: string;
+                /** @enum {string} */
+                reason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc";
+            }[];
+            /**
+             * @description 미이송 사유. 대원이 취소 때 고른 값, 서버가 끝낸 취소(활동 없음·근무 종료 등)는 system_end, 도착했거나 고르지 않았으면 null
+             * @enum {string|null}
+             */
+            notTransportedReason?: "refused" | "death" | "on_scene" | "other_agency" | "etc" | "system_end" | null;
+            /** @description 미이송 사유 '기타' 글 */
+            notTransportedText?: string | null;
+        };
     };
-    /** @description 구급활동일지 초안의 자동 항목 (부록 G). 서버는 따로 저장하지 않고 이송 건 기록에서 그때 만든다. 환자 성명·주소 등은 없음 — 앱이 단말에서만 입력·보관 (DAR-015) */
-    JournalDraft: {
-      /** Format: uuid */
-      transportId?: string;
-      agencyName?: string;
-      safetyCenter?: string;
-      /** @description 이송이 진행되는 동안 팀에 있었던 대원 (끝난 뒤 들어온 사람은 빼고) */
-      crew?: {
-        name?: string;
-        rank?: string;
-        /** @enum {string} */
-        role?: 'driver' | 'care';
-      }[];
-      /** Format: date-time */
-      departedAt?: string | null;
-      /** Format: date-time */
-      arrivedAt?: string | null;
-      /** @description 이동 거리. 위치 기록이 없으면(위치 미동의·통신 두절 중 도착) null → 대원이 직접 입력 */
-      distanceKm?: number | null;
-      /**
-       * @description 확인 불가면 null (대원이 직접 입력)
-       * @enum {string|null}
-       */
-      sex?: 'M' | 'F' | null;
-      ageBand?: string | null;
-      chiefComplaint?: string | null;
-      onsetAt?: string | null;
-      /**
-       * @description 앱 평가의 의식 수준(alert·verbal·pain·unresponsive)을 AVPU로. 확인 불가면 null
-       * @enum {string|null}
-       */
-      consciousness?: 'A' | 'V' | 'P' | 'U' | null;
-      /** @description 마지막으로 보낸 평가의 활력징후. 없는 값은 null. 혈압은 '150/90'을 나눈 값 */
-      vitals?: {
-        sbp?: number | null;
-        dbp?: number | null;
-        pulse?: number | null;
-        resp?: number | null;
-        temp?: number | null;
-        spo2?: number | null;
-        glucose?: number | null;
-      };
-      history?: string | null;
-      ktas?: number | null;
-      /** @description 이송 기관 = 도착한 확정 병원. 취소된 건은 null */
-      hospitalName?: string | null;
-      /** @description 재이송 사유. 이 이송 건에서 병원 거절·승인 취소·수용 불가와 전화 확인 거절 (잠시 요청 중지 자동 거절은 뺌) */
-      reTransferReasons?: {
-        hospitalName?: string;
-        /** @enum {string} */
-        reason?: 'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
-      }[];
-      /**
-       * @description 미이송 사유. 대원이 취소 때 고른 값, 서버가 끝낸 취소(활동 없음·근무 종료 등)는 system_end, 도착했거나 고르지 않았으면 null
-       * @enum {string|null}
-       */
-      notTransportedReason?:
-        'refused' | 'death' | 'on_scene' | 'other_agency' | 'etc' | 'system_end' | null;
-      /** @description 미이송 사유 '기타' 글 */
-      notTransportedText?: string | null;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  getHealth: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 정상 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Health'];
-        };
-      };
-      /** @description DB 또는 Redis 연결 실패 */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Health'];
-        };
-      };
-    };
-  };
-  get_agencies__code: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        code: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            code?: string;
-            name?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_auth_signup: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'multipart/form-data': {
-          agencyCode: string;
-          loginId: string;
-          password: string;
-          name: string;
-          rank: string;
-          safetyCenter: string;
-          employeeNo: string;
-          /**
-           * Format: binary
-           * @description 공무원증 사진 (승인·반려 즉시 삭제)
-           */
-          photo: string;
-          /** @description 필수, true여야 함 */
-          photoConsent: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @enum {string} */
-            status?: 'pending';
-            /** Format: date-time */
-            appliedAt?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_me_signup: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'multipart/form-data': {
-          agencyCode: string;
-          name: string;
-          rank: string;
-          safetyCenter: string;
-          employeeNo: string;
-          /**
-           * Format: binary
-           * @description 공무원증 사진 (승인·반려 즉시 삭제)
-           */
-          photo: string;
-          /** @description 필수, true여야 함 */
-          photoConsent: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Me'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_auth_login: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          loginId: string;
-          password: string;
-          /** @description 앱 설치마다 고유 */
-          deviceId: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            tokens?: components['schemas']['Tokens'];
-            me?: components['schemas']['Me'];
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_auth_refresh: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          refreshToken: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Tokens'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_auth_logout: {
-    parameters: {
-      query?: {
-        /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
-        confirmCancelActive?: boolean;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_me: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Me'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  delete_me: {
-    parameters: {
-      query?: {
-        /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
-        confirmCancelActive?: boolean;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_me_password: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          currentPassword: string;
-          newPassword: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_me_push_device: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          deviceId: string;
-          /** @enum {string} */
-          platform: 'android' | 'ios' | 'web';
-          fcmToken: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_teams: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          role: 'driver' | 'care';
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Team'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_teams_join: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          code?: string;
-          qrToken?: string;
-          /** @enum {string} */
-          role: 'driver' | 'care';
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Team'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_teams_current: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Team'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  patch_teams_current_members_me: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          role: 'driver' | 'care';
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Team'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_teams_current_leave: {
-    parameters: {
-      query?: {
-        /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
-        confirmCancelActive?: boolean;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_paramedics_on_duty: {
-    parameters: {
-      query?: {
-        /** @description 이름 검색 (비우면 근무 중 목록) */
-        q?: string;
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['OnDutyParamedic'][];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_teams_current_invites: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          toParamedicId: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            inviteId?: number;
-            /** Format: date-time */
-            expiresAt?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_invites__inviteId__accept: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        inviteId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          role: 'driver' | 'care';
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Team'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_invites__inviteId__decline: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        inviteId: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_memos__paramedicId: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        paramedicId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          memo: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_teams_current_draft: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            version?: number;
-            assessment?: components['schemas']['Assessment'];
-            /** @description 항목별 {byName, at} */
-            fieldMeta?: Record<string, never>;
-            /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157). 팀의 가장 최근 이송이 도착·취소로 끝난 뒤 아무도 안 고쳤고 진행 중 이송이 없을 때 그 건 ID. 앱은 '직전 환자 정보 · 지우기'를 띄우고, 지우기는 DELETE. 10분이 지나면 빈 작성 중 정보(version 0)로 보이고 서버가 1분 안에 비운다 */
-            prefilledFromTransportId?: string | null;
-            /** Format: date-time */
-            prefillExpiresAt?: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  delete_teams_current_draft: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  patch_teams_current_draft: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 내가 마지막으로 받은 버전 */
-          baseVersion: number;
-          /** @description 바뀐 항목만 (Assessment의 일부, 1개 이상). null = 지우기. Assessment에 없는 칸(환자 이름 등)이 있으면 400 */
-          changes: Record<string, never>;
-          /** @description 단말이 잰 지금 속도 (운전 역할 잠금 확인용, SFR-115). 보내면 이 값으로 판단 */
-          speedKmh?: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            version?: number;
-            assessment?: components['schemas']['Assessment'];
-            /** @description baseVersion 이후 다른 팀원이 고친 항목을 내가 덮어씀 → 화면에 알림 */
-            overwritten?: {
-              field?: string;
-              prevByName?: string;
-            }[];
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_geocode: {
-    parameters: {
-      query: {
-        address: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @description 정리된 주소 */
-            address?: string;
-            location?: components['schemas']['LatLng'];
-          }[];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hospitals_nearby: {
-    parameters: {
-      query: {
-        lat: number;
-        lng: number;
-        radiusKm?: 10 | 20 | 30 | 40;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['HospitalCard'][];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hospitals__hospitalId: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        hospitalId: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['HospitalDetail'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * Format: uuid
-           * @description 앱이 만든 UUID (중복 생성 방지)
-           */
-          id: string;
-          /**
-           * Format: uuid
-           * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157). 같은 팀이고 끝난 지 10분 안이면 그 건의 수용 불가 병원을 이번 요청에서 빼고 excluded_hospital(unacceptable_prev)에 넣는다. 조건이 안 맞으면 이어받지 않는다(오류 아님)
-           */
-          prevTransportId?: string | null;
-          /** @description 진행 중 건이 '이동 중'일 때 '이전 이송 끝내기'를 확인함 (SFR-104) */
-          finishPrevious?: boolean;
-          /** @description finishPrevious일 때 이전 건의 version */
-          previousVersion?: number | null;
-          /** @enum {integer} */
-          radiusKm: 10 | 20 | 30 | 40;
-          location?: components['schemas']['LatLng'] | null;
-          /** @description 위치 미동의·실패 시 주소 (geocode 결과) */
-          address?: string | null;
-          locationConsent: boolean;
-          assessment: components['schemas']['Assessment'];
-          /**
-           * @description 병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)
-           * @enum {integer|null}
-           */
-          requestedGrade?: 1 | 2 | 3 | null;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_transports_current: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_transports__transportId: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__confirm: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description 확정 요청마다 앱이 만든 고유 값. 같은 값으로 다시 보내면 첫 결과를 그대로 돌려줌 */
-        'Idempotency-Key': string;
-      };
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          hospitalRequestId: number;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_transports__transportId__recommendations: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @enum {integer} */
-            radiusKm?: 10 | 20 | 30 | 40;
-            /** @description 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 고른 등급 이상 먼저, 그 안에서 직선거리순 (SFR-098, D-128) */
-            items?: components['schemas']['HospitalCard'][];
-            /** @description 반경 안 전체 (지도) */
-            map?: components['schemas']['HospitalCard'][];
-            /** @description 실시간 병상 정보가 전혀 없는 병원 (미제공·수집 실패로 저장값 없음). 거리순 최대 3곳, '병상 정보 없음 · 전화로 확인' */
-            noBedInfo?: components['schemas']['HospitalCard'][];
-            /**
-             * @description 후보 0건일 때 안내 (SFR-029)
-             * @enum {string|null}
-             */
-            emptyGuide?: 'expand_radius' | 'call_nearby' | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_transports__transportId__fallback_radius: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description 지금보다 한 단계 큰 값
-           * @enum {integer}
-           */
-          radiusKm: 10 | 20 | 30 | 40;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__rounds: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          kind: 'expand' | 're_request';
-          /**
-           * @description expand일 때 다음 단계 1칸
-           * @enum {integer}
-           */
-          radiusKm?: 10 | 20 | 30 | 40;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-          location?: components['schemas']['LatLng'] | null;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__phone_check_start: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          hospitalId: number;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__phone_checks: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description phoneTarget과 같아야 함 */
-          hospitalId: number;
-          /** @enum {string} */
-          result: 'accepted' | 'no_answer' | 'skipped' | 'rejected' | 'dismissed';
-          /**
-           * @description no_answer·skipped일 때 필수
-           * @enum {string|null}
-           */
-          reason?: 'no_answer' | 'busy' | 'urgent' | 'etc' | null;
-          /** @description no_answer·skipped의 '기타' 글(30자), 또는 rejectReason이 etc일 때 글(20자) */
-          reasonText?: string | null;
-          /**
-           * @description 거절 사유 (선택, SFR-044). result가 rejected일 때만, 아니면 400. 거절 원장에 출처 phone_check로 쌓임 (SFR-126)
-           * @enum {string|null}
-           */
-          rejectReason?:
-            'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc' | null;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__nav_device: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          deviceId: string;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            navDeviceId?: string;
-            /** @description false면 보기 전용 */
-            isMe?: boolean;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__assessments: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 마지막으로 보낸 seq (Transport.lastSentAssessmentSeq). 빠지면 400 VERSION_REQUIRED */
-          baseSeq: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            seq?: number;
-            changedFields?: string[];
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__locations: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          deviceId: string;
-          points: {
-            lat?: number;
-            lng?: number;
-            speedKmh?: number;
-            /** Format: date-time */
-            recordedAt?: string;
-          }[];
-          /** @description 앱 안 내비가 계산한 남은 분 (선택). 보여 줄 때 서버가 받은 뒤 지난 분을 뺀다(2분 넘게 안 와도 줄어듦) */
-          etaMin?: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__destination: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          reason: 'patient_change' | 'road' | 'hospital' | 'etc';
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-          location?: components['schemas']['LatLng'] | null;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__arrive: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description hospital = 병원 '도착 확인' 요청에 대원이 '도착 처리'를 누름
-           * @enum {string}
-           */
-          method: 'button' | 'menu' | 'hospital';
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** Format: date-time */
-            departedAt?: string;
-            /** Format: date-time */
-            arrivedAt?: string;
-            durationSec?: number;
-            distanceKm?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports__transportId__cancel: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-          /**
-           * @description 미이송 사유 (선택). refused=이송 거부, death=사망, on_scene=현장 처치, other_agency=타 기관 이송, etc=기타
-           * @enum {string}
-           */
-          notTransportedReason?: 'refused' | 'death' | 'on_scene' | 'other_agency' | 'etc';
-          /** @description '기타' 글. notTransportedReason이 etc일 때만 */
-          notTransportedText?: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Transport'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_transports_sync: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 발생 순서대로 */
-          records: {
-            /**
-             * Format: uuid
-             * @description 기록마다 앱이 만든 값 → 같은 기록 두 번 반영 안 됨
-             */
-            clientRecordId: string;
-            /** @enum {string} */
-            kind: 'create_fallback' | 'phone_check' | 'arrive';
-            /** Format: uuid */
-            transportId: string;
-            /**
-             * Format: date-time
-             * @description 단말 시각
-             */
-            occurredAt: string;
-            /** @description create_fallback일 때 */
-            assessment?: components['schemas']['Assessment'];
-            /** @enum {integer} */
-            radiusKm?: 10 | 20 | 30 | 40;
-            location?: components['schemas']['LatLng'];
-            hospitalId?: number | null;
-            /** @enum {string|null} */
-            result?: 'accepted' | 'no_answer' | 'skipped' | 'rejected' | 'dismissed' | null;
-            /**
-             * @description phone_check no_answer·skipped 사유 (필수)
-             * @enum {string|null}
-             */
-            reason?: 'no_answer' | 'busy' | 'urgent' | 'etc' | null;
-            /** @description phone_check '기타' 글 (거절 '기타'는 20자) */
-            reasonText?: string | null;
-            /**
-             * @description phone_check 거절 사유 (선택, SFR-044)
-             * @enum {string|null}
-             */
-            rejectReason?:
-              'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc' | null;
-            /**
-             * @description arrive일 때
-             * @enum {string|null}
-             */
-            method?: 'button' | 'menu' | null;
-          }[];
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            results?: {
-              clientRecordId?: string;
-              /** @enum {string} */
-              outcome?: 'applied' | 'history_only' | 'duplicate' | 'rejected';
-              /** @description rejected일 때 오류 코드 */
-              code?: string | null;
-            }[];
-            /** @description 반영 후 최신 상태 */
-            transport?: components['schemas']['Transport'] | null;
-            /** @description 서버에 유효한 승인·확정이 있어 이력으로만 남김 → 경보 */
-            alert?: boolean;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_pc_register: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          licenseKey: string;
-          pcName: string;
-          /** @description 3대가 찼을 때 바꿀 PC */
-          replacePcId?: number | null;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            hospital?: {
-              id?: number;
-              name?: string;
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 정상 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
             };
-            pcId?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hw_session: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            hospital?: {
-              id?: number;
-              name?: string;
+            /** @description DB 또는 Redis 연결 실패 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
             };
-            pc?: {
-              id?: number;
-              name?: string;
+        };
+    };
+    get_agencies__code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
             };
-            licenseDaysLeft?: number;
-            /** @description 근무 전이면 null */
-            shift?: {
-              id?: number;
-              staffName?: string;
-              alarmOn?: boolean;
-            } | null;
-            paused?: boolean;
-            /** Format: date-time */
-            pausedAt?: string | null;
-            /** Format: date-time */
-            serverNow?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_shifts: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          staffName: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            shiftId?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_shifts_current_alarm_on: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 이 탭의 웹소켓 id → hospital:{id}:on 방에 넣음 */
-          socketId: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            shiftId?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_shifts_current_end: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_hw_pause: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          paused: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hw_requests: {
-    parameters: {
-      query?: {
-        status?: 'open' | 'all';
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['HwRequestItem'][];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-            /** Format: date-time */
-            serverNow?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hw_requests__requestId: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['HwRequestDetail'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__approve: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          memo?: string | null;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-          /** @description 과승인 확인을 눌렀으면 true */
-          overApprovalConfirmed?: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @enum {string} */
-            status?: 'approved';
-            respondedBy?: string;
-            version?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__reject: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
-           * @enum {string}
-           */
-          reason: 'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
-          etcText?: string | null;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @enum {string} */
-            status?: 'rejected';
-            version?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__cancel_approval: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
-           * @enum {string}
-           */
-          reason: 'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
-          etcText?: string | null;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_hw_incoming: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items?: components['schemas']['HwIncoming'][];
-            /** Format: date-time */
-            serverNow?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__extra_memo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          memo: string;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__confirm_arrival: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /**
-             * @description arrived = 바로 도착 처리 / asked_paramedic = 위치 없는 건이라 대원 앱에 확인 요청
-             * @enum {string}
-             */
-            result?: 'arrived' | 'asked_paramedic';
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_hw_requests__requestId__unacceptable: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        requestId: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
-           * @enum {string}
-           */
-          reason: 'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
-          etcText?: string | null;
-          /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
-          version: number;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_auth_login: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          loginId: string;
-          password: string;
-          /** @description OTP를 연결한 뒤부터 필수 */
-          otp?: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Tokens'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_auth_otp_enroll: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          setupToken: string;
-          /** @description OTP 앱에 뜬 첫 코드 */
-          otp: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Tokens'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_signups: {
-    parameters: {
-      query?: {
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['SignupItem'][];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_signups__id__photo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          'Cache-Control'?: string;
-          [name: string]: unknown;
-        };
-        content: {
-          'image/jpeg': string;
-          'image/png': string;
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_signups__id__approve: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_signups__id__reject: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description 사진 불명확 · 정보 불일치 · 소속 확인 불가 · 기타
-           * @enum {string}
-           */
-          reason: 'photo_unclear' | 'info_mismatch' | 'agency_unverified' | 'etc';
-          etcText?: string | null;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_paramedics: {
-    parameters: {
-      query?: {
-        q?: string;
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: {
-              id?: number;
-              name?: string;
-              agencyName?: string;
-              safetyCenter?: string;
-              /** @description 사번 (동명이인 구분) */
-              employeeNo?: string;
-              status?: string;
-              hasActiveTransport?: boolean;
-            }[];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_paramedics__id__suspend: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /**
-           * @description 퇴직 · 폰 분실 · 부정 사용 · 기타
-           * @enum {string}
-           */
-          reason: 'retired' | 'phone_lost' | 'misuse' | 'etc';
-          etcText?: string | null;
-          confirmCancelActive?: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_paramedics__id__unsuspend: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_paramedics__id__reset_password: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @description 한 번만 표시 */
-            tempPassword?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_hospitals: {
-    parameters: {
-      query?: {
-        q?: string;
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['AdminHospital'][];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_hospitals__id__account: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @description 전체 키는 이 응답에서 한 번만 */
-            licenseKey?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_hospitals__id__license_keys: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          reason: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            licenseKey?: string;
-            /** Format: date-time */
-            expiresAt?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_license_keys__id__revoke: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          reason: string;
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_hospitals__id__suspend: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_hospitals__id__pcs: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            id?: number;
-            name?: string;
-            /** Format: date-time */
-            registeredAt?: string;
-            /** Format: date-time */
-            lastUsedAt?: string;
-            online?: boolean;
-          }[];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  delete_admin_pcs__id: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  put_admin_hospitals__id__entrance: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['LatLng'];
-      };
-    };
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_notifications: {
-    parameters: {
-      query?: {
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: {
-              id?: number;
-              /** @enum {string} */
-              kind?: 'collect_fail' | 'signup' | 'pc_change' | 'key_expiring' | 'odd_pc';
-              text?: string;
-              occurrences?: number;
-              /** Format: date-time */
-              lastAt?: string;
-              read?: boolean;
-            }[];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-            unread?: number;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_admin_notifications__id__read: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 (본문 없음) */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_audit_logs: {
-    parameters: {
-      query?: {
-        from?: string;
-        to?: string;
-        limit?: number;
-        /** @description 이전 응답의 nextCursor */
-        cursor?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: {
-              /** Format: date-time */
-              at?: string;
-              admin?: string;
-              action?: string;
-              target?: string;
-              reason?: string | null;
-            }[];
-            /** @description 다음 페이지 커서, 마지막이면 null */
-            nextCursor: string | null;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_admin_stats_hospitals: {
-    parameters: {
-      query?: {
-        days?: 7 | 30;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            /** @enum {integer} */
-            days?: 7 | 30;
-            /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
-            avgRequestToDepartSec?: number | null;
-            hospitals?: components['schemas']['HospitalStat'][];
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_request_targets_preview: {
-    parameters: {
-      query: {
-        lat: number;
-        lng: number;
-        radiusKm: 10 | 20 | 30 | 40;
-        grade?: 1 | 2 | 3;
-        /** @description 제외 병원 이어받기 (같은 팀·끝난 지 10분 안인 직전 건의 수용 불가 병원을 빼고 센다, SFR-157) */
-        prevTransportId?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            count?: number;
-            /** @description 그 등급을 고르면 요청이 갈 병원 수 (그 등급 이상 누적). 예 {1: 2, 2: 5, 3: 9} = 대학병원급 2곳·종합병원급 이상 5곳·전체 9곳. '등급 바꾸기' 안내용. count는 지금 grade 기준(없으면 byGrade.3과 같음) */
-            byGrade?: {
-              1?: number;
-              2?: number;
-              3?: number;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        name?: string;
+                    };
+                };
             };
-            /** Format: date-time */
-            serverNow?: string;
-          };
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  get_transports__transportId__journal_draft: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        transportId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['JournalDraft'];
-        };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
-    };
-  };
-  post_journal_ai_organize: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @description 대원 메모 (앞뒤 공백 빼고 1자 이상) */
-          text: string;
-          /** @description 단말에만 있는 이름 칸 값(환자·보호자). 메모에서 지우려고만 쓰고 저장하지 않는다 */
-          names?: string[];
-        };
-      };
-    };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            suggestions?: {
-              chiefComplaint?: string | null;
-              history?: string | null;
-              treatment?: string | null;
-              medicalDirection?: string | null;
-              other?: string | null;
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
-            /** @description 지운 식별정보 개수 (내용은 돌려주지 않음) */
-            removedIdentifiers?: number;
-          };
         };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
     };
-  };
-  get_config: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    post_auth_signup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          'application/json': {
-            featureFlags?: {
-              journalAi?: boolean;
-              hospitalGrade?: boolean;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    agencyCode: string;
+                    loginId: string;
+                    password: string;
+                    name: string;
+                    rank: string;
+                    safetyCenter: string;
+                    employeeNo: string;
+                    /**
+                     * Format: binary
+                     * @description 공무원증 사진 (승인·반려 즉시 삭제)
+                     */
+                    photo: string;
+                    /** @description 필수, true여야 함 */
+                    photoConsent: boolean;
+                };
             };
-            minAppVersion?: string;
-            /** Format: date-time */
-            serverNow?: string;
-          };
         };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "pending";
+                        /** Format: date-time */
+                        appliedAt?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
     };
-  };
-  get_admin_feature_flags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    put_me_signup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    agencyCode: string;
+                    name: string;
+                    rank: string;
+                    safetyCenter: string;
+                    employeeNo: string;
+                    /**
+                     * Format: binary
+                     * @description 공무원증 사진 (승인·반려 즉시 삭제)
+                     */
+                    photo: string;
+                    /** @description 필수, true여야 함 */
+                    photoConsent: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    post_auth_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          'application/json': {
-            journalAi?: boolean;
-            hospitalGrade?: boolean;
-          };
+        requestBody: {
+            content: {
+                "application/json": {
+                    loginId: string;
+                    password: string;
+                    /** @description 앱 설치마다 고유 */
+                    deviceId: string;
+                };
+            };
         };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tokens?: components["schemas"]["Tokens"];
+                        me?: components["schemas"]["Me"];
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
     };
-  };
-  put_admin_feature_flags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    post_auth_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    refreshToken: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        'application/json': {
-          journalAi?: boolean;
-          hospitalGrade?: boolean;
+    post_auth_logout: {
+        parameters: {
+            query?: {
+                /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
+                confirmCancelActive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description 성공 */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          'application/json': {
-            journalAi?: boolean;
-            hospitalGrade?: boolean;
-          };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
-      };
-      /** @description 오류 (코드는 오류 코드표) */
-      '4XX': {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Error'];
-        };
-      };
     };
-  };
+    delete_me: {
+        parameters: {
+            query?: {
+                /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
+                confirmCancelActive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_me_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    currentPassword: string;
+                    newPassword: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_me_push_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    deviceId: string;
+                    /** @enum {string} */
+                    platform: "android" | "ios" | "web";
+                    fcmToken: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_teams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role: "driver" | "care";
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_teams_join: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code?: string;
+                    qrToken?: string;
+                    /** @enum {string} */
+                    role: "driver" | "care";
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_teams_current: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch_teams_current_members_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role: "driver" | "care";
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_teams_current_leave: {
+        parameters: {
+            query?: {
+                /** @description 팀에 진행 중 이송이 있을 때 경고를 보고 '확인'을 눌렀으면 true (SFR-113) */
+                confirmCancelActive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_paramedics_on_duty: {
+        parameters: {
+            query?: {
+                /** @description 이름 검색 (비우면 근무 중 목록) */
+                q?: string;
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["OnDutyParamedic"][];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_teams_current_invites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    toParamedicId: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        inviteId?: number;
+                        /** Format: date-time */
+                        expiresAt?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_invites__inviteId__accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inviteId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role: "driver" | "care";
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_invites__inviteId__decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inviteId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_memos__paramedicId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paramedicId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    memo: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_teams_current_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version?: number;
+                        assessment?: components["schemas"]["Assessment"];
+                        /** @description 항목별 {byName, at} */
+                        fieldMeta?: Record<string, never>;
+                        /** @description 직전 환자 정보로 채워진 경우 (10분, SFR-157). 팀의 가장 최근 이송이 도착·취소로 끝난 뒤 아무도 안 고쳤고 진행 중 이송이 없을 때 그 건 ID. 앱은 '직전 환자 정보 · 지우기'를 띄우고, 지우기는 DELETE. 10분이 지나면 빈 작성 중 정보(version 0)로 보이고 서버가 1분 안에 비운다 */
+                        prefilledFromTransportId?: string | null;
+                        /** Format: date-time */
+                        prefillExpiresAt?: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_teams_current_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch_teams_current_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 내가 마지막으로 받은 버전 */
+                    baseVersion: number;
+                    /** @description 바뀐 항목만 (Assessment의 일부, 1개 이상). null = 지우기. Assessment에 없는 칸(환자 이름 등)이 있으면 400 */
+                    changes: Record<string, never>;
+                    /** @description 단말이 잰 지금 속도 (운전 역할 잠금 확인용, SFR-115). 보내면 이 값으로 판단 */
+                    speedKmh?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version?: number;
+                        assessment?: components["schemas"]["Assessment"];
+                        /** @description baseVersion 이후 다른 팀원이 고친 항목을 내가 덮어씀 → 화면에 알림 */
+                        overwritten?: {
+                            field?: string;
+                            prevByName?: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_geocode: {
+        parameters: {
+            query: {
+                address: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 정리된 주소 */
+                        address?: string;
+                        location?: components["schemas"]["LatLng"];
+                    }[];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hospitals_nearby: {
+        parameters: {
+            query: {
+                lat: number;
+                lng: number;
+                radiusKm?: 10 | 20 | 30 | 40;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalCard"][];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hospitals__hospitalId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hospitalId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalDetail"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description 앱이 만든 UUID (중복 생성 방지)
+                     */
+                    id: string;
+                    /**
+                     * Format: uuid
+                     * @description 직전 이송 건 → 제외 병원 이어 쓰기 (SFR-157). 같은 팀이고 끝난 지 10분 안이면 그 건의 수용 불가 병원을 이번 요청에서 빼고 excluded_hospital(unacceptable_prev)에 넣는다. 조건이 안 맞으면 이어받지 않는다(오류 아님)
+                     */
+                    prevTransportId?: string | null;
+                    /** @description 진행 중 건이 '이동 중'일 때 '이전 이송 끝내기'를 확인함 (SFR-104) */
+                    finishPrevious?: boolean;
+                    /** @description finishPrevious일 때 이전 건의 version */
+                    previousVersion?: number | null;
+                    /** @enum {integer} */
+                    radiusKm: 10 | 20 | 30 | 40;
+                    location?: components["schemas"]["LatLng"] | null;
+                    /** @description 위치 미동의·실패 시 주소 (geocode 결과) */
+                    address?: string | null;
+                    locationConsent: boolean;
+                    assessment: components["schemas"]["Assessment"];
+                    /**
+                     * @description 병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)
+                     * @enum {integer|null}
+                     */
+                    requestedGrade?: 1 | 2 | 3 | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_transports_current: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_transports__transportId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 확정 요청마다 앱이 만든 고유 값. 같은 값으로 다시 보내면 첫 결과를 그대로 돌려줌 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    hospitalRequestId: number;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_transports__transportId__recommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {integer} */
+                        radiusKm?: 10 | 20 | 30 | 40;
+                        /** @description 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 고른 등급 이상 먼저, 그 안에서 직선거리순 (SFR-098, D-128) */
+                        items?: components["schemas"]["HospitalCard"][];
+                        /** @description 반경 안 전체 (지도) */
+                        map?: components["schemas"]["HospitalCard"][];
+                        /** @description 실시간 병상 정보가 전혀 없는 병원 (미제공·수집 실패로 저장값 없음). 거리순 최대 3곳, '병상 정보 없음 · 전화로 확인' */
+                        noBedInfo?: components["schemas"]["HospitalCard"][];
+                        /**
+                         * @description 후보 0건일 때 안내 (SFR-029)
+                         * @enum {string|null}
+                         */
+                        emptyGuide?: "expand_radius" | "call_nearby" | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_transports__transportId__fallback_radius: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description 지금보다 한 단계 큰 값
+                     * @enum {integer}
+                     */
+                    radiusKm: 10 | 20 | 30 | 40;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__rounds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    kind: "expand" | "re_request";
+                    /**
+                     * @description expand일 때 다음 단계 1칸
+                     * @enum {integer}
+                     */
+                    radiusKm?: 10 | 20 | 30 | 40;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                    location?: components["schemas"]["LatLng"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__phone_check_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    hospitalId: number;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__phone_checks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description phoneTarget과 같아야 함 */
+                    hospitalId: number;
+                    /** @enum {string} */
+                    result: "accepted" | "no_answer" | "skipped" | "rejected" | "dismissed";
+                    /**
+                     * @description no_answer·skipped일 때 필수
+                     * @enum {string|null}
+                     */
+                    reason?: "no_answer" | "busy" | "urgent" | "etc" | null;
+                    /** @description no_answer·skipped의 '기타' 글(30자), 또는 rejectReason이 etc일 때 글(20자) */
+                    reasonText?: string | null;
+                    /**
+                     * @description 거절 사유 (선택, SFR-044). result가 rejected일 때만, 아니면 400. 거절 원장에 출처 phone_check로 쌓임 (SFR-126)
+                     * @enum {string|null}
+                     */
+                    rejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__nav_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    deviceId: string;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        navDeviceId?: string;
+                        /** @description false면 보기 전용 */
+                        isMe?: boolean;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__assessments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 마지막으로 보낸 seq (Transport.lastSentAssessmentSeq). 빠지면 400 VERSION_REQUIRED */
+                    baseSeq: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        seq?: number;
+                        changedFields?: string[];
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__locations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    deviceId: string;
+                    points: {
+                        lat?: number;
+                        lng?: number;
+                        speedKmh?: number;
+                        /** Format: date-time */
+                        recordedAt?: string;
+                    }[];
+                    /** @description 앱 안 내비가 계산한 남은 분 (선택). 보여 줄 때 서버가 받은 뒤 지난 분을 뺀다(2분 넘게 안 와도 줄어듦) */
+                    etaMin?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__destination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    reason: "patient_change" | "road" | "hospital" | "etc";
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                    location?: components["schemas"]["LatLng"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__arrive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description hospital = 병원 '도착 확인' 요청에 대원이 '도착 처리'를 누름
+                     * @enum {string}
+                     */
+                    method: "button" | "menu" | "hospital";
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        departedAt?: string;
+                        /** Format: date-time */
+                        arrivedAt?: string;
+                        durationSec?: number;
+                        distanceKm?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports__transportId__cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                    /**
+                     * @description 미이송 사유 (선택). refused=이송 거부, death=사망, on_scene=현장 처치, other_agency=타 기관 이송, etc=기타
+                     * @enum {string}
+                     */
+                    notTransportedReason?: "refused" | "death" | "on_scene" | "other_agency" | "etc";
+                    /** @description '기타' 글. notTransportedReason이 etc일 때만 */
+                    notTransportedText?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transport"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_transports_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 발생 순서대로 */
+                    records: {
+                        /**
+                         * Format: uuid
+                         * @description 기록마다 앱이 만든 값 → 같은 기록 두 번 반영 안 됨
+                         */
+                        clientRecordId: string;
+                        /** @enum {string} */
+                        kind: "create_fallback" | "phone_check" | "arrive";
+                        /** Format: uuid */
+                        transportId: string;
+                        /**
+                         * Format: date-time
+                         * @description 단말 시각
+                         */
+                        occurredAt: string;
+                        /** @description create_fallback일 때 */
+                        assessment?: components["schemas"]["Assessment"];
+                        /** @enum {integer} */
+                        radiusKm?: 10 | 20 | 30 | 40;
+                        location?: components["schemas"]["LatLng"];
+                        hospitalId?: number | null;
+                        /** @enum {string|null} */
+                        result?: "accepted" | "no_answer" | "skipped" | "rejected" | "dismissed" | null;
+                        /**
+                         * @description phone_check no_answer·skipped 사유 (필수)
+                         * @enum {string|null}
+                         */
+                        reason?: "no_answer" | "busy" | "urgent" | "etc" | null;
+                        /** @description phone_check '기타' 글 (거절 '기타'는 20자) */
+                        reasonText?: string | null;
+                        /**
+                         * @description phone_check 거절 사유 (선택, SFR-044)
+                         * @enum {string|null}
+                         */
+                        rejectReason?: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc" | null;
+                        /**
+                         * @description arrive일 때
+                         * @enum {string|null}
+                         */
+                        method?: "button" | "menu" | null;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results?: {
+                            clientRecordId?: string;
+                            /** @enum {string} */
+                            outcome?: "applied" | "history_only" | "duplicate" | "rejected";
+                            /** @description rejected일 때 오류 코드 */
+                            code?: string | null;
+                        }[];
+                        /** @description 반영 후 최신 상태 */
+                        transport?: components["schemas"]["Transport"] | null;
+                        /** @description 서버에 유효한 승인·확정이 있어 이력으로만 남김 → 경보 */
+                        alert?: boolean;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_pc_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    licenseKey: string;
+                    pcName: string;
+                    /** @description 3대가 찼을 때 바꿀 PC */
+                    replacePcId?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hospital?: {
+                            id?: number;
+                            name?: string;
+                        };
+                        pcId?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hw_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hospital?: {
+                            id?: number;
+                            name?: string;
+                        };
+                        pc?: {
+                            id?: number;
+                            name?: string;
+                        };
+                        licenseDaysLeft?: number;
+                        /** @description 근무 전이면 null */
+                        shift?: {
+                            id?: number;
+                            staffName?: string;
+                            alarmOn?: boolean;
+                        } | null;
+                        paused?: boolean;
+                        /** Format: date-time */
+                        pausedAt?: string | null;
+                        /** Format: date-time */
+                        serverNow?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_shifts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    staffName: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        shiftId?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_shifts_current_alarm_on: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 이 탭의 웹소켓 id → hospital:{id}:on 방에 넣음 */
+                    socketId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        shiftId?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_shifts_current_end: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_hw_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    paused: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hw_requests: {
+        parameters: {
+            query?: {
+                status?: "open" | "all";
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["HwRequestItem"][];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                        /** Format: date-time */
+                        serverNow?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hw_requests__requestId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HwRequestDetail"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    memo?: string | null;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                    /** @description 과승인 확인을 눌렀으면 true */
+                    overApprovalConfirmed?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "approved";
+                        respondedBy?: string;
+                        version?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
+                     * @enum {string}
+                     */
+                    reason: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc";
+                    etcText?: string | null;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "rejected";
+                        version?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__cancel_approval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
+                     * @enum {string}
+                     */
+                    reason: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc";
+                    etcText?: string | null;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_hw_incoming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["HwIncoming"][];
+                        /** Format: date-time */
+                        serverNow?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__extra_memo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    memo: string;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__confirm_arrival: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description arrived = 바로 도착 처리 / asked_paramedic = 위치 없는 건이라 대원 앱에 확인 요청
+                         * @enum {string}
+                         */
+                        result?: "arrived" | "asked_paramedic";
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_hw_requests__requestId__unacceptable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description er_bed 응급실 병상 부족 · or_room 수술실 부족 · ward 입원실 부족 · icu 중환자실 부족 · no_specialist 해당 전문의 부재 · equipment 의료장비 고장(CT 등) · etc 기타(etcText 20자). 구급활동일지 재이송 사유와 대응 (요구사항 부록 G, D-115)
+                     * @enum {string}
+                     */
+                    reason: "er_bed" | "or_room" | "ward" | "icu" | "no_specialist" | "equipment" | "etc";
+                    etcText?: string | null;
+                    /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
+                    version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_auth_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    loginId: string;
+                    password: string;
+                    /** @description OTP를 연결한 뒤부터 필수 */
+                    otp?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_auth_otp_enroll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    setupToken: string;
+                    /** @description OTP 앱에 뜬 첫 코드 */
+                    otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_signups: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SignupItem"][];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_signups__id__photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_signups__id__approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_signups__id__reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description 사진 불명확 · 정보 불일치 · 소속 확인 불가 · 기타
+                     * @enum {string}
+                     */
+                    reason: "photo_unclear" | "info_mismatch" | "agency_unverified" | "etc";
+                    etcText?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_paramedics: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id?: number;
+                            name?: string;
+                            agencyName?: string;
+                            safetyCenter?: string;
+                            /** @description 사번 (동명이인 구분) */
+                            employeeNo?: string;
+                            status?: string;
+                            hasActiveTransport?: boolean;
+                        }[];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_paramedics__id__suspend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description 퇴직 · 폰 분실 · 부정 사용 · 기타
+                     * @enum {string}
+                     */
+                    reason: "retired" | "phone_lost" | "misuse" | "etc";
+                    etcText?: string | null;
+                    confirmCancelActive?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_paramedics__id__unsuspend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_paramedics__id__reset_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 한 번만 표시 */
+                        tempPassword?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_hospitals: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminHospital"][];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_hospitals__id__account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 전체 키는 이 응답에서 한 번만 */
+                        licenseKey?: string;
+                        /** Format: date-time */
+                        expiresAt?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_hospitals__id__license_keys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        licenseKey?: string;
+                        /** Format: date-time */
+                        expiresAt?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_license_keys__id__revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_hospitals__id__suspend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_hospitals__id__pcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: number;
+                        name?: string;
+                        /** Format: date-time */
+                        registeredAt?: string;
+                        /** Format: date-time */
+                        lastUsedAt?: string;
+                        online?: boolean;
+                    }[];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_admin_pcs__id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_admin_hospitals__id__entrance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LatLng"];
+            };
+        };
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_notifications: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id?: number;
+                            /** @enum {string} */
+                            kind?: "collect_fail" | "signup" | "pc_change" | "key_expiring" | "odd_pc";
+                            text?: string;
+                            occurrences?: number;
+                            /** Format: date-time */
+                            lastAt?: string;
+                            read?: boolean;
+                        }[];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                        unread?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_admin_notifications__id__read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 (본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_audit_logs: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                limit?: number;
+                /** @description 이전 응답의 nextCursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            /** Format: date-time */
+                            at?: string;
+                            admin?: string;
+                            action?: string;
+                            target?: string;
+                            reason?: string | null;
+                        }[];
+                        /** @description 다음 페이지 커서, 마지막이면 null */
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_stats_hospitals: {
+        parameters: {
+            query?: {
+                days?: 7 | 30;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {integer} */
+                        days?: 7 | 30;
+                        /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
+                        avgRequestToDepartSec?: number | null;
+                        hospitals?: components["schemas"]["HospitalStat"][];
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_request_targets_preview: {
+        parameters: {
+            query: {
+                lat: number;
+                lng: number;
+                radiusKm: 10 | 20 | 30 | 40;
+                grade?: 1 | 2 | 3;
+                /** @description 제외 병원 이어받기 (같은 팀·끝난 지 10분 안인 직전 건의 수용 불가 병원을 빼고 센다, SFR-157) */
+                prevTransportId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count?: number;
+                        /** @description 그 등급을 고르면 요청이 갈 병원 수 (그 등급 이상 누적). 예 {1: 2, 2: 5, 3: 9} = 대학병원급 2곳·종합병원급 이상 5곳·전체 9곳. '등급 바꾸기' 안내용. count는 지금 grade 기준(없으면 byGrade.3과 같음) */
+                        byGrade?: {
+                            1?: number;
+                            2?: number;
+                            3?: number;
+                        };
+                        /** Format: date-time */
+                        serverNow?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_transports__transportId__journal_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalDraft"];
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_journal_ai_organize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 대원 메모 (앞뒤 공백 빼고 1자 이상) */
+                    text: string;
+                    /** @description 단말에만 있는 이름 칸 값(환자·보호자). 메모에서 지우려고만 쓰고 저장하지 않는다 */
+                    names?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        suggestions?: {
+                            chiefComplaint?: string | null;
+                            history?: string | null;
+                            treatment?: string | null;
+                            medicalDirection?: string | null;
+                            other?: string | null;
+                        };
+                        /** @description 지운 식별정보 개수 (내용은 돌려주지 않음) */
+                        removedIdentifiers?: number;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        featureFlags?: {
+                            journalAi?: boolean;
+                            hospitalGrade?: boolean;
+                        };
+                        minAppVersion?: string;
+                        /** Format: date-time */
+                        serverNow?: string;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_admin_feature_flags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        journalAi?: boolean;
+                        hospitalGrade?: boolean;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_admin_feature_flags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    journalAi?: boolean;
+                    hospitalGrade?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 성공 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        journalAi?: boolean;
+                        hospitalGrade?: boolean;
+                    };
+                };
+            };
+            /** @description 오류 (코드는 오류 코드표) */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
 }
