@@ -17,6 +17,9 @@ import {
 } from 'react';
 import { ApiError, api, refreshTokens, setTokenHooks, type Me, type Tokens } from '../api/client';
 import { toSignupFormData, type SignupForm } from './signupForm';
+import { clearTeam, refreshTeam } from '../duty/team';
+import { connectRealtime, disconnectRealtime } from '../realtime/socket';
+import { wireAccountAndTeam } from '../realtime/wire';
 import { clearRefreshToken, getDeviceId, loadRefreshToken, saveRefreshToken } from './storage';
 
 type State =
@@ -44,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutLocal = useCallback(async (notice?: string) => {
     tokens = null;
+    disconnectRealtime();
+    await clearTeam();
     await clearRefreshToken();
     setState({ status: 'signedOut', notice });
   }, []);
@@ -126,6 +131,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api('POST', '/auth/logout').catch(() => undefined);
     await signOutLocal();
   }, [signOutLocal]);
+
+  // 로그인돼 있는 동안 실시간 연결 (승인 결과 · 강제 로그아웃 · 팀 초대 · 팀원 변화)
+  const signedIn = state.status === 'signedIn';
+  const approved = signedIn && state.me.status === 'approved';
+  useEffect(() => {
+    if (!signedIn) return;
+    connectRealtime();
+    const off = wireAccountAndTeam({
+      refreshMe: () => void refreshMe(),
+      forceLogout: (n) => void signOutLocal(n),
+    });
+    return () => {
+      off();
+      disconnectRealtime();
+    };
+  }, [signedIn, refreshMe, signOutLocal]);
+  // 승인된 대원: 서버의 내 팀으로 맞춘다 (근무 중이면 앱을 다시 열어도 이어서)
+  useEffect(() => {
+    if (approved) void refreshTeam();
+  }, [approved]);
 
   const value = useMemo(
     () => ({ state, login, signup, refreshMe, logout }),

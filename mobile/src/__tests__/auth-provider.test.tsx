@@ -12,6 +12,14 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// 실시간 연결은 이 테스트에서 실제로 붙지 않게
+jest.mock('../realtime/socket', () => ({
+  connectRealtime: jest.fn(),
+  disconnectRealtime: jest.fn(),
+  reconnectRealtime: jest.fn(),
+  onEvent: jest.fn(() => () => undefined),
+}));
+
 type Call = { method: string; url: string };
 const calls: Call[] = [];
 const json = (status: number, body: unknown) => ({

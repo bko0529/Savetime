@@ -75,6 +75,16 @@ export function refreshTokens(): Promise<boolean> {
   return refreshing;
 }
 
+/** 실시간 연결이 TOKEN_EXPIRED 로 거절됐을 때: 토큰을 새로 받고, 안 되면 로그인 화면으로 */
+export async function ensureFreshToken(): Promise<boolean> {
+  const ok = await refreshTokens();
+  if (!ok) hooks.lost();
+  return ok;
+}
+
+/** 지금 access 토큰 (실시간 연결에 씀) */
+export const currentAccessToken = () => hooks.get()?.accessToken ?? null;
+
 type Options = {
   body?: unknown;
   /** 사진을 보내는 multipart 요청 (가입 신청). Content-Type 은 fetch 가 경계값과 함께 직접 붙인다 */

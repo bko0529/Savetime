@@ -27,9 +27,11 @@
     "lucide-react-native": "^1.80.0",
     "react": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-qrcode-svg": "^6.3.56",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-svg": "15.16.0",
+    "socket.io-client": "^4.8.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {

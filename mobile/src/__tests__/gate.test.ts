@@ -7,6 +7,7 @@ const ready: GateInput = {
   consent: 'agreed',
   permissions: { location: 'granted', notify: 'granted' },
   auth: { status: 'signedIn', me: { id: 1, status: 'approved' } },
+  duty: { team: 'joined', started: true },
 };
 const go = (patch: Partial<GateInput>) => gateTarget({ ...ready, ...patch });
 

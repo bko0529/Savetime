@@ -489,7 +489,100 @@ export function Chips<T extends string>({
   );
 }
 
+/** 이름 두 글자만 넣은 칸 (팀원 · 대원 목록) */
+export function Avatar({
+  name,
+  tone = 'ink',
+}: {
+  name: string;
+  tone?: 'ink' | 'accent' | 'muted';
+}) {
+  const t = {
+    ink: { bg: color.primary, fg: color.primaryText },
+    accent: { bg: color.accentSoft, fg: color.accentDeep },
+    muted: { bg: color.surface2, fg: color.muted },
+  }[tone];
+  return (
+    <View style={[s.avatar, { backgroundColor: t.bg }]}>
+      <Txt style={{ fontFamily: font.extrabold, fontSize: 14, color: t.fg }}>
+        {name.slice(0, 2)}
+      </Txt>
+    </View>
+  );
+}
+
+/** 맞붙은 선택 (팀 만들기/참여, 처치/운전) */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  small,
+}: {
+  value: T;
+  options: readonly { value: T; label: string; disabled?: boolean }[];
+  onChange: (v: T) => void;
+  small?: boolean;
+}) {
+  return (
+    <View style={[s.segment, small && { padding: 3, borderRadius: radius.sm }]}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            disabled={o.disabled}
+            accessibilityRole="tab"
+            accessibilityLabel={o.label}
+            accessibilityState={{ selected: on, disabled: !!o.disabled }}
+            style={[
+              s.segmentItem,
+              small && { paddingVertical: 6, paddingHorizontal: 10, flex: 0, borderRadius: 6 },
+              on && s.segmentOn,
+              o.disabled && { opacity: 0.35 },
+            ]}
+          >
+            <Txt
+              style={{
+                fontFamily: font.bold,
+                fontSize: small ? 12 : 14,
+                color: on ? (small ? color.accentDeep : color.foreground) : color.muted,
+              }}
+            >
+              {o.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segment: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface2,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.sm,
+  },
+  segmentOn: { backgroundColor: color.card, ...shadow.card },
   field: {
     height: 52,
     paddingHorizontal: 14,

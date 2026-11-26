@@ -1,6 +1,6 @@
 /**
  * 지금 상태에서 있어야 할 화면 (Lovable app-gate.tsx 와 같은 순서).
- * 업데이트 → 위치 동의 → 권한 → 로그인(·가입 신청) → 승인 대기 → 앱
+ * 업데이트 → 위치 동의 → 권한 → 로그인(·가입 신청) → 승인 대기 → 근무 시작(팀) → 앱
  * 화면 함수가 아니라 순수 함수라 테스트로 순서를 확인하기 쉽다.
  */
 import type { Me } from './api/client';
@@ -14,10 +14,12 @@ export type GateInput = {
   consent: Consent;
   permissions: { location: Perm; notify: Perm };
   auth: { status: 'loading' } | { status: 'signedOut' } | { status: 'signedIn'; me: Me };
+  /** 팀: loading = 서버에 묻는 중, started = 이 팀으로 '근무 시작'을 눌렀음 */
+  duty?: { team: 'loading' | 'none' | 'joined'; started: boolean };
 };
 
 export type Screen =
-  'loading' | 'update' | 'welcome' | 'permissions' | 'login' | 'pending' | 'home';
+  'loading' | 'update' | 'welcome' | 'permissions' | 'login' | 'pending' | 'duty' | 'home';
 
 export function gateTarget(g: GateInput): Screen {
   if (versionBelow(g.appVersion, g.minAppVersion)) return 'update';
@@ -29,6 +31,9 @@ export function gateTarget(g: GateInput): Screen {
   if (g.auth.status === 'signedOut') return 'login';
   // SFR-022: 승인 전에는 '승인 대기' 화면만 (반려·정지도 이 화면이 문구를 고름)
   if (g.auth.me.status !== 'approved') return 'pending';
+  // SFR-113: 근무(팀)를 시작해야 이송 화면을 쓴다
+  if (!g.duty || g.duty.team === 'loading') return 'loading';
+  if (g.duty.team === 'none' || !g.duty.started) return 'duty';
   return 'home';
 }
 

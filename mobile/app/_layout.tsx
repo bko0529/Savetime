@@ -15,6 +15,7 @@ import { canSignup, gateTarget } from '../src/gate';
 import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
 import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
+import { teamStore } from '../src/duty/team';
 import { useStore } from '../src/state/store';
 import { color } from '../src/ui/theme';
 
@@ -38,6 +39,11 @@ function Gate() {
   const { consent } = useStore(consentStore);
   const { minAppVersion } = useStore(configStore);
   const permissions = usePermissions();
+  const t = useStore(teamStore);
+  const duty = {
+    team: t.team === 'loading' ? 'loading' : t.team ? 'joined' : 'none',
+    started: t.started,
+  } as const;
 
   // 서버 설정(최소 버전·기능 토글): 켜질 때와 1분마다 (SFR-142, QUR-013)
   useEffect(() => {
@@ -47,7 +53,7 @@ function Gate() {
     return () => clearInterval(t);
   }, []);
 
-  const input = { appVersion: APP_VERSION, minAppVersion, consent, permissions, auth: state };
+  const input = { appVersion: APP_VERSION, minAppVersion, consent, permissions, auth: state, duty };
   const target = gateTarget(input);
   if (target === 'loading') return <Splash />;
   // Stack.Protected: guard 가 true 인 화면만 열린다. 지금 화면이 닫히면 열린 화면으로 자동 이동
@@ -72,6 +78,11 @@ function Gate() {
       </Stack.Protected>
       <Stack.Protected guard={canSignup(input, target)}>
         <Stack.Screen name="signup" />
+      </Stack.Protected>
+      <Stack.Protected guard={target === 'duty'}>
+        <Stack.Screen name="duty" />
+        <Stack.Screen name="invite" />
+        <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={target === 'home'}>
         <Stack.Screen name="index" />
