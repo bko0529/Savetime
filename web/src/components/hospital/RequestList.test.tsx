@@ -85,6 +85,24 @@ describe('요청 목록 (SFR-135)', () => {
     render(<RequestList items={[item(7, 60)]} nowMs={NOW} selectedId={null} onOpen={onOpen} />);
     fireEvent.click(screen.getByRole('button', { name: 'R-7' }));
     expect(onOpen).toHaveBeenCalledWith(7);
+    // 줄 클릭과 겹쳐 두 번 열지 않는다
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('번호가 아닌 줄의 다른 칸(주 증상·남은 시간)을 눌러도 그 요청을 연다', () => {
+    const onOpen = vi.fn();
+    render(
+      <RequestList
+        items={[item(7, 60), item(8, 90, { chiefComplaint: '복통' })]}
+        nowMs={NOW}
+        selectedId={null}
+        onOpen={onOpen}
+      />,
+    );
+    fireEvent.click(screen.getByText('복통'));
+    expect(onOpen).toHaveBeenLastCalledWith(8);
+    fireEvent.click(screen.getByText('1:00'));
+    expect(onOpen).toHaveBeenLastCalledWith(7);
   });
 
   it('요청이 없으면 안내 문구', () => {

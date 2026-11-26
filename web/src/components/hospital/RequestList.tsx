@@ -55,8 +55,12 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
             return (
               <tr
                 key={id}
+                // 줄 어디를 눌러도 상세가 열린다 (번호 글자만 누르기는 작아서 어렵다).
+                // 키보드(Tab·Enter)는 아래 번호 버튼으로 연다
+                onClick={() => onOpen(id)}
                 className={cn(
                   table.row,
+                  'cursor-pointer hover:bg-surface',
                   selectedId === id && 'bg-selected shadow-[inset_4px_0_0_var(--foreground)]',
                   urgent && 'bg-urgent shadow-[inset_4px_0_0_var(--destructive)]',
                 )}
@@ -67,7 +71,11 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
                   <button
                     type="button"
                     className="font-extrabold tabular-nums underline underline-offset-4"
-                    onClick={() => onOpen(id)}
+                    // 줄의 onClick 과 두 번 열리지 않게 여기서 멈춘다
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen(id);
+                    }}
                   >
                     {item.label}
                   </button>
