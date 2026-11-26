@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { BrandLogo } from './Brand';
 
 // 화면 하나를 통째로 대신하는 안내 (없는 주소·오류·서버 연결 실패·확인 중).
 // 빈 화면에 글자 한 줄만 뜨지 않게, 로고가 있는 가운데 카드로 무엇이 문제이고 무엇을 하면 되는지 보여 준다
@@ -23,7 +22,6 @@ export function StatusScreen({
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-canvas p-8">
       <div className="tile flex w-full max-w-[520px] flex-col items-center gap-5 rounded-2xl p-10 text-center shadow-[var(--shadow-lift)]">
-        <BrandLogo className="size-14" />
         <div className="flex flex-col gap-2">
           {eyebrow && (
             <span
