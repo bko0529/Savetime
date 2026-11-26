@@ -105,9 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const reapply = state.status === 'signedIn' && state.me.status === 'rejected';
       try {
         if (reapply) {
-          // 반려된 뒤 다시 신청: 같은 계정이라 아이디·비밀번호 없이 내용·사진만 새로 (PUT /me/signup)
-          const me = await api<Me>('PUT', '/me/signup', { form: toSignupFormData(f, false) });
-          setState({ status: 'signedIn', me });
+          // 반려된 뒤 다시 신청: 같은 계정이라 아이디·비밀번호 없이 내용·사진만 새로 (PUT /me/signup).
+          // 응답에는 status·appliedAt 만 와서(openapi 는 Me 라고 적혀 있음) 내 정보를 다시 받는다
+          await api('PUT', '/me/signup', { form: toSignupFormData(f, false) });
+          setState({ status: 'signedIn', me: await api<Me>('GET', '/me') });
           return null;
         }
         await api('POST', '/auth/signup', { auth: false, form: toSignupFormData(f, true) });
