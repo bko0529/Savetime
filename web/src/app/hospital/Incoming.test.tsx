@@ -61,7 +61,9 @@ afterEach(() => {
 });
 
 // '도착 예정' 제목 아래 표
+// 요청 / 도착 예정 탭 중 '도착 예정' 탭을 눌러 연다
 async function incomingTable() {
+  fireEvent.click(await screen.findByRole('tab', { name: /도착 예정/ }));
   const heading = await screen.findByRole('heading', { name: '도착 예정' });
   return heading.parentElement!;
 }
@@ -80,12 +82,15 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('구급차 위치·지도는 보여 주지 않는다 (D-71)', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
-    expect(document.body.textContent).not.toMatch(/위도|경도|지도|km/);
+    // 글자 조각마다 본다 (붙여 읽으면 '요청 중지' + '도착'이 '지도'처럼 보임)
+    expect(screen.queryAllByText(/위도|경도|지도|km/)).toEqual([]);
     expect(document.querySelector('iframe, canvas, [data-map]')).toBeNull();
   });
 
   it('새로 확정·도착 예상 갱신·도착 알림이 오면 목록을 다시 받는다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     const before = server.callsTo(INCOMING).length;
 
@@ -108,6 +113,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('이송이 취소되면 목록에서 빠지고, 확인을 누를 때까지 이유를 보여 준다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     server.set(INCOMING, list());
     socket.fire('incoming.removed', envelope({ requestId: 102, reason: 'cancelled' }));
@@ -123,6 +129,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('목적지가 바뀌거나 승인을 취소해도 이유를 보여 준다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     server.set(INCOMING, list());
     socket.fire('incoming.removed', envelope({ requestId: 102, reason: 'dest_changed' }));
@@ -132,6 +139,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('다시 연결되면 전체를 다시 받는다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     const before = server.callsTo(INCOMING).length;
     socket.serverConnect('sock-2');

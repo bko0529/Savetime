@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { INCOMING_KEY, type HwIncoming } from '@/app/hospital/useIncoming';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
@@ -32,36 +33,26 @@ const STATUS_TEXT: Record<string, string> = {
   rejected: '거절함',
 };
 
-// 상태·남은 시간·도착 예상 칸 (인계 시안: 연한 바탕, 위에 작은 이름표, 아래 큰 값)
-const tileClass = 'flex min-w-0 flex-col gap-1 rounded-[12px] bg-surface px-4 py-3';
-const tileLabel = 'text-[14px] font-semibold text-muted-foreground';
-const tileValue = 'text-[22px] leading-tight font-extrabold tabular-nums break-words';
-
-// '도착 예상 8분' → 이름표 '도착 예상' + 값 '8분'. 도착한 뒤('13:28 도착')는 이름표 '도착'
-function etaTile(eta: string): { label: string; value: string } {
+// '도착 예상 8분' → 값 '8분'. 도착한 뒤('13:28 도착')는 이름표 '도착'
+function etaRow(eta: string): { label: string; value: string } {
   const prefix = '도착 예상 ';
   return eta.startsWith(prefix)
     ? { label: '도착 예상', value: eta.slice(prefix.length) }
     : { label: '도착', value: eta };
 }
 
-// 병상 값 '6/20'(빈 병상/전체) → 큰 숫자 6 + 작은 /20
-function BedTile({ label, value }: { label: string; value: string | null | undefined }) {
-  const [avail, total] = value ? value.split('/') : [];
+// 카드 한 줄: 이름 왼쪽, 값 오른쪽 (시안의 '환자 평가 정보'·'우리 병원' 카드)
+const rowClass =
+  'flex items-baseline justify-between gap-4 border-b border-line-soft py-2.5 last:border-b-0';
+const cardClass =
+  'flex min-w-0 flex-col rounded-[16px] border border-line bg-card px-5 py-4 shadow-[var(--shadow-card)]';
+
+function CardTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 rounded-[12px] border border-line px-3 py-3">
-      <span className="text-[16px] whitespace-nowrap text-muted-foreground">{label}</span>
-      {value ? (
-        <span className="tabular-nums">
-          <span className="text-[22px] font-extrabold">{avail}</span>
-          {total !== undefined && (
-            <span className="text-[15px] font-semibold text-muted-foreground">/{total}</span>
-          )}
-        </span>
-      ) : (
-        <span className="text-[16px] font-bold">정보 없음</span>
-      )}
-    </div>
+    <h3 className="mb-1 flex items-center gap-2 text-[17px] font-extrabold">
+      <span aria-hidden className="h-4 w-[3px] rounded-full bg-destructive" />
+      {children}
+    </h3>
   );
 }
 
@@ -96,20 +87,24 @@ export function RequestDetail({
   const incomingItem = incoming.data?.items?.find((i) => i.id === requestId);
 
   return (
-    <section
-      aria-label="요청 상세"
-      className="flex flex-col gap-4 rounded-[16px] border-2 border-foreground bg-card p-[24px]"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[15px] font-semibold text-muted-foreground">요청 상세</p>
-          <h2 className="text-[30px] font-extrabold tracking-[-0.02em] tabular-nums">
-            요청 R-{requestId}
-          </h2>
+    <section aria-label="요청 상세" className="flex min-w-0 flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* 제목: 번호 · 성별 나이대 · 주 증상 (시안) */}
+        <h2 className="min-w-0 text-[24px] leading-snug font-extrabold tracking-[-0.02em] break-words">
+          {detail.data && !detail.isError
+            ? titleText(detail.data, requestId)
+            : `요청 R-${requestId}`}
+        </h2>
+        <div className="flex shrink-0 items-center gap-2">
+          {detail.data && !detail.isError && <RemainingChip detail={detail.data} nowMs={nowMs} />}
+          <Button
+            variant="outline"
+            className="h-9 rounded-[10px] px-3 text-[15px]"
+            onClick={onClose}
+          >
+            닫기
+          </Button>
         </div>
-        <Button variant="outline" className="rounded-[10px]" onClick={onClose}>
-          닫기
-        </Button>
       </div>
       {detail.isPending && <p className="text-xl">불러오는 중…</p>}
       {/* 다시 받다가 실패하면(요청이 끝남 등) 예전 환자 정보는 남기지 않는다 (SER-014) */}
@@ -133,6 +128,7 @@ export function RequestDetail({
             !detail.isError &&
             (detail.data.status === 'approved' || detail.data.status === 'confirmed')
           }
+          approvalHint={approvalHint(detail.data)}
         />
       )}
       {/* 추가 메모: 우리 병원으로 확정된 요청에 한 번만 (SFR-140) */}
@@ -176,10 +172,50 @@ function etaLine(detail: Detail, incomingItem: HwIncoming | undefined): string |
   return `도착 예상 ${estimated ? '약 ' : ''}${detail.etaMin}분${estimated ? ' (추정)' : ''}`;
 }
 
+// 제목: 'R-102 · 남 60대 · 두통' (값이 없으면 빼고 잇는다)
+function titleText(detail: Detail, requestId: number): string {
+  const a = (detail.assessment ?? {}) as Assessment;
+  const who = [fieldText(a, 'sex'), fieldText(a, 'ageBand')].filter(Boolean).join(' ');
+  return [detail.label ?? `R-${requestId}`, who, a.chiefComplaint].filter(Boolean).join(' · ');
+}
+
+// 오른쪽 위 칩: 대기 중이면 '남은 1:40'(30초 이하 빨강), 아니면 상태
+function RemainingChip({ detail, nowMs }: { detail: Detail; nowMs: number }) {
+  if (detail.status === 'waiting' && detail.respondUntil) {
+    const urgent = isUrgent(detail.respondUntil, nowMs);
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[16px] font-bold whitespace-nowrap',
+          urgent
+            ? 'border-danger-line bg-danger-soft text-danger-strong'
+            : 'border-warning-strong/30 bg-warning-soft text-warning-strong',
+        )}
+      >
+        남은{' '}
+        <span className={cn('tabular-nums', urgent && 'font-extrabold text-destructive')}>
+          {remainingText(detail.respondUntil, nowMs)}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex rounded-full border border-line bg-surface px-3 py-1 text-[16px] font-bold whitespace-nowrap">
+      {STATUS_TEXT[detail.status ?? ''] ?? detail.status}
+    </span>
+  );
+}
+
+// 승인 전에 미리 보여 주는 안내: 지금 유효한 승인 수와 응급실 빈 병상 (병상 정보가 없으면 안 보여 줌)
+function approvalHint(detail: Detail): string | null {
+  const erAvail = Number(detail.ourHospital?.beds?.er?.split('/')[0]);
+  if (detail.validApprovals == null || !Number.isFinite(erAvail)) return null;
+  return `지금 유효한 승인 ${detail.validApprovals}건 · 응급실 병상 ${erAvail}개 (병상보다 많이 승인하면 확인을 한 번 더 받아요)`;
+}
+
 function DetailBody({
   detail,
   incomingItem,
-  nowMs,
 }: {
   detail: Detail;
   incomingItem: HwIncoming | undefined;
@@ -188,83 +224,92 @@ function DetailBody({
   const eta = etaLine(detail, incomingItem);
   const a = (detail.assessment ?? {}) as Assessment;
   const abnormal = new Set(detail.abnormalFields ?? []);
-  const waiting = detail.status === 'waiting';
-  const urgent = waiting && detail.respondUntil && isUrgent(detail.respondUntil, nowMs);
   const beds = detail.ourHospital?.beds;
-  const rows = (Object.keys(FIELD_LABEL) as (keyof Assessment)[])
-    .map((field) => ({ field, text: fieldText(a, field) }))
-    .filter((r): r is { field: keyof Assessment; text: string } => r.text !== null);
+  const capability = detail.ourHospital?.capability;
+  // 제목에 이미 있는 성별·나이대는 카드에서 뺀다
+  const rows = (Object.keys(FIELD_LABEL) as (keyof typeof FIELD_LABEL)[]).flatMap((field) => {
+    if (field === 'sex' || field === 'ageBand') return [];
+    const text = fieldText(a, field);
+    return text === null ? [] : [{ field, text }];
+  });
+  // 확정 전 길찾기로 잰 시간이면 '(길찾기)'를 붙인다 (직선거리 추정은 이미 '(추정)')
+  const etaShown = eta ? etaRow(eta) : null;
+  const etaValue =
+    etaShown && !incomingItem && detail.etaSource === 'route'
+      ? `${etaShown.value} (길찾기)`
+      : etaShown?.value;
+  const bedRows = [
+    ['응급실', beds?.er],
+    ['수술실', beds?.or],
+    ['중환자실', beds?.icu],
+  ] as const;
 
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-[10px]">
-        <div className={tileClass}>
-          <span className={tileLabel}>상태</span>
-          <span className={tileValue}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
-        </div>
-        {waiting && detail.respondUntil && (
-          // 30초 이하면 칸이 빨강 연한 바탕 + 빨간 숫자
-          <div className={cn(tileClass, urgent && 'bg-danger-soft')}>
-            <span className={tileLabel}>남은 시간</span>
-            <span className={cn(tileValue, urgent && 'text-destructive')}>
-              {remainingText(detail.respondUntil, nowMs)}
-            </span>
-          </div>
-        )}
-        {eta && (
-          <div className={tileClass}>
-            <span className={tileLabel}>{etaTile(eta).label}</span>
-            <span className={tileValue}>{etaTile(eta).value}</span>
-          </div>
-        )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="환자 평가 정보" className={cardClass}>
+          <CardTitle>환자 평가 정보</CardTitle>
+          {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
+          <dl className="flex flex-col">
+            {rows.map(({ field, text }) => (
+              <div key={field} className={rowClass}>
+                <dt className="shrink-0 text-[16px] text-muted-foreground">{FIELD_LABEL[field]}</dt>
+                <dd
+                  className={cn(
+                    'text-right text-[17px] font-bold break-words',
+                    abnormal.has(field) && 'font-extrabold text-destructive',
+                  )}
+                  data-abnormal={abnormal.has(field) || undefined}
+                >
+                  {abnormal.has(field) ? `⚠ ${text}` : text}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section aria-label="우리 병원" className={cardClass}>
+          <CardTitle>우리 병원</CardTitle>
+          <dl className="flex flex-col">
+            {capability?.name && (
+              <div className={rowClass}>
+                <dt className="text-[16px] text-muted-foreground">[{capability.name}]</dt>
+                <dd
+                  className={cn(
+                    'text-[17px] font-extrabold',
+                    capability.available ? 'text-success-strong' : 'text-destructive',
+                  )}
+                >
+                  {capability.available ? '가능 ✓' : '불가'}
+                </dd>
+              </div>
+            )}
+            {bedRows.map(([label, value]) => (
+              <div key={label} className={rowClass}>
+                <dt className="text-[16px] text-muted-foreground">{label}</dt>
+                <dd className="text-[17px] font-bold tabular-nums">
+                  {value ? value.replace('/', ' / ') : '정보 없음'}
+                </dd>
+              </div>
+            ))}
+            {etaShown && (
+              <div className={rowClass}>
+                <dt className="text-[16px] text-muted-foreground">{etaShown.label}</dt>
+                <dd className="text-[17px] font-bold tabular-nums">{etaValue}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
       </div>
 
-      <p className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] break-words">
-        {a.chiefComplaint}
-      </p>
-
-      {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
-        {rows.map(({ field, text }) => (
-          <div
-            key={field}
-            className={cn(
-              'min-w-0 rounded-[10px] border border-line px-3 py-2',
-              abnormal.has(field) && 'border-danger-line bg-danger-soft',
-            )}
-          >
-            <dt className="text-[14px] text-muted-foreground">{FIELD_LABEL[field]}</dt>
-            <dd
-              className={cn(
-                'text-[19px] font-semibold break-words',
-                abnormal.has(field) && 'font-extrabold text-destructive',
-              )}
-              data-abnormal={abnormal.has(field) || undefined}
-            >
-              {abnormal.has(field) ? `⚠ ${text}` : text}
-            </dd>
-          </div>
-        ))}
-      </dl>
-
-      {/* 우리 병원 병상: 응급실·수술실·중환자실 3칸 (이름표 왼쪽, 빈 병상 숫자 오른쪽) */}
-      <section aria-label="우리 병원 병상" className="flex flex-col gap-2">
-        <h3 className="text-[16px] font-extrabold">우리 병원 병상</h3>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
-          <BedTile label="응급실" value={beds?.er} />
-          <BedTile label="수술실" value={beds?.or} />
-          <BedTile label="중환자실" value={beds?.icu} />
-        </div>
-      </section>
-
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
-        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
+        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[18px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
       {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
       {detail.extraMemo && (
-        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
+        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[18px] font-bold text-info-strong">
           추가 메모: {detail.extraMemo}
         </p>
       )}

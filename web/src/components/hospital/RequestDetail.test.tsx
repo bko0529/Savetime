@@ -45,23 +45,42 @@ describe('요청 상세 (SFR-118)', () => {
     fakeServer({ 'GET /hw/requests/102': { status: 200, body: detail() } });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
 
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
-    // 도착 예상 칸: 이름표 '도착 예상' + 값 '12분'
-    expect(screen.getByText('도착 예상')).toBeTruthy();
-    expect(screen.getByText('12분')).toBeTruthy();
-    // 우리 병원 병상 3칸 (빈 병상 / 전체)
-    const beds = screen.getByRole('region', { name: '우리 병원 병상' });
-    expect(beds.textContent).toContain('응급실5/20');
-    expect(beds.textContent).toContain('수술실1/4');
-    expect(beds.textContent).toContain('중환자실0/10');
-    // 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
+    // 제목: 번호 · 성별 나이대 · 주 증상
+    expect(
+      (await screen.findByRole('heading', { level: 2, name: 'R-102 · 남 60대 · 갑작스러운 두통' }))
+        .textContent,
+    ).toBeTruthy();
+    // 남은 시간 25초 → 빨간색 칩
+    expect(screen.getByText('0:25').className).toContain('text-destructive');
+    // 환자 평가 정보 카드: 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
+    expect(screen.getByRole('region', { name: '환자 평가 정보' })).toBeTruthy();
     const spo2 = screen.getByText('⚠ 86%');
     expect(spo2.className).toContain('text-destructive');
     expect(screen.getByText('88회/분').className).not.toContain('text-destructive');
-    expect(screen.getByText('60대')).toBeTruthy();
-    // 남은 시간 25초 → 빨간색
-    expect(screen.getByText('남은 시간')).toBeTruthy();
-    expect(screen.getByText('0:25').className).toContain('text-destructive');
+    // 우리 병원 카드: 병상(빈 병상 / 전체)과 길찾기로 잰 도착 예상
+    const ours = screen.getByRole('region', { name: '우리 병원' });
+    expect(ours.textContent).toContain('응급실5 / 20');
+    expect(ours.textContent).toContain('수술실1 / 4');
+    expect(ours.textContent).toContain('중환자실0 / 10');
+    expect(ours.textContent).toContain('도착 예상12분 (길찾기)');
+    // 승인 전 안내: 지금 유효한 승인과 응급실 빈 병상
+    expect(screen.getByText(/지금 유효한 승인 0건 · 응급실 병상 5개/)).toBeTruthy();
+  });
+
+  it('수술 가능 여부를 우리 병원 카드 맨 위에', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          ourHospital: { capability: { name: '뇌출혈수술', available: true }, beds: null },
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    expect(await screen.findByText('[뇌출혈수술]')).toBeTruthy();
+    expect(screen.getByText('가능 ✓')).toBeTruthy();
+    // 병상 정보가 없으면 승인 전 안내를 보여 주지 않는다
+    expect(screen.queryByText(/지금 유효한 승인/)).toBeNull();
   });
 
   it('길찾기 전 추정 시간은 (추정)으로', async () => {
@@ -117,7 +136,7 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([]);
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
+    expect(await screen.findByRole('region', { name: '우리 병원' })).toBeTruthy();
     expect(screen.queryByText(/도착 예상/)).toBeNull();
   });
 

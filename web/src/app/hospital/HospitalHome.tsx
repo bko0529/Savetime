@@ -9,7 +9,7 @@ import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { StatusScreen } from '@/components/brand/StatusScreen';
 import { LicenseBanner } from '@/components/hospital/LicenseBanner';
 import { Button } from '@/components/ui/button';
-import { Logo } from '@/components/hospital/Logo';
+import { BrandLogo } from '@/components/brand/Brand';
 import { ShiftScreen } from './ShiftScreen';
 
 type Session = ApiPaths['/hw/session']['get']['responses'][200]['content']['application/json'];
@@ -70,18 +70,24 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
       // 상단 막대의 왼쪽. 알림·연결 상태는 ShiftScreen 이 알고 있어서 막대 자체는 거기서 그린다
       brand={
         <div className="flex min-w-0 items-center gap-3">
-          <Logo />
-          <p className="flex min-w-0 flex-col leading-tight">
-            <span className="text-[20px] font-extrabold">{hospital?.name}</span>
-            <span className="text-[15px] text-muted-foreground">{pc?.name}</span>
+          <BrandLogo className="size-10 rounded-xl" />
+          <p className="flex min-w-0 items-baseline gap-2 leading-tight">
+            <span className="text-[22px] font-extrabold tracking-[-0.02em]">SaveTime</span>
+            <span aria-hidden className="text-line">
+              |
+            </span>
+            <span className="text-[17px] font-semibold text-muted-foreground">
+              병원 · 응급실 이송 요청
+            </span>
           </p>
-          {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
-          {/* 인계 시안의 위쪽 막대에는 화면 제목이 따로 보이지 않는다. 화면 읽기 프로그램·탭 이동용으로만 둔다 */}
+          {/* 화면 제목은 보이지 않게, 화면 읽기 프로그램·탭 이동용으로만 둔다 */}
           <h1 className="sr-only">{shift ? '이송 요청' : '근무 시작'}</h1>
         </div>
       }
       // 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168)
       notice={shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
+      hospitalName={hospital?.name}
+      pcName={pc?.name}
       shift={shift ?? null}
       pause={{
         paused: session.data.paused ?? false,

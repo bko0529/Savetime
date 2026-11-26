@@ -49,7 +49,9 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
     expect(server.callsTo('POST /hw/shifts')[0].body).toEqual({ staffName: '김간호' });
 
     fireEvent.click(alarmButton());
-    expect(await screen.findByText(/알림 켜짐 · 김간호 님 근무 중/)).toBeDefined();
+    // 위쪽 막대 오른쪽: 작은 '알림 켜짐' 칩과 '담당자 · PC 이름'
+    expect(await screen.findByText(/알림 켜짐/)).toBeDefined();
+    expect(screen.getByText(/김간호/)).toBeDefined();
     expect(server.callsTo('POST /hw/shifts/current/alarm-on')[0].body).toEqual({
       socketId: 'sock-1',
     });

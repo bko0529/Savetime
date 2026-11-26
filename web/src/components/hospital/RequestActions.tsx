@@ -71,10 +71,18 @@ type Props = {
   canAnswer: boolean;
   // 승인했거나 우리 병원으로 확정된 요청이면 '승인 취소'를 보여 준다 (SFR-128)
   canCancelApproval?: boolean;
+  // 승인 전에 보여 줄 안내 (지금 유효한 승인 수·응급실 빈 병상). 없으면 안 보여 준다
+  approvalHint?: string | null;
 };
 
 // 승인·거절 (SFR-119), 승인 취소 (SFR-128). 응답자 이름은 서버가 근무 시작 때 입력한 담당자 이름으로 남긴다
-export function RequestActions({ requestId, version, canAnswer, canCancelApproval }: Props) {
+export function RequestActions({
+  requestId,
+  version,
+  canAnswer,
+  canCancelApproval,
+  approvalHint,
+}: Props) {
   const queryClient = useQueryClient();
   // 열려 있는 사유 창: 거절 / 승인 취소
   const [reasonFor, setReasonFor] = useState<'reject' | 'cancelApproval' | null>(null);
@@ -161,6 +169,11 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           />
         </label>
       )}
+      {canAnswer && approvalHint && (
+        <p className="rounded-[12px] border border-info-strong/20 bg-info-soft px-4 py-3 text-[16px] font-semibold text-info-strong">
+          {approvalHint}
+        </p>
+      )}
       {canAnswer && (
         <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
@@ -183,10 +196,17 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
               answer.reset();
               setReasonFor('reject');
             }}
+            aria-label="거절"
           >
-            거절
+            거절 (사유 선택)
           </Button>
         </div>
+      )}
+      {canAnswer && (
+        <p className="text-center text-[14px] text-muted-foreground">
+          다른 PC에서 먼저 응답하면 &lsquo;다른 PC에서 이미 승인했어요&rsquo;로 바뀌어요 · 열람
+          기록이 남아요
+        </p>
       )}
       {canCancelApproval && (
         <Button

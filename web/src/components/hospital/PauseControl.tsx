@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { apiFetch } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { cn } from '@/lib/utils';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { dialog } from './dialogStyles';
 
@@ -27,10 +28,12 @@ type Props = {
   // 지금 응답 대기 중인 요청 수. 중지하면 이만큼 거절(요청 중지)로 처리된다
   waitingCount: number;
   socket: HospitalSocket | null;
+  // '잠시 요청 중지' 버튼 모양 덧붙이기 (탭 줄에서는 탭과 같은 높이)
+  className?: string;
 };
 
 // 잠시 요청 중지 / 요청 다시 받기 (SFR-139). 병원 전체에 적용돼서 한 PC 에서 누르면 모든 PC 가 같이 바뀐다
-export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) {
+export function PauseControl({ paused, pausedAt, waitingCount, socket, className }: Props) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   // 중지 2시간째 서버가 보내는 '아직 멈춘 상태' 알림. 다시 받으면 사라진다
@@ -108,7 +111,10 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
       <Button
         size="lg"
         variant="outline"
-        className="ml-auto h-[48px] w-fit rounded-[10px] border-2 bg-card px-5 text-lg"
+        className={cn(
+          'ml-auto h-[48px] w-fit rounded-[10px] border-2 bg-card px-5 text-lg',
+          className,
+        )}
         onClick={() => {
           toggle.reset();
           setConfirming(true);
