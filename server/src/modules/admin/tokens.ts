@@ -2,18 +2,23 @@
 import { errors, jwtVerify, SignJWT } from 'jose';
 
 const ISSUER = 'savetime';
-const ACCESS_TTL = '15m';
+// 기본 15분. 서버 설정 ADMIN_ACCESS_MINUTES 로 바꿀 수 있다
+const DEFAULT_ACCESS_MINUTES = 15;
 
 export type AdminVerifyResult =
   { ok: true; adminId: string } | { ok: false; reason: 'expired' | 'invalid' };
 
-export function signAdminAccessToken(key: Uint8Array, adminId: string): Promise<string> {
+export function signAdminAccessToken(
+  key: Uint8Array,
+  adminId: string,
+  accessMinutes = DEFAULT_ACCESS_MINUTES,
+): Promise<string> {
   return new SignJWT({ typ: 'admin' })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(adminId)
     .setIssuer(ISSUER)
     .setIssuedAt()
-    .setExpirationTime(ACCESS_TTL)
+    .setExpirationTime(`${accessMinutes}m`)
     .sign(key);
 }
 

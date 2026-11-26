@@ -19,3 +19,10 @@ test('빈 값·보통 값은 그대로 읽는다', () => {
   assert.equal(config.JWT_SECRET, 'a'.repeat(32));
   assert.equal(config.KAKAO_REST_API_KEY, '');
 });
+
+test('관리자 로그인 유지 시간: 비우면 15분, 값을 주면 그 값(최대 480분)', () => {
+  assert.equal(loadConfig({ ...base }).ADMIN_ACCESS_MINUTES, 15);
+  assert.equal(loadConfig({ ...base, ADMIN_ACCESS_MINUTES: '' }).ADMIN_ACCESS_MINUTES, 15);
+  assert.equal(loadConfig({ ...base, ADMIN_ACCESS_MINUTES: '240' }).ADMIN_ACCESS_MINUTES, 240);
+  assert.throws(() => loadConfig({ ...base, ADMIN_ACCESS_MINUTES: '1000' }));
+});

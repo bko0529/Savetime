@@ -129,13 +129,31 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
       ),
     });
     renderStats();
-    await screen.findByRole('row', { name: 'A병원' });
-    fireEvent.click(screen.getByRole('button', { name: 'A병원 거절 사유 보기' }));
+    // 병원 줄을 누르면 상세(지표 + 출처별 거절 사유)가 펼쳐진다
+    fireEvent.click(await screen.findByRole('row', { name: 'A병원' }));
+    expect(screen.getByLabelText('A병원 상세').textContent).toContain('받은 요청');
     const detail = screen.getByLabelText('A병원 출처별 거절 사유');
     expect(detail.textContent).toContain('병원 웹 직접 1건');
     expect(detail.textContent).toContain('해당 전문의 부재 1');
     expect(detail.textContent).toContain('전화 확인 3건');
     expect(detail.textContent).toContain('수술실 부족 3');
+  });
+
+  it('병원 이름으로 검색하면 그 병원만 보인다', async () => {
+    fakeServer({
+      'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원'), stat(2, '천안중앙병원')),
+    });
+    renderStats();
+    await screen.findByRole('row', { name: 'A병원' });
+    fireEvent.change(screen.getByRole('searchbox', { name: '병원 이름 검색' }), {
+      target: { value: '천안' },
+    });
+    expect(screen.queryByRole('row', { name: 'A병원' })).toBeNull();
+    expect(screen.getByRole('row', { name: '천안중앙병원' })).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: '병원 이름 검색' }), {
+      target: { value: '없는병원' },
+    });
+    expect(screen.getByText(/에 맞는 병원이 없어요/)).toBeTruthy();
   });
 
   it("'최근 30일'로 바꾸면 30일 통계를 받는다", async () => {

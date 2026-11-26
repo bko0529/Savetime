@@ -173,6 +173,7 @@ const app = createApp({
           redis,
           jwtKey: signingKey(config.JWT_SECRET),
           sessionHours: config.SHIFT_MAX_HOURS,
+          accessMinutes: config.ADMIN_ACCESS_MINUTES,
           allowedOrigins: config.ALLOWED_ORIGINS,
           allowedIps: config.ADMIN_ALLOWED_IPS,
         }

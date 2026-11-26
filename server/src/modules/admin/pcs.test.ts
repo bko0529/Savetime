@@ -226,6 +226,10 @@ test('알림 목록: 새 PC 등록이 알림이 되고, 30분 안 재발생은 �
       ),
       [['pc_change', 'A병원 PC 등록 · 응급실 접수대', 1, false]],
     );
+    // 누르면 병원 관리 화면으로 가도록 병원 ID·이름을 같이 준다
+    const hospitalId = (await h.pool.query("SELECT id FROM hospital WHERE name = 'A병원'")).rows[0].id;
+    assert.equal(res.body.items[0].refId, Number(hospitalId));
+    assert.equal(res.body.items[0].hospitalName, 'A병원');
 
     // 병상 수집 3회 연속 실패가 12분 뒤 또 생기면 새로 쌓지 않고 횟수가 2
     await notifyAdmin(h.pool, 'collect_fail', null);
@@ -237,6 +241,9 @@ test('알림 목록: 새 PC 등록이 알림이 되고, 30분 안 재발생은 �
     const fail = res.body.items.find((i: { kind: string }) => i.kind === 'collect_fail');
     assert.equal(fail.text, '병상 수집 3회 연속 실패');
     assert.equal(fail.occurrences, 2);
+    // 병원과 상관없는 알림은 병원 이름이 없다
+    assert.equal(fail.hospitalName, null);
+    assert.equal(fail.refId, null);
     assert.equal(res.body.items.length, 2);
     assert.equal(res.body.unread, 2);
 

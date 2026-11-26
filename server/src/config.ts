@@ -19,6 +19,11 @@ const schema = z.object({
   // .env.example을 그대로 복사하면 'JWT_SECRET=' 빈 값이 들어온다. 빈 값은 '없음'으로 본다.
   JWT_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
   SHIFT_MAX_HOURS: z.coerce.number().int().min(1).max(24).default(14),
+  // 관리자 로그인 토큰 유효 시간(분). 기본 15분. 시연처럼 오래 켜 둘 때만 늘린다 (최대 8시간)
+  ADMIN_ACCESS_MINUTES: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().min(1).max(480).default(15),
+  ),
   PUBLIC_DATA_API_KEY: z.string().optional(),
   PUBLIC_DATA_DAILY_LIMIT: z.coerce.number().int().positive().default(10_000),
   COLLECT_REGIONS: z.string().optional(),

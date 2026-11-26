@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -114,6 +114,23 @@ export function HospitalAdmin() {
   }
 
   const items = list.data?.items ?? [];
+
+  // 알림(PC 등록·이상 PC·키 만료)을 누르고 왔으면 그 병원으로 검색하고, PC 알림이면 등록 PC 창을 연다
+  const [openPcsFor, setOpenPcsFor] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (!q) return;
+    setInput(q);
+    setQuery(q);
+    if (params.get('pcs') === '1') setOpenPcsFor(q);
+  }, []);
+  useEffect(() => {
+    if (openPcsFor === null || !list.isSuccess) return;
+    const target = items.find((h) => h.name === openPcsFor);
+    if (target) setPcsOf(target);
+    setOpenPcsFor(null);
+  }, [openPcsFor, list.isSuccess, items]);
 
   return (
     <div className="panel gap-5">

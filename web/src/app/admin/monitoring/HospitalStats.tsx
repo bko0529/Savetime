@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { REJECT_REASONS } from '@/components/hospital/RejectReasonDialog';
@@ -8,7 +9,6 @@ import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
 import { cn } from '@/lib/utils';
-import { ShowMoreButtons, useShowMore } from '../ShowMore';
 import { useAdminApi } from '../useAdminApi';
 
 type Stats =
@@ -50,8 +50,10 @@ export function HospitalStats() {
     queryFn: () => api<Stats>(`/admin/stats/hospitals?days=${days}`),
   });
   const hospitals = stats.data?.hospitals ?? [];
-  // 처음엔 3곳만, '병원 더 보기'로 10곳씩
-  const shown = useShowMore(hospitals);
+  // 병원 이름으로 걸러 보기 (받아 둔 목록 안에서)
+  const [search, setSearch] = useState('');
+  const keyword = search.trim();
+  const shown = keyword ? hospitals.filter((h) => (h.name ?? '').includes(keyword)) : hospitals;
 
   return (
     <section aria-labelledby="stats-title" className="panel">
@@ -93,9 +95,29 @@ export function HospitalStats() {
         </p>
       )}
       {hospitals.length > 0 && (
-        <div className="panel-table">
+        <input
+          type="search"
+          aria-label="병원 이름 검색"
+          placeholder="병원 이름 검색 (예: 천안)"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setOpenId(null);
+          }}
+          maxLength={40}
+          className="field h-11 max-w-md rounded-xl text-base"
+        />
+      )}
+      {hospitals.length > 0 && shown.length === 0 && (
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          &lsquo;{keyword}&rsquo;에 맞는 병원이 없어요.
+        </p>
+      )}
+      {shown.length > 0 && (
+        // 병원이 많아도 화면이 길어지지 않게 상자 안에서 스크롤 (제목 줄은 위에 고정)
+        <div className="panel-table max-h-[440px] overflow-y-auto">
           <table className="data-table data-table-flush">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-surface">
               <tr className="text-left">
                 <th className="px-3 py-3.5">병원</th>
                 <th className="px-3 py-3.5">요청</th>
@@ -108,11 +130,29 @@ export function HospitalStats() {
               </tr>
             </thead>
             <tbody>
-              {shown.visible.map((h) => {
+              {shown.map((h) => {
                 const open = openId === h.hospitalId;
+                const toggle = () => setOpenId(open ? null : (h.hospitalId ?? null));
                 return (
                   <Fragment key={h.hospitalId}>
-                    <tr className={cn(h.rejectSpike && 'bg-urgent font-bold')} aria-label={h.name}>
+                    {/* 줄을 누르면(또는 Enter) 그 병원 상세가 아래에 펼쳐진다 */}
+                    <tr
+                      className={cn(
+                        'cursor-pointer hover:bg-surface',
+                        h.rejectSpike && 'bg-urgent font-bold',
+                        open && 'bg-surface',
+                      )}
+                      aria-label={h.name}
+                      aria-expanded={open}
+                      tabIndex={0}
+                      onClick={toggle}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggle();
+                        }
+                      }}
+                    >
                       <td className="px-3 py-4 font-extrabold">
                         {h.name}
                         {h.rejectSpike && (
@@ -148,22 +188,20 @@ export function HospitalStats() {
                           </td>
                         </>
                       )}
-                      <td className="px-3 py-4">
-                        <Button
-                          variant="link"
-                          className="h-auto p-0 text-lg"
-                          aria-expanded={open}
-                          aria-label={`${h.name} 거절 사유 ${open ? '접기' : '보기'}`}
-                          onClick={() => setOpenId(open ? null : (h.hospitalId ?? null))}
-                        >
+                      <td className="px-3 py-4 font-bold">
+                        <span className="flex items-center justify-between gap-2">
                           {h.topRejectReason ? REASON_LABEL[h.topRejectReason] : '—'}
-                        </Button>
+                          <ChevronDown
+                            aria-hidden
+                            className={cn('size-4 shrink-0 transition', open && 'rotate-180')}
+                          />
+                        </span>
                       </td>
                     </tr>
                     {open && (
                       <tr className="border-b bg-muted">
-                        <td colSpan={8} className="p-4">
-                          <RejectBreakdown stat={h} />
+                        <td colSpan={8} className="p-5">
+                          <HospitalDetail stat={h} />
                         </td>
                       </tr>
                     )}
@@ -174,14 +212,47 @@ export function HospitalStats() {
           </table>
         </div>
       )}
-      <ShowMoreButtons
-        hasMore={shown.hasMore}
-        canCollapse={shown.canCollapse}
-        onMore={shown.more}
-        onCollapse={shown.collapse}
-        label="병원 더 보기"
-      />
     </section>
+  );
+}
+
+// 병원 상세: 숫자를 이름과 함께 크게, 아래에 출처별 거절 사유
+function HospitalDetail({ stat }: { stat: HospitalStat }) {
+  const rows: [string, string][] = [
+    ['받은 요청', `${stat.requests ?? 0}건`],
+    ['응답률', percent(stat.responseRate)],
+    ['평균 응답 시간', durationText(stat.avgResponseSec)],
+    ['승인 취소율', percent(stat.approvalCancelRate)],
+    ['수용 불가', `${stat.unacceptableCount ?? 0}건`],
+    ['요청 → 첫 승인', durationText(stat.avgRequestToFirstApprovalSec)],
+    ['요청 → 출발', durationText(stat.avgRequestToDepartSec)],
+    ['가장 많은 거절 사유', stat.topRejectReason ? REASON_LABEL[stat.topRejectReason] : '—'],
+  ];
+  return (
+    <div className="flex flex-col gap-4" aria-label={`${stat.name} 상세`}>
+      <p className="text-lg font-extrabold">
+        {stat.name} 상세
+        {stat.sampleTooSmall && (
+          <span className="ml-2 text-base font-normal text-muted-foreground">
+            · 표본 부족 (요청 10건 미만이라 비율은 참고만)
+          </span>
+        )}
+        {stat.rejectSpike && (
+          <span className="ml-2 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
+            거절 급증 (최근 7일이 30일보다 20%p 이상 높음)
+          </span>
+        )}
+      </p>
+      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {rows.map(([label, value]) => (
+          <div key={label} className="well flex flex-col gap-1 px-4 py-3">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd className="text-lg font-bold tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <RejectBreakdown stat={stat} />
+    </div>
   );
 }
 

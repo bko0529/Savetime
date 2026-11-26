@@ -19,6 +19,8 @@ export interface AdminContext {
   jwtKey: Uint8Array;
   // 갱신 토큰을 쓸 수 있는 시간 (대원 근무 시간과 같은 값)
   sessionHours: number;
+  // 관리자 로그인 토큰 유효 시간(분). 없으면 15분
+  accessMinutes?: number;
   allowedOrigins: string[];
   // 관리자 서버 접속 허용 IP (ADMIN_ALLOWED_IPS, T-11). 비우면 검사하지 않는다 (개발·테스트)
   allowedIps?: string[];
@@ -92,7 +94,7 @@ async function issueTokens(ctx: AdminContext, adminId: string) {
      VALUES ('admin', $1, $2, now() + make_interval(hours => $3))`,
     [adminId, hashRefreshToken(refreshToken), ctx.sessionHours],
   );
-  return { accessToken: await signAdminAccessToken(ctx.jwtKey, adminId), refreshToken };
+  return { accessToken: await signAdminAccessToken(ctx.jwtKey, adminId, ctx.accessMinutes), refreshToken };
 }
 
 export function adminAuthRouter(ctx: AdminContext): Router {

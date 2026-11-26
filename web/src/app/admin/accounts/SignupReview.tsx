@@ -132,6 +132,19 @@ export function SignupReview() {
   }
 
   const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+
+  // 알림에서 '새 가입 신청'을 누르고 왔으면(?signup=ID) 그 신청 창을 바로 연다. 이미 처리된 신청이면 목록만
+  const [linked, setLinked] = useState<number | null>(null);
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get('signup'));
+    if (id) setLinked(id);
+  }, []);
+  useEffect(() => {
+    if (linked === null || !list.isSuccess) return;
+    const target = items.find((s) => s.id === linked);
+    if (target) setOpen(target);
+    setLinked(null);
+  }, [linked, list.isSuccess, items]);
   // 아직 다 받지 않았으면 '30건 이상'처럼 보여 준다 (받은 개수가 전체인 것처럼 보이지 않게)
   const countText = `${items.length}건${list.hasNextPage ? ' 이상' : ''}`;
 

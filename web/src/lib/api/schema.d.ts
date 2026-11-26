@@ -5534,8 +5534,12 @@ export interface operations {
                         items: {
                             id?: number;
                             /** @enum {string} */
-                            kind?: "collect_fail" | "signup" | "pc_change" | "key_expiring" | "odd_pc";
+                            kind?: "collect_fail" | "signup" | "pc_change" | "key_expiring" | "odd_pc" | "api_quota" | "integrity";
                             text?: string;
+                            /** @description 알림 대상 ID. signup = 가입 신청 ID, pc_change·odd_pc = 병원 ID, key_expiring = 라이선스 키 ID, integrity = 발견 건수, api_quota = 80·100. 누르면 해당 화면으로 갈 때 쓴다 */
+                            refId?: number | null;
+                            /** @description 병원 관련 알림(pc_change·odd_pc·key_expiring)의 병원 이름. 병원 관리 화면에서 그 병원을 찾을 때 쓴다 */
+                            hospitalName?: string | null;
                             occurrences?: number;
                             /** Format: date-time */
                             lastAt?: string;

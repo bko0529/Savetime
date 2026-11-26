@@ -169,6 +169,9 @@ export function adminNotificationRouter(pool: pg.Pool, adminOnly: RequestHandler
         id: Number(r.id),
         kind: r.kind,
         text: notificationText(r),
+        // 누르면 해당 화면(가입 신청·병원 관리)으로 가도록 대상 ID 와 병원 이름도 준다
+        refId: r.ref_id === null ? null : Number(r.ref_id),
+        hospitalName: r.hospital_name,
         occurrences: r.occurrences,
         lastAt: r.last_at.toISOString(),
         read: r.read,

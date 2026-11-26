@@ -351,7 +351,7 @@ describe('관리자 알림 목록 (SFR-100)', () => {
     expect(server.callsTo('POST /admin/notifications/2/read')).toHaveLength(1);
   });
 
-  it('더 보기는 커서를 그대로(인코딩해서) 보낸다', async () => {
+  it('목록 상자를 끝까지 내리면 다음 쪽을 받는다 (커서는 그대로 인코딩해서)', async () => {
     const cursor = '2026-11-04T05:09:00.123Z|7';
     const server = fakeServer({
       'GET /admin/notifications?limit=30': {
@@ -364,7 +364,9 @@ describe('관리자 알림 목록 (SFR-100)', () => {
       },
     });
     renderAdmin(<Notifications />);
-    fireEvent.click(await screen.findByRole('button', { name: '알림 더 보기' }));
+    await screen.findByText('새 가입 신청');
+    // 스크롤 상자 끝에 닿으면 다음 30개를 받는다
+    fireEvent.scroll(screen.getByTestId('notifications-scroll'));
     expect(await screen.findByText('이상 PC 등록 감지')).toBeTruthy();
     expect(
       server.callsTo(`GET /admin/notifications?limit=30&cursor=${encodeURIComponent(cursor)}`),
