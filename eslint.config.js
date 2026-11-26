@@ -16,5 +16,18 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // React Native(Metro)는 글꼴·그림 파일을 require() 로 불러온다 (표준 방식)
+    files: ['mobile/**/*.{ts,tsx}'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
+    // mobile 의 설정 파일(jest.config.js 등)은 Node CommonJS
+    files: ['mobile/*.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { module: 'writable', require: 'readonly' },
+    },
+  },
   prettier,
 );

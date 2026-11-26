@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "세이브타임",
+    "name": "골든타임즈",
     "slug": "savetime-paramedic",
     "scheme": "savetime",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,6 +21,33 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "plugins": ["expo-router", "expo-secure-store"]
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "반경 안 병원에 이송을 요청하고 도착 예상 시간을 계산하려고 위치를 써요. 앱을 쓰는 동안에만 써요."
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "팀 QR 코드를 찍으려고 카메라를 써요.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "가입 신청 때 공무원증 사진을 고르려고 사진을 봐요.",
+          "cameraPermission": "가입 신청 때 공무원증을 찍으려고 카메라를 써요.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }
