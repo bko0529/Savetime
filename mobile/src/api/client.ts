@@ -90,6 +90,8 @@ type Options = {
   /** 사진을 보내는 multipart 요청 (가입 신청). Content-Type 은 fetch 가 경계값과 함께 직접 붙인다 */
   form?: FormData;
   auth?: boolean;
+  /** 추가 헤더 (확정할 때 Idempotency-Key 등) */
+  headers?: Record<string, string>;
 };
 
 export async function api<T = unknown>(
@@ -99,7 +101,7 @@ export async function api<T = unknown>(
   retried = false,
 ): Promise<T> {
   const auth = opt.auth ?? true;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...opt.headers };
   if (opt.body !== undefined) headers['Content-Type'] = 'application/json';
   const token = hooks.get()?.accessToken;
   if (auth && token) headers['Authorization'] = `Bearer ${token}`;
@@ -117,7 +119,7 @@ export async function api<T = unknown>(
   noteServerTime(res.headers.get('X-Server-Now'));
 
   // 401 = 토큰 만료. 로그인 요청(auth: false)은 갱신하지 않는다 (비밀번호가 틀린 것일 뿐)
-  if (res.status === 401 && auth && !retried) {
+  if (res.status === 401 && auth && !retried && hooks.get()) {
     if (await refreshTokens()) return api<T>(method, path, opt, true);
     hooks.lost();
   }
@@ -138,4 +140,9 @@ export async function api<T = unknown>(
     );
   }
   return data as T;
+}
+
+/** 화면에 보여 줄 오류 문구 (서버 문구가 있으면 그대로) */
+export function errorText(e: unknown, fallback = '잠시 후 다시 시도해 주세요'): string {
+  return e instanceof Error && e.message ? e.message : fallback;
 }

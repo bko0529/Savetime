@@ -16,6 +16,7 @@ import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
 import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
+import { startTransportSync } from '../src/transport/engine';
 import { useStore } from '../src/state/store';
 import { color } from '../src/ui/theme';
 
@@ -52,6 +53,10 @@ function Gate() {
     const t = setInterval(() => void loadConfig(), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // 근무 중이면 팀의 이송 건을 서버와 맞춘다 (이벤트 받기 · 진행 중 이송 이어서 보기, SFR-133)
+  const onDuty = state.status === 'signedIn' && duty.team === 'joined' && duty.started;
+  useEffect(() => (onDuty ? startTransportSync() : undefined), [onDuty]);
 
   const input = { appVersion: APP_VERSION, minAppVersion, consent, permissions, auth: state, duty };
   const target = gateTarget(input);
