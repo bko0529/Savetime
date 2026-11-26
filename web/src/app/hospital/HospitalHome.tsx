@@ -6,8 +6,8 @@ import { useEffect } from 'react';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
-import { BrandLogo, EcgLine } from '@/components/brand/Brand';
 import { LicenseBanner } from '@/components/hospital/LicenseBanner';
+import { Logo } from '@/components/hospital/Logo';
 import { ShiftScreen } from './ShiftScreen';
 
 type Session = ApiPaths['/hw/session']['get']['responses'][200]['content']['application/json'];
@@ -42,49 +42,32 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
   }
 
   const { hospital, pc, shift, licenseDaysLeft } = session.data;
-  const paused = session.data.paused ?? false;
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 p-8">
-      {/* 대원 앱 시안과 같은 위쪽 띠: 둥근 카드 안에 로고 + 무슨 화면인지 + 오른쪽 심전도 선 */}
-      <header className="surface-header relative flex items-center gap-3 overflow-hidden rounded-2xl border border-border px-5 py-4">
-        <BrandLogo className="relative" />
-        {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
-        <h1 className="relative text-3xl font-extrabold tracking-tight">
-          {shift ? '이송 요청' : '근무 시작'}
-        </h1>
-        <EcgLine className="top-1/2 right-6 w-56 -translate-y-1/2" />
-      </header>
-      {/* 띠 아래: 어느 병원·PC 인지 + 지금 상태 */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-lg text-muted-foreground">
-          <span className="font-bold text-foreground">{hospital?.name}</span> · {pc?.name}
-        </p>
-        <StatusChip shift={!!shift} paused={paused} />
-      </div>
-      {/* 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168) */}
-      {shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
-      <ShiftScreen
-        shift={shift ?? null}
-        pause={{ paused, pausedAt: session.data.pausedAt ?? null }}
-        createSocket={createSocket}
-      />
-    </div>
-  );
-}
-
-// 지금 상태를 색 칩으로. 색만으로 구분하지 않게 글자도 같이 쓴다
-export function StatusChip({ shift, paused }: { shift: boolean; paused: boolean }) {
-  const [text, tone] = !shift
-    ? ['근무 전', 'border-border-strong bg-surface text-muted-foreground']
-    : paused
-      ? ['요청 잠시 멈춤', 'border-warning/30 bg-warning-soft text-warning']
-      : ['근무 중', 'border-success/30 bg-success-soft text-success'];
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-lg font-bold ${tone}`}
-    >
-      <span aria-hidden className="size-2.5 rounded-full bg-current" />
-      {text}
-    </span>
+    <ShiftScreen
+      // 상단 막대의 왼쪽. 알림·연결 상태는 ShiftScreen 이 알고 있어서 막대 자체는 거기서 그린다
+      brand={
+        // 대원 앱 Lovable 시안: 로고 + 큰 화면 제목, 그 아래 작은 글씨로 병원·PC 이름
+        <div className="flex min-w-0 items-center gap-3">
+          <Logo />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
+            <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.02em] whitespace-nowrap">
+              {shift ? '이송 요청' : '근무 시작'}
+            </h1>
+            <p className="text-[16px] text-muted-foreground">
+              <span className="font-bold text-foreground">{hospital?.name}</span> · {pc?.name}
+            </p>
+          </div>
+        </div>
+      }
+      // 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168)
+      notice={shift && <LicenseBanner key={shift.id} daysLeft={licenseDaysLeft} />}
+      shift={shift ?? null}
+      pause={{
+        paused: session.data.paused ?? false,
+        pausedAt: session.data.pausedAt ?? null,
+      }}
+      createSocket={createSocket}
+    />
   );
 }

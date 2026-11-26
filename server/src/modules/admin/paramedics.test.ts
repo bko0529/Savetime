@@ -363,6 +363,9 @@ test('임시 비밀번호로 로그인하면 비밀번호 변경만 되고, 바�
     assert.equal(wrong.status, 401);
     assert.equal(wrong.body.error.code, 'INVALID_CREDENTIALS');
     assert.equal((await change({ currentPassword: temp, newPassword: 'short' })).status, 400);
+    // SER-006: 영문만·숫자만은 안 된다
+    assert.equal((await change({ currentPassword: temp, newPassword: 'onlyletters' })).status, 400);
+    assert.equal((await change({ currentPassword: temp, newPassword: '1234567890' })).status, 400);
     assert.equal((await change({ currentPassword: temp, newPassword: temp })).status, 400);
 
     assert.equal(

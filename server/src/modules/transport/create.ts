@@ -24,6 +24,7 @@ import { syncTeamDraft } from '../team/draft.js';
 import { inheritedExclusions } from '../team/prevPatient.js';
 import { currentTeamId } from '../team/routes.js';
 import type { EtaLookup } from './eta.js';
+import { transportIdParam, transportNotFound } from './access.js';
 import { findRequestTargets, insertRound } from './requestTargets.js';
 import { closeRoute } from './route.js';
 import { forgetScene, recordTransportStat } from '../stats/records.js';
@@ -365,6 +366,16 @@ export function transportRouter(
     );
     if (!rows[0]) throw noActive;
     res.json(await loadTransport(pool, rows[0].id, paramedicId));
+  });
+
+  // 이송 건 보기 (SFR-110). 실시간 이벤트에는 ID 만 오므로 앱은 이벤트를 받으면 이걸로 다시 읽는다.
+  // 끝난 건(도착·취소)도 볼 수 있어야 도착 뒤 일지 화면으로 넘어간다. /current 보다 뒤에 둬야 'current' 가 여기로 오지 않는다.
+  // 우리 팀 건이 아니면 404 (있는지조차 알리지 않음, SER-010)
+  router.get('/transports/:transportId', ...guards, async (req, res) => {
+    const transportId = transportIdParam(req.params.transportId);
+    const view = await loadTransport(pool, transportId, paramedicAuth(res).paramedicId);
+    if (!view) throw transportNotFound();
+    res.json(view);
   });
 
   return router;

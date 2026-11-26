@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { INCOMING_KEY, type HwIncoming } from '@/app/hospital/useIncoming';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
@@ -32,6 +31,9 @@ const STATUS_TEXT: Record<string, string> = {
   expired: '응답 시간 지남',
   rejected: '거절함',
 };
+
+const tileClass =
+  'flex items-center justify-center rounded-[12px] bg-surface px-3 py-3 text-center text-[19px] font-extrabold tabular-nums';
 
 export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
 
@@ -66,16 +68,16 @@ export function RequestDetail({
   return (
     <section
       aria-label="요청 상세"
-      className="tile flex flex-col gap-5 p-6 shadow-[var(--shadow-lift)]"
+      className="tile flex flex-col gap-4 rounded-2xl p-[24px] shadow-[var(--shadow-lift)]"
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <span aria-hidden className="text-sm font-bold text-muted-foreground">
-            요청 상세
-          </span>
-          <h2 className="text-3xl font-extrabold tracking-tight">요청 R-{requestId}</h2>
+        <div>
+          <p className="text-[15px] font-semibold text-muted-foreground">요청 상세</p>
+          <h2 className="text-[30px] font-extrabold tracking-[-0.02em] tabular-nums">
+            요청 R-{requestId}
+          </h2>
         </div>
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" className="rounded-[10px]" onClick={onClose}>
           닫기
         </Button>
       </div>
@@ -120,7 +122,7 @@ function DetailError({ error }: { error: unknown }) {
   if (error instanceof ApiError && error.code === 'REQUEST_CLOSED') {
     const status = (error.details as { status?: string } | null)?.status;
     return (
-      <p role="alert" className="text-2xl font-bold">
+      <p role="alert" className="rounded-[12px] bg-neutral-soft p-4 text-[22px] font-bold">
         이미 끝난 요청이에요{status ? ` (${STATUS_TEXT[status] ?? status})` : ''}. 환자 정보는 볼 수
         없어요.
       </p>
@@ -144,18 +146,6 @@ function etaLine(detail: Detail, incomingItem: HwIncoming | undefined): string |
   return `도착 예상 ${estimated ? '약 ' : ''}${detail.etaMin}분${estimated ? ' (추정)' : ''}`;
 }
 
-// 글이 길어질 수 있는 항목은 한 줄을 다 쓴다 (좁은 칸에서 한 글자씩 줄바꿈되지 않게)
-const WIDE_FIELDS = new Set<keyof Assessment>(['painSite', 'onset', 'traumaCause', 'history']);
-
-function InfoTile({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 rounded-xl bg-surface px-3 py-2.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-lg font-bold">{children}</span>
-    </div>
-  );
-}
-
 function DetailBody({
   detail,
   incomingItem,
@@ -177,65 +167,62 @@ function DetailBody({
 
   return (
     <>
-      {/* 상태·남은 시간·도착을 작은 칸 3개로: 한눈에 '지금 뭘 해야 하는지'가 보이게 */}
-      <div className="grid grid-cols-3 gap-2">
-        <InfoTile label="상태">{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</InfoTile>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-[10px]">
+        <span className={tileClass}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
         {waiting && detail.respondUntil && (
-          <InfoTile label="응답 시간">
-            <span className={cn('tabular-nums', urgent && 'font-extrabold text-destructive')}>
-              남은 시간 {remainingText(detail.respondUntil, nowMs)}
-            </span>
-          </InfoTile>
+          <span
+            className={cn(tileClass, urgent && 'bg-danger-soft font-extrabold text-destructive')}
+          >
+            남은 시간 {remainingText(detail.respondUntil, nowMs)}
+          </span>
         )}
-        {eta && (
-          <InfoTile label="도착">
-            <span>{eta}</span>
-          </InfoTile>
-        )}
+        {eta && <span className={tileClass}>{eta}</span>}
       </div>
 
-      <p className="text-3xl font-extrabold">{a.chiefComplaint}</p>
+      <p className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] break-words">
+        {a.chiefComplaint}
+      </p>
 
-      {/* 평가 항목을 칸(타일)으로. 정상 범위 밖 값은 빨간 칸 + 빨간 글자 + ⚠ (색만으로 구분하지 않게).
-          위급도 판정은 하지 않는다 (D-38) */}
-      <dl className="grid grid-cols-3 gap-2">
-        {rows.map(({ field, text }) => {
-          const bad = abnormal.has(field);
-          return (
-            <div
-              key={field}
+      {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
+      <dl className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
+        {rows.map(({ field, text }) => (
+          <div
+            key={field}
+            className={cn(
+              'min-w-0 rounded-xl border border-transparent bg-surface px-3 py-2.5',
+              abnormal.has(field) && 'border-danger-line bg-danger-soft',
+            )}
+          >
+            <dt className="text-[14px] text-muted-foreground">{FIELD_LABEL[field]}</dt>
+            <dd
               className={cn(
-                'flex flex-col gap-0.5 rounded-xl px-3 py-2.5',
-                WIDE_FIELDS.has(field) && 'col-span-3',
-                bad ? 'border border-destructive/30 bg-destructive/10' : 'bg-surface',
+                'text-[19px] font-semibold break-words',
+                abnormal.has(field) && 'font-extrabold text-destructive',
               )}
+              data-abnormal={abnormal.has(field) || undefined}
             >
-              <dt className={cn('text-sm', bad ? 'text-destructive' : 'text-muted-foreground')}>
-                {FIELD_LABEL[field]}
-              </dt>
-              <dd
-                className={cn('text-lg font-bold break-keep', bad && 'text-destructive')}
-                data-abnormal={bad || undefined}
-              >
-                {bad ? `⚠ ${text}` : text}
-              </dd>
-            </div>
-          );
-        })}
+              {abnormal.has(field) ? `⚠ ${text}` : text}
+            </dd>
+          </div>
+        ))}
       </dl>
 
-      <p className="rounded-xl bg-surface px-4 py-3 text-lg">
-        <span className="font-bold">우리 병원</span>: 응급실 {beds?.er ?? '정보 없음'} · 수술실{' '}
+      <p className="rounded-[12px] bg-surface px-4 py-3 text-[19px] font-semibold tabular-nums">
+        <span className="font-extrabold">우리 병원</span>: 응급실 {beds?.er ?? '정보 없음'} · 수술실{' '}
         {beds?.or ?? '정보 없음'} · 중환자실 {beds?.icu ?? '정보 없음'}
       </p>
 
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
-        <p className="text-xl">
+        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
       {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
-      {detail.extraMemo && <p className="text-xl font-bold">추가 메모: {detail.extraMemo}</p>}
+      {detail.extraMemo && (
+        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
+          추가 메모: {detail.extraMemo}
+        </p>
+      )}
     </>
   );
 }

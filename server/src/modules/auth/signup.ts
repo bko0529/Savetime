@@ -17,7 +17,7 @@ import { withTransaction } from '../../db/transaction.js';
 import { AppError } from '../../http/errors.js';
 import { notifyAdmin } from '../admin/notifications.js';
 import { paramedicAuth, requireParamedic } from './guards.js';
-import { hashPassword } from './password.js';
+import { hashPassword, newPasswordSchema } from './password.js';
 import type { PhotoStore } from './photoStore.js';
 import { forgetSessionState, type AuthContext } from './session.js';
 
@@ -40,8 +40,8 @@ const signupSchema = profileSchema.extend({
     .string()
     .trim()
     .regex(/^[a-zA-Z0-9._-]{4,40}$/),
-  // 길이 기준은 요구사항에 없어 8자 이상으로 정했다 (SER-004 저장은 argon2id)
-  password: z.string().min(8).max(200),
+  // 8자 이상, 영문+숫자 (SER-006). 저장은 argon2id (SER-004)
+  password: newPasswordSchema,
 });
 
 // 메모리로만 받는다(디스크에 원본 사진을 쓰지 않음). 파일 1개·5MB 까지

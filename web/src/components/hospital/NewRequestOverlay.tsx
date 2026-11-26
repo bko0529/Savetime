@@ -22,6 +22,9 @@ type Props = {
   onConfirm: (id: number) => void;
 };
 
+const cellClass =
+  'flex min-h-[110px] items-center justify-center rounded-[14px] bg-overlay-cell px-5 py-4 text-[36px] leading-tight font-extrabold break-words';
+
 export function formatRemaining(respondUntil: string, nowMs: number): string {
   const sec = Math.max(0, Math.floor((Date.parse(respondUntil) - nowMs) / 1000));
   return `${Math.floor(sec / 60)}분 ${String(sec % 60).padStart(2, '0')}초`;
@@ -42,22 +45,34 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
       {request && (
         <DialogContent
           showCloseButton={false}
-          className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col items-center justify-center gap-8 btn-solid-brand p-10 text-center text-white ring-0 sm:max-w-none"
+          overlayClassName="bg-foreground/60"
+          className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none flex-col items-center justify-center-safe gap-10 overflow-y-auto rounded-[20px] bg-destructive p-10 text-center text-white ring-0 sm:max-w-none"
         >
-          <DialogTitle className="text-5xl leading-tight font-extrabold">
+          <DialogTitle className="flex flex-col items-center gap-5 text-[64px] leading-tight font-extrabold tracking-[-0.02em]">
+            {pendingCount > 1 && (
+              <span className="rounded-full bg-white/20 px-5 py-2 text-[24px] tracking-normal">
+                대기 {pendingCount}건
+              </span>
+            )}
             🔴 새 이송 요청
-            {pendingCount > 1 && <span className="mt-4 block text-4xl">대기 {pendingCount}건</span>}
           </DialogTitle>
-          <DialogDescription render={<div />} className="space-y-3 text-3xl text-white">
-            <p className="font-bold">{request.label}</p>
-            <p>{request.chiefComplaint ?? '주 증상 정보 없음'}</p>
-            <p>도착 예상 {request.etaMin === null ? '계산 중' : `${request.etaMin}분`}</p>
-            <p>응답 남은 시간 {formatRemaining(request.respondUntil, nowMs)}</p>
+          <DialogDescription
+            render={<div />}
+            className="grid w-full max-w-[960px] gap-3 text-white tabular-nums sm:grid-cols-2"
+          >
+            <p className={cellClass}>{request.label}</p>
+            <p className={cellClass}>{request.chiefComplaint ?? '주 증상 정보 없음'}</p>
+            <p className={cellClass}>
+              도착 예상 {request.etaMin === null ? '계산 중' : `${request.etaMin}분`}
+            </p>
+            <p className={cellClass}>
+              응답 남은 시간 {formatRemaining(request.respondUntil, nowMs)}
+            </p>
           </DialogDescription>
           <Button
             size="lg"
             autoFocus
-            className="h-20 min-w-64 bg-white bg-none text-3xl text-destructive hover:bg-white/90"
+            className="h-[88px] min-w-[300px] rounded-[12px] bg-white text-[34px] font-extrabold text-destructive hover:bg-white/90"
             onClick={() => onConfirm(request.id)}
           >
             확인

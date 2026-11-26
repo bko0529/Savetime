@@ -1,18 +1,20 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
-import { cn } from '@/lib/utils';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { EcgLine } from '@/components/brand/Brand';
+import { Chip } from '@/components/hospital/Chip';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
+import { cn } from '@/lib/utils';
 import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
 import { useIncoming } from './useIncoming';
 import { useNewRequests } from './useNewRequests';
@@ -23,8 +25,10 @@ type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
 
 export const STAFF_NAME_MAX = 40;
 
+// 대원 앱 Lovable 시안처럼 둥근 흰 카드 + 옅은 그림자
+const cardClass = 'tile rounded-2xl';
 const inputClass =
-  'h-14 rounded-md border border-input bg-card px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+  'h-[56px] rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 // 근무 시작: 담당자 이름만 받는다 (SFR-117)
 function StartShift({ onStarted }: { onStarted: () => void }) {
@@ -46,7 +50,11 @@ function StartShift({ onStarted }: { onStarted: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex max-w-xl flex-col gap-6" noValidate>
+    <form
+      onSubmit={submit}
+      className={cn(cardClass, 'mx-auto mt-12 flex w-full max-w-[560px] flex-col gap-6 p-8')}
+      noValidate
+    >
       <label className="flex flex-col gap-2">
         <span className="text-xl font-bold">담당자 이름</span>
         <input
@@ -84,9 +92,14 @@ function offMessage(alarm: AlarmState, startedHere: boolean): string {
 export function ShiftScreen({
   shift,
   pause = { paused: false, pausedAt: null },
+  brand,
+  notice,
   createSocket,
 }: {
   shift: Shift | null;
+  // 상단 막대 왼쪽(병원·PC 이름)과 막대 바로 아래 안내
+  brand?: ReactNode;
+  notice?: ReactNode;
   // 병원 전체의 잠시 요청 중지 상태 (GET /hw/session, SFR-139)
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
@@ -102,122 +115,149 @@ export function ShiftScreen({
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-1 flex-col">
       {/* 연결이 끊기면 새 요청을 못 받으니 화면 맨 위에 크게, 내려도 보이게 고정한다 (SFR-122).
           다시 붙으면 목록을 새로 받아 놓친 요청을 불러온다 (useNewRequests) */}
       {connection === 'disconnected' && (
         <p
           role="alert"
-          className="sticky top-0 z-40 rounded-lg btn-solid-brand px-4 py-4 text-2xl font-extrabold text-white"
+          className="sticky top-0 z-40 bg-destructive px-8 py-[18px] text-[26px] font-extrabold text-white"
         >
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
       )}
-      {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
-      {shift !== null && notificationBlocked && (
-        <NotificationPermissionGuide reason={notificationBlocked} />
-      )}
-      {incoming.waiting.length > 0 && (
-        <p className="text-3xl font-extrabold text-destructive">
-          🔴 새 이송 요청 {incoming.waiting.length}건
-        </p>
-      )}
-      <NewRequestOverlay
-        request={incoming.overlay}
-        pendingCount={incoming.waiting.length}
-        nowMs={incoming.nowMs}
-        onConfirm={(id) => {
-          // '확인'을 누르면 덮개를 닫고 그 요청의 상세를 바로 연다
-          incoming.confirm(id);
-          setSelectedId(id);
-        }}
-      />
-
-      {shift === null ? (
-        <StartShift onStarted={() => setStartedHere(true)} />
-      ) : alarm.kind === 'on' ? (
-        <p className="w-fit rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-2xl font-bold text-success">
-          🔔 알림 켜짐 · {shift.staffName} 님 근무 중
-        </p>
-      ) : (
-        <div className="flex flex-col items-start gap-4">
-          <p className="text-3xl font-bold text-destructive">{offMessage(alarm, startedHere)}</p>
-          {turnOn.isError && (
-            <p role="alert" className="text-lg font-bold text-destructive">
-              {errorText(turnOn.error)}
-            </p>
-          )}
-          <Button
-            size="lg"
-            onClick={() => turnOn.mutate()}
-            disabled={turnOn.isPending || connection !== 'connected'}
-          >
-            {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
-          </Button>
-        </div>
-      )}
-
-      {shift !== null && (
-        <>
-          <PauseControl
-            paused={pause.paused}
-            pausedAt={pause.pausedAt}
-            // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
-            waitingCount={
-              incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
-            }
-            socket={socket}
-          />
-          {/* 상세를 열면 목록은 왼쪽, 상세는 오른쪽 칸 (대원 앱 시안과 같은 배치).
-              병원 PC(1280px 이상)에서만 나란히 두고, 그보다 좁으면 예전처럼 목록 아래에 연다 */}
-          <div
-            className={cn(
-              'grid items-start gap-6',
-              selectedId !== null && 'xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]',
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
+        {/* 위쪽 띠: 대원 앱 Lovable 시안처럼 둥근 카드 안에 로고·제목, 오른쪽에 알림·연결 상태 + 심전도 선 */}
+        <header className="surface-header relative flex flex-wrap items-center justify-between gap-x-6 gap-y-3 overflow-hidden rounded-2xl border border-border px-5 py-4">
+          <EcgLine className="top-1/2 right-6 w-56 -translate-y-1/2 opacity-60" />
+          <div className="relative min-w-0">{brand}</div>
+          <div className="relative flex flex-wrap items-center gap-[10px]">
+            {shift !== null && alarm.kind === 'on' && (
+              <Chip tone="success" className="px-4 py-2 text-[18px]">
+                <span aria-hidden className="size-[10px] rounded-full bg-success-dot" />
+                <span>🔔 알림 켜짐 · {shift.staffName} 님 근무 중</span>
+              </Chip>
             )}
-          >
-            <section className="tile overflow-hidden">
-              <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
-                <h2 className="section-title text-2xl">요청 목록</h2>
-                {/* 서버가 주는 순서 그대로다 (SFR-155). 이상 수치로 바꾸지 않는다는 걸 화면에도 적어 둔다 */}
-                <span className="text-base text-muted-foreground">남은 시간 짧은 순</span>
-              </div>
-              <RequestList
-                items={incoming.items}
-                nowMs={incoming.nowMs}
-                selectedId={selectedId}
-                onOpen={setSelectedId}
-              />
-            </section>
-            {selectedId !== null && (
-              // 목록을 내려 봐도 상세가 따라오게 위에 붙인다
-              <div className="xl:sticky xl:top-6">
-                <RequestDetail
-                  key={selectedId}
-                  requestId={selectedId}
-                  nowMs={incoming.nowMs}
-                  onClose={() => setSelectedId(null)}
-                />
-              </div>
+            {connection === 'connected' && (
+              <Chip tone="success" className="border border-success-dot/40 bg-card">
+                <span aria-hidden className="size-2 rounded-full bg-success-dot" />
+                실시간 연결됨
+              </Chip>
+            )}
+            {connection === 'disconnected' && (
+              <Chip tone="danger" className="border border-danger-line">
+                <span aria-hidden className="size-2 rounded-full bg-destructive" />
+                연결 끊김
+              </Chip>
             )}
           </div>
+        </header>
+        {notice}
+        {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
+        {shift !== null && notificationBlocked && (
+          <NotificationPermissionGuide reason={notificationBlocked} />
+        )}
+        <NewRequestOverlay
+          request={incoming.overlay}
+          pendingCount={incoming.waiting.length}
+          nowMs={incoming.nowMs}
+          onConfirm={(id) => {
+            // '확인'을 누르면 덮개를 닫고 그 요청의 상세를 바로 연다
+            incoming.confirm(id);
+            setSelectedId(id);
+          }}
+        />
 
-          {/* 요청 목록과 같은 카드 모양: 제목 줄 아래에 표 */}
-          <section className="tile overflow-hidden">
-            <h2 className="section-title border-b border-border px-5 py-4 text-2xl">도착 예정</h2>
-            {arriving.isError && (
-              <p role="alert" className="px-5 pt-4 text-xl font-bold text-destructive">
-                {errorText(arriving.error)}
+        {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
+        {shift !== null && alarm.kind !== 'on' && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-[26px] font-extrabold text-danger-strong">
+                {offMessage(alarm, startedHere)}
               </p>
-            )}
-            <IncomingList
-              items={arriving.items}
-              notices={arriving.notices}
-              onDismiss={arriving.dismiss}
-            />
-          </section>
-        </>
-      )}
+              {turnOn.isError && (
+                <p role="alert" className="text-lg font-bold text-destructive">
+                  {errorText(turnOn.error)}
+                </p>
+              )}
+            </div>
+            <Button
+              size="lg"
+              className="h-[64px] rounded-[12px]"
+              onClick={() => turnOn.mutate()}
+              disabled={turnOn.isPending || connection !== 'connected'}
+            >
+              {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
+            </Button>
+          </div>
+        )}
+
+        {shift !== null && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              {incoming.waiting.length > 0 && (
+                <p className="text-[30px] font-extrabold tracking-[-0.02em] text-destructive">
+                  🔴 새 이송 요청 {incoming.waiting.length}건
+                </p>
+              )}
+              <PauseControl
+                paused={pause.paused}
+                pausedAt={pause.pausedAt}
+                // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
+                waitingCount={
+                  incoming.waiting.filter((r) => Date.parse(r.respondUntil) > incoming.nowMs).length
+                }
+                socket={socket}
+              />
+            </div>
+
+            {/* 목록과 상세를 나란히, 좁으면 상세가 목록 아래로 내려간다 */}
+            <div className="flex flex-wrap items-start gap-[24px]">
+              <section
+                className={cn(cardClass, 'min-w-[min(100%,560px)] flex-[1.5] overflow-hidden')}
+              >
+                <div className="flex items-baseline justify-between gap-3 px-6 py-4">
+                  <h2 className="section-title text-[24px] tracking-[-0.02em]">요청 목록</h2>
+                  <span className="text-[15px] text-muted-foreground">남은 시간 짧은 순</span>
+                </div>
+                <RequestList
+                  items={incoming.items}
+                  nowMs={incoming.nowMs}
+                  selectedId={selectedId}
+                  onOpen={setSelectedId}
+                />
+              </section>
+              {selectedId !== null && (
+                <div className="min-w-[min(100%,400px)] flex-1">
+                  <RequestDetail
+                    key={selectedId}
+                    requestId={selectedId}
+                    nowMs={incoming.nowMs}
+                    onClose={() => setSelectedId(null)}
+                  />
+                </div>
+              )}
+            </div>
+
+            <section className={cn(cardClass, 'relative overflow-hidden')}>
+              <h2 className="section-title px-6 py-4 text-[24px] tracking-[-0.02em]">도착 예정</h2>
+              <span className="absolute top-5 right-6 text-[15px] text-muted-foreground">
+                구급차 위치는 표시하지 않아요
+              </span>
+              {arriving.isError && (
+                <p role="alert" className="px-6 pb-4 text-xl font-bold text-destructive">
+                  {errorText(arriving.error)}
+                </p>
+              )}
+              <IncomingList
+                items={arriving.items}
+                notices={arriving.notices}
+                onDismiss={arriving.dismiss}
+              />
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }

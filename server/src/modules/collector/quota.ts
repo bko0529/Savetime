@@ -2,10 +2,14 @@
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
 import type { Logger } from 'pino';
+import { notifyAdmin } from '../admin/notifications.js';
 import { CollectError } from './publicApi.js';
 
 const KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
 const WARN_RATIO = 0.8;
+// 관리자 알림(api_quota)의 ref_id: 어느 단계인지
+export const QUOTA_ALERT_WARN = 80;
+export const QUOTA_ALERT_EXHAUSTED = 100;
 
 export interface ApiQuota {
   // 공공 API를 부르기 직전에 1회분을 쓴다. 한도에 닿았으면 CollectError를 던진다.
@@ -26,6 +30,8 @@ export interface ApiQuotaOptions {
   api?: string;
   // 로그 문구에 쓰는 이름. 길찾기처럼 다른 API도 같은 방식으로 센다
   label?: string;
+  // 관리자 알림 목록에도 올릴지 (SFR-090 은 공공 데이터만 말한다. 카카오는 로그만)
+  notifyAdmin?: boolean;
   today?: () => Promise<string>;
 }
 
@@ -43,8 +49,13 @@ export function createApiQuota(options: ApiQuotaOptions): ApiQuota {
     });
   const countKey = (day: string) => `api-calls:${api}:${day}`;
 
-  // 관리자 알림 목록이 생기는 S5 전까지는 오류 로그로 남긴다. 하루에 단계별 1번만.
-  const alertOnce = async (day: string, stage: string, used: number): Promise<void> => {
+  // 하루에 단계별 1번만: 오류 로그 + (공공 데이터면) 관리자 알림. 80% 는 ref 80, 한도 초과는 ref 100 으로 나눠 문구를 다르게 한다.
+  // 서버가 2대여도 Redis SET NX 를 먼저 잡은 쪽만 알린다 (규칙 7)
+  const alertOnce = async (
+    day: string,
+    stage: '80%' | '한도 초과',
+    used: number,
+  ): Promise<void> => {
     const first = await redis.set(
       `${countKey(day)}:alert:${stage}`,
       '1',
@@ -52,7 +63,19 @@ export function createApiQuota(options: ApiQuotaOptions): ApiQuota {
       KEY_TTL_SECONDS,
       'NX',
     );
-    if (first) logger.error({ api, day, used, limit }, `${label} 호출 ${stage}`);
+    if (!first) return;
+    logger.error({ api, day, used, limit }, `${label} 호출 ${stage}`);
+    if (!options.notifyAdmin) return;
+    try {
+      await notifyAdmin(
+        pool,
+        'api_quota',
+        stage === '80%' ? QUOTA_ALERT_WARN : QUOTA_ALERT_EXHAUSTED,
+      );
+    } catch (err) {
+      // 알림을 못 남겨도 수집·한도 판정은 계속한다
+      logger.error({ api, message: (err as Error).message }, '호출 한도 알림 실패');
+    }
   };
 
   return {

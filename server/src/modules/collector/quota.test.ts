@@ -71,6 +71,37 @@ test('80%에 닿으면 하루 1번만 알리고 수집은 계속된다', async (
   });
 });
 
+test('공공 데이터 한도는 관리자 알림에도 80%·한도 초과를 따로 1건씩 올린다 (SFR-100)', async () => {
+  await withQuota(async ({ options, pool }) => {
+    const quota = createApiQuota({ ...options, limit: 5, notifyAdmin: true });
+    await takeTimes(quota.take, 5);
+    await assert.rejects(quota.take(), { code: 'QUOTA_EXCEEDED' });
+    await assert.rejects(quota.take(), { code: 'QUOTA_EXCEEDED' });
+    assert.equal(await quota.isExhausted(), true);
+
+    const { rows } = await pool.query<{ ref_id: string; occurrences: number }>(
+      "SELECT ref_id, occurrences FROM admin_notification WHERE kind = 'api_quota' ORDER BY ref_id",
+    );
+    assert.deepEqual(
+      rows.map((r) => [Number(r.ref_id), r.occurrences]),
+      [
+        [80, 1],
+        [100, 1],
+      ],
+    );
+  });
+});
+
+test('알림을 켜지 않은 API(카카오)는 관리자 알림을 올리지 않는다', async () => {
+  await withQuota(async ({ options, pool }) => {
+    const quota = createApiQuota({ ...options, limit: 1 });
+    await quota.take();
+    await assert.rejects(quota.take(), { code: 'QUOTA_EXCEEDED' });
+    const { rows } = await pool.query('SELECT 1 FROM admin_notification');
+    assert.equal(rows.length, 0);
+  });
+});
+
 test('한도에 닿으면 더 호출하지 못하고, 수는 한도를 넘지 않는다', async () => {
   await withQuota(async ({ options, redis, alerts, day }) => {
     const quota = createApiQuota({ ...options, limit: 3 });

@@ -9,6 +9,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { dialog } from './dialogStyles';
 
 export const MEMO_MAX = 50;
 
@@ -40,9 +41,13 @@ export function ExtraMemoDialog({ open, pending, error, onSubmit, onCancel }: Pr
         if (!next) onCancel();
       }}
     >
-      <DialogContent showCloseButton={false} className="gap-6 p-6 sm:max-w-lg">
-        <DialogTitle className="text-2xl font-bold">추가 메모</DialogTitle>
-        <DialogDescription className="text-lg">
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName={dialog.overlay}
+        className={dialog.content}
+      >
+        <DialogTitle className={dialog.title}>추가 메모</DialogTitle>
+        <DialogDescription className={dialog.description}>
           대원 앱에 경보와 함께 보여요. 한 번만 보낼 수 있어요.
         </DialogDescription>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -57,7 +62,7 @@ export function ExtraMemoDialog({ open, pending, error, onSubmit, onCancel }: Pr
               maxLength={MEMO_MAX}
               // 메모는 대원에게 그대로 보인다. 환자를 알아볼 수 있는 내용은 쓰지 않게 안내한다
               placeholder="예: CT 고장, 2번 입구로 오세요"
-              className="h-12 rounded-md border border-input bg-card px-3 text-xl"
+              className={dialog.input}
               autoFocus
             />
           </label>
@@ -66,11 +71,17 @@ export function ExtraMemoDialog({ open, pending, error, onSubmit, onCancel }: Pr
               {problem ?? error}
             </p>
           )}
-          <DialogFooter className="-mx-6 -mb-6 p-6">
-            <Button type="button" variant="outline" size="lg" onClick={onCancel}>
+          <DialogFooter className={dialog.footer}>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className={dialog.button}
+              onClick={onCancel}
+            >
               취소
             </Button>
-            <Button type="submit" size="lg" disabled={pending}>
+            <Button type="submit" size="lg" className={dialog.button} disabled={pending}>
               {pending ? '보내는 중…' : '추가 메모 보내기'}
             </Button>
           </DialogFooter>

@@ -3,6 +3,8 @@
 import type { components } from '@/lib/api/schema';
 import { isUrgent, remainingText } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
+import { Chip, type Tone } from './Chip';
+import { table } from './tableStyles';
 
 export type HwRequestItem = components['schemas']['HwRequestItem'];
 
@@ -10,11 +12,14 @@ const STATUS_TEXT: Record<string, string> = {
   waiting: '응답 대기',
   approved: '승인',
 };
+const STATUS_TONE: Record<string, Tone> = { waiting: 'warning', approved: 'success' };
 
-const STATUS_TONE: Record<string, string> = {
-  waiting: 'bg-warning-soft text-warning',
-  approved: 'bg-success-soft text-success',
-};
+// 응답 2분 중 남은 비율. 막대를 그리는 데만 쓴다 (시간 판정은 서버, 규칙 6)
+const RESPOND_WINDOW_MS = 2 * 60 * 1000;
+function remainingPercent(respondUntil: string, nowMs: number): number {
+  const ratio = (Date.parse(respondUntil) - nowMs) / RESPOND_WINDOW_MS;
+  return Math.min(100, Math.max(0, ratio * 100));
+}
 
 type Props = {
   items: HwRequestItem[];
@@ -27,78 +32,99 @@ type Props = {
 // 구급대 소속은 API 에도 없고 여기서도 보여 주지 않는다 (D-98)
 export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
   if (items.length === 0) {
-    return <p className="px-5 py-6 text-xl text-muted-foreground">지금 응답할 요청이 없어요.</p>;
+    return <p className={table.empty}>지금 응답할 요청이 없어요.</p>;
   }
   return (
-    // 카드(요청 목록 칸) 안에 들어가므로 표 자체의 테두리·그림자는 뺀다
-    <table className="data-table data-table-flush text-lg">
-      <thead>
-        <tr className="text-left">
-          <th className="p-3">번호</th>
-          <th className="p-3">주 증상</th>
-          <th className="p-3">이상 수치</th>
-          <th className="p-3">도착 예상</th>
-          <th className="p-3">상태</th>
-          <th className="p-3">남은 시간</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const id = item.id!;
-          const waiting = item.status === 'waiting';
-          const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
-          const selected = selectedId === id;
-          return (
-            <tr
-              key={id}
-              // 지금 상세를 연 줄은 연한 빨강 바탕 + 빨간 글자
-              className={cn(selected && 'bg-brand-soft text-brand-deep')}
-              aria-selected={selected}
-            >
-              <td className="p-3">
-                {/* 행 전체가 아니라 버튼을 둬야 키보드(Tab·Enter)로도 열 수 있다 */}
-                <button
-                  type="button"
-                  className="font-bold whitespace-nowrap underline underline-offset-4"
-                  onClick={() => onOpen(id)}
-                >
-                  {item.label}
-                </button>
-              </td>
-              <td className="p-3">{item.chiefComplaint ?? '—'}</td>
-              <td className="p-3">
-                {item.abnormalCount ? (
-                  <span className="inline-flex items-center rounded-full bg-destructive/10 px-2.5 py-0.5 text-base font-bold whitespace-nowrap text-destructive">
-                    ⚠ 이상 {item.abnormalCount}
-                  </span>
-                ) : (
-                  '—'
+    <div className="overflow-x-auto">
+      <table className={table.root}>
+        <thead>
+          <tr className={table.headRow}>
+            <th className={table.th}>번호</th>
+            <th className={table.th}>주 증상</th>
+            <th className={table.th}>이상 수치</th>
+            <th className={table.th}>도착 예상</th>
+            <th className={table.th}>상태</th>
+            <th className={table.th}>남은 시간</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const id = item.id!;
+            const waiting = item.status === 'waiting';
+            const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
+            return (
+              <tr
+                key={id}
+                className={cn(
+                  table.row,
+                  selectedId === id && 'bg-selected shadow-[inset_4px_0_0_var(--foreground)]',
+                  urgent && 'bg-urgent shadow-[inset_4px_0_0_var(--destructive)]',
                 )}
-              </td>
-              <td className="p-3 whitespace-nowrap">
-                {item.etaMin != null
-                  ? `${item.etaSource === 'straight' ? '약 ' : ''}${item.etaMin}분`
-                  : '—'}
-              </td>
-              <td className="p-3">
-                {/* 상태마다 색 칩. 색만으로 구분하지 않게 글자도 그대로 쓴다 */}
-                <span
-                  className={cn(
-                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-base font-bold whitespace-nowrap',
-                    STATUS_TONE[item.status ?? ''] ?? 'bg-surface text-muted-foreground',
+                aria-selected={selectedId === id}
+              >
+                <td className={cn(table.td, 'whitespace-nowrap')}>
+                  {/* 행 전체가 아니라 버튼을 둬야 키보드(Tab·Enter)로도 열 수 있다 */}
+                  <button
+                    type="button"
+                    className="font-extrabold tabular-nums underline underline-offset-4"
+                    onClick={() => onOpen(id)}
+                  >
+                    {item.label}
+                  </button>
+                </td>
+                <td className={cn(table.td, 'min-w-[96px] break-words')}>
+                  {item.chiefComplaint ?? '—'}
+                </td>
+                <td className={table.td}>
+                  {item.abnormalCount ? (
+                    <Chip tone="danger" className="rounded-[8px] text-[17px] font-extrabold">
+                      ⚠ 이상 {item.abnormalCount}
+                    </Chip>
+                  ) : (
+                    '—'
                   )}
-                >
-                  {STATUS_TEXT[item.status ?? ''] ?? item.status}
-                  {item.respondedBy ? ` · ${item.respondedBy}` : ''}
-                </span>
-              </td>
-              <td className={cn('p-3 tabular-nums', urgent && 'font-extrabold text-destructive')}>
-                {waiting && item.respondUntil ? remainingText(item.respondUntil, nowMs) : '—'}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                </td>
+                <td className={cn(table.td, 'whitespace-nowrap tabular-nums')}>
+                  {item.etaMin != null
+                    ? `${item.etaSource === 'straight' ? '약 ' : ''}${item.etaMin}분`
+                    : '—'}
+                </td>
+                <td className={table.td}>
+                  <Chip tone={STATUS_TONE[item.status ?? ''] ?? 'neutral'}>
+                    {STATUS_TEXT[item.status ?? ''] ?? item.status}
+                    {item.respondedBy ? ` · ${item.respondedBy}` : ''}
+                  </Chip>
+                </td>
+                <td className={cn(table.td, 'min-w-[96px]')}>
+                  {waiting && item.respondUntil ? (
+                    <>
+                      <span
+                        className={cn(
+                          'text-[22px] font-bold tabular-nums',
+                          urgent && 'font-extrabold text-destructive',
+                        )}
+                      >
+                        {remainingText(item.respondUntil, nowMs)}
+                      </span>
+                      <div
+                        aria-hidden
+                        className="mt-1 h-[5px] overflow-hidden rounded-full bg-line-soft"
+                      >
+                        <div
+                          className={cn('h-full', urgent ? 'bg-destructive' : 'bg-foreground')}
+                          style={{ width: `${remainingPercent(item.respondUntil, nowMs)}%` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

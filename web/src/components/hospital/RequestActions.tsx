@@ -117,7 +117,8 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
     answer.error instanceof ApiError && answer.error.code === 'OVER_APPROVAL_CONFIRM_REQUIRED';
 
   return (
-    <div className="flex flex-col gap-3">
+    // 'contents': 아래 승인·거절 줄이 상세 카드 전체를 기준으로 화면 아래에 붙게 한다
+    <div className="contents">
       {answer.isError && (
         <p role="alert" className="text-xl font-bold text-destructive">
           {answerErrorText(answer.error)}
@@ -134,23 +135,22 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         </Button>
       )}
       {canAnswer && (
-        <label className="flex flex-col gap-1 text-base text-muted-foreground">
+        <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
           승인 메모 (선택, {MEMO_MAX}자까지)
           <input
             value={approveMemo}
             onChange={(e) => setApproveMemo(e.target.value.slice(0, MEMO_MAX))}
             maxLength={MEMO_MAX}
             placeholder="예: 3번 출입구로 오세요"
-            className="h-12 rounded-lg border border-input bg-card px-3 text-xl text-foreground outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="h-[52px] w-full rounded-[10px] border-2 border-input px-3 text-[19px] font-normal text-foreground"
           />
         </label>
       )}
       {canAnswer && (
-        // 승인(검정)·거절(빨강)을 같은 크기로 나란히: 잘못 누르지 않게 크게 둔다
-        <div className="grid grid-cols-2 gap-3">
+        <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
-            className="h-16 w-full text-2xl"
+            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => send(approve())}
           >
@@ -159,7 +159,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           <Button
             size="lg"
             variant="destructive"
-            className="h-16 w-full text-2xl"
+            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => {
               answer.reset();
@@ -174,7 +174,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         <Button
           size="lg"
           variant="outline"
-          className="h-14 w-fit border-destructive/50 text-xl text-destructive"
+          className="h-[56px] w-full rounded-[12px] border-2 border-destructive text-xl text-destructive"
           disabled={answer.isPending}
           onClick={() => {
             answer.reset();

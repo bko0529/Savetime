@@ -6,13 +6,13 @@ export function NotificationPermissionGuide({ reason }: { reason: 'denied' | 'un
     <div
       role="status"
       aria-label="브라우저 알림 안내"
-      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-foreground"
+      className="flex flex-col gap-2 rounded-[14px] border border-warning-strong/30 bg-warning-soft px-5 py-3 text-warning-strong"
     >
-      <p className="text-xl font-extrabold">
+      <p className="text-[19px] font-extrabold">
         ⚠ 브라우저 알림을 허용해야 다른 창을 볼 때도 알 수 있어요
       </p>
       {reason === 'denied' ? (
-        <ol className="list-decimal pl-6 text-lg">
+        <ol className="list-decimal pl-6 text-[16px]">
           <li>주소창 왼쪽의 사이트 정보(자물쇠) 아이콘을 눌러요</li>
           <li>&apos;알림&apos;을 &apos;허용&apos;으로 바꿔요</li>
           <li>이 화면으로 돌아와 &apos;알림 켜기&apos;를 다시 눌러요</li>
