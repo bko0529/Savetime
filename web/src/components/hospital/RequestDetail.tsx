@@ -49,8 +49,8 @@ function etaTile(eta: string): { label: string; value: string } {
 function BedTile({ label, value }: { label: string; value: string | null | undefined }) {
   const [avail, total] = value ? value.split('/') : [];
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 rounded-[12px] border border-line px-4 py-3">
-      <span className="text-[16px] text-muted-foreground">{label}</span>
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-[12px] border border-line px-3 py-3">
+      <span className="text-[16px] whitespace-nowrap text-muted-foreground">{label}</span>
       {value ? (
         <span className="tabular-nums">
           <span className="text-[22px] font-extrabold">{avail}</span>
