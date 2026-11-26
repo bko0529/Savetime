@@ -398,8 +398,24 @@
 .request-new {
   animation: request-new-blink 1.2s ease-in-out infinite;
 }
+/* 탭 줄 오른쪽 '● 새 이송 요청 N건' 글자 깜빡임 */
+@keyframes request-new-blink-text {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.request-new-blink-text {
+  animation: request-new-blink-text 1.2s ease-in-out infinite;
+}
 /* 'PC 애니메이션 줄이기'를 켠 경우 깜빡이지 않고 빨간 배경만 */
 @media (prefers-reduced-motion: reduce) {
+  .request-new-blink-text {
+    animation: none;
+  }
   .request-new {
     animation: none;
     background-color: color-mix(in oklab, var(--color-destructive) 20%, var(--color-card));

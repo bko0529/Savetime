@@ -170,13 +170,19 @@ describe('요청 목록·상세 (SFR-135·118)', () => {
     const button = await screen.findByRole('button', { name: 'R-102' });
     const card = button.closest('li')!;
     await waitFor(() => expect(card.className).toContain('request-new'));
+    // 위쪽 '새 이송 요청 1건'이 깜빡인다
+    expect(screen.getByText('새 이송 요청 1건').parentElement!.className).toContain(
+      'request-new-blink-text',
+    );
     expect(screen.getByText('새 요청 1건')).toBeDefined();
 
     fireEvent.click(button);
     await waitFor(() => expect(card.className).not.toContain('request-new'));
     expect(screen.queryByText('새 요청 1건')).toBeNull();
-    // 열어도 응답 전까지 대기 건수는 그대로
-    expect(screen.getByText('새 이송 요청 1건')).toBeDefined();
+    // 위쪽 '새 이송 요청 N건'도 다 열어 보면 사라진다. 응답 전까지 대기 건수·탭 제목은 그대로
+    expect(screen.queryByText(/새 이송 요청 \d+건/)).toBeNull();
+    expect(screen.getByText(/응답 대기 1건/)).toBeDefined();
+    expect(document.title).toBe('🔴 새 이송 요청 1건');
   });
 
   it('열어 둔 요청이 다른 PC 응답으로 끝나면 상세도 끝난 요청으로 바뀐다', async () => {

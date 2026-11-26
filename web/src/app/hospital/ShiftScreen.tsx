@@ -239,14 +239,18 @@ export function ShiftScreen({
                   className="ml-0 h-[44px] text-[17px]"
                 />
               )}
-              {incoming.waiting.length > 0 && (
-                // 이모지 대신 빨간 점 + 연한 링 (탭 제목은 그대로 🔴)
-                <p className="ml-auto flex items-center gap-2 text-[18px] font-extrabold text-destructive">
+              {/* 아직 안 연 새 요청이 있을 때만, 깜빡이며 보여 준다. 다 열어 보면 사라진다
+                  (응답 대기 건수는 왼쪽 목록 위, 탭 제목 🔴 은 응답 전까지 그대로) */}
+              {newCount > 0 && (
+                <p
+                  role="status"
+                  className="request-new-blink-text ml-auto flex items-center gap-2 text-[18px] font-extrabold text-destructive"
+                >
                   <span
                     aria-hidden
                     className="size-[12px] shrink-0 rounded-full bg-destructive shadow-[0_0_0_5px_var(--danger-soft)]"
                   />
-                  <span>새 이송 요청 {incoming.waiting.length}건</span>
+                  <span>새 이송 요청 {newCount}건</span>
                   {hospitalName && (
                     <span className="font-semibold text-muted-foreground">· {hospitalName}</span>
                   )}
