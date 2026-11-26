@@ -5640,7 +5640,8 @@ export interface operations {
     get_admin_stats_hospitals: {
         parameters: {
             query?: {
-                days?: 7 | 30;
+                /** @description 기간(일). 0 = 전체 기간 */
+                days?: 0 | 7 | 30;
             };
             header?: never;
             path?: never;
@@ -5656,7 +5657,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {integer} */
-                        days?: 7 | 30;
+                        days?: 0 | 7 | 30;
                         /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
                         avgRequestToDepartSec?: number | null;
                         hospitals?: components["schemas"]["HospitalStat"][];

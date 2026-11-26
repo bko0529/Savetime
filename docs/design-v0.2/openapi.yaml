@@ -3834,9 +3834,10 @@ paths:
         schema:
           type: integer
           enum:
+          - 0
           - 7
           - 30
-        description: ''
+        description: 기간(일). 0 = 전체 기간
       responses:
         '200':
           description: 성공
@@ -3848,6 +3849,7 @@ paths:
                   days:
                     type: integer
                     enum:
+                    - 0
                     - 7
                     - 30
                   avgRequestToDepartSec:

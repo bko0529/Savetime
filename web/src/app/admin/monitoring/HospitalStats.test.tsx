@@ -161,11 +161,15 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
 
     fireEvent.click(screen.getByRole('row', { name: 'A병원' }));
     const self = await screen.findByRole('region', { name: '이 병원 평소와 비교' });
-    // 응답률: 최근 7일 50% vs 평소 70% → ▼ 20%p (나빠짐)
-    expect(self.textContent).toContain('응답률50%70%▼ 20%p');
+    // 응답률: 최근 7일 50% vs 평소 70% → ▼ 20%p (나빠짐, 막대 2개)
+    expect(self.textContent).toContain('▼ 20%p최근 7일50%평소(30일)70%');
     const avg = screen.getByRole('region', { name: '전체 병원 평균과 비교' });
     // 전체 평균 (0.5×20 + 0.9×20)/40 = 70% → ▼ 20%p
-    expect(avg.textContent).toContain('응답률50%70%▼ 20%p');
+    expect(avg.textContent).toContain('▼ 20%p이 병원50%전체 평균70%');
+    // 전체 병원 중 위치: 응답률 2곳 중 2위
+    expect(screen.getByRole('region', { name: '전체 병원 중 위치' }).textContent).toContain(
+      '2곳 중 2위',
+    );
     expect(avg.textContent).toContain('병원 2곳의 평균');
   });
 
@@ -196,13 +200,25 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
     expect(screen.getByText(/에 맞는 병원이 없어요/)).toBeTruthy();
   });
 
+  it("'전체'를 누르면 전체 기간(days=0) 통계를 받는다", async () => {
+    const server = fakeServer({
+      'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원')),
+      'GET /admin/stats/hospitals?days=0': reply(0, stat(1, 'A병원', { requests: 300 })),
+    });
+    renderStats();
+    await screen.findByRole('row', { name: 'A병원' });
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    await waitFor(() => expect(rowOf('A병원').textContent).toContain('300'));
+    expect(server.callsTo('GET /admin/stats/hospitals?days=0')).toHaveLength(1);
+  });
+
   it("'최근 30일'로 바꾸면 30일 통계를 받는다", async () => {
     const server = fakeServer({
       'GET /admin/stats/hospitals?days=7': reply(7),
       'GET /admin/stats/hospitals?days=30': reply(30, stat(9, '옛병원')),
     });
     renderStats();
-    expect(await screen.findByText('이 기간에 요청을 받은 병원이 없어요.')).toBeTruthy();
+    expect(await screen.findByText('최근 7일 동안 요청을 받은 병원이 없어요.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '최근 30일' }));
     expect(await screen.findByRole('row', { name: '옛병원' })).toBeTruthy();
     await waitFor(() =>
