@@ -127,7 +127,7 @@ export function RejectReasonDialog({
                 }}
                 maxLength={ETC_TEXT_MAX}
                 placeholder="환자 이름·연락처는 쓰지 마세요"
-                className="h-12 rounded-lg border-2 border-input px-3 text-xl"
+                className="h-12 rounded-md border border-input bg-card px-3 text-xl"
                 autoFocus
               />
             </label>

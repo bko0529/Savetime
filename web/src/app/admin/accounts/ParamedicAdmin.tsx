@@ -90,7 +90,7 @@ export function ParamedicAdmin() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold">대원 계정</h1>
+      <h1 className="section-title text-3xl">대원 계정</h1>
       <form onSubmit={search} className="flex max-w-xl gap-3" role="search">
         <input
           aria-label="이름 또는 사번"
@@ -98,7 +98,7 @@ export function ParamedicAdmin() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={40}
-          className="h-12 flex-1 rounded-lg border-2 border-input px-3 text-lg"
+          className="h-12 flex-1 rounded-md border border-input bg-card px-3 text-lg"
         />
         <Button type="submit" size="lg">
           검색
@@ -114,9 +114,9 @@ export function ParamedicAdmin() {
         <p className="text-lg text-muted-foreground">찾는 대원이 없어요.</p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">이름</th>
               <th className="p-3">사번</th>
               <th className="p-3">소속</th>
@@ -256,14 +256,14 @@ function SuspendDialog({
               value={etcText}
               onChange={(e) => setEtcText(e.target.value)}
               maxLength={ETC_MAX}
-              className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+              className="h-12 rounded-md border border-input bg-card px-3 text-lg"
             />
           )}
         </fieldset>
         {warned && (
           <p
             role="alert"
-            className="rounded-lg bg-destructive px-4 py-3 text-lg font-bold text-white"
+            className="btn-solid-brand rounded-lg px-4 py-3 text-lg font-bold text-white"
           >
             진행 중 이송 1건이 있어요. 팀의 마지막 대원이면 이송이 &apos;취소&apos;로 끝나요.
           </p>

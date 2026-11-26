@@ -42,7 +42,7 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
       {request && (
         <DialogContent
           showCloseButton={false}
-          className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col items-center justify-center gap-8 bg-destructive p-10 text-center text-white ring-0 sm:max-w-none"
+          className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col items-center justify-center gap-8 btn-solid-brand p-10 text-center text-white ring-0 sm:max-w-none"
         >
           <DialogTitle className="text-5xl leading-tight font-extrabold">
             🔴 새 이송 요청

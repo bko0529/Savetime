@@ -19,7 +19,7 @@ type OtpSetup = { setupToken: string; secret: string };
 const OTP_PATTERN = /^\d{6}$/;
 
 const inputClass =
-  'h-14 rounded-lg border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+  'h-14 rounded-xl border border-input bg-card px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 // otpauth://totp/세이브타임:admin?secret=ABCD...&issuer=... 에서 OTP 앱에 직접 입력할 키만 꺼낸다.
 // QR 라이브러리 없이 키를 글자로 보여주기로 했다 (관리자는 몇 명뿐이라 한 번만 입력하면 됨).
@@ -112,8 +112,8 @@ export function LoginForm() {
 
   if (setup) {
     return (
-      <form onSubmit={submitEnroll} className="flex w-full max-w-xl flex-col gap-6" noValidate>
-        <h2 className="text-2xl font-bold">OTP 앱 연결 (처음 한 번)</h2>
+      <form onSubmit={submitEnroll} className="flex w-full flex-col gap-5" noValidate>
+        <h2 className="section-title text-2xl">OTP 앱 연결 (처음 한 번)</h2>
         <ol className="list-decimal space-y-2 pl-6 text-lg">
           <li>휴대폰 OTP 앱(Google Authenticator 등)에서 &lsquo;설정 키 입력&rsquo;을 골라요.</li>
           <li>아래 키를 입력해요. 키 종류는 &lsquo;시간 기준&rsquo;이에요.</li>
@@ -121,12 +121,12 @@ export function LoginForm() {
         </ol>
         <p
           data-testid="otp-secret"
-          className="rounded-lg border-2 border-foreground bg-muted p-4 text-center font-mono text-2xl font-bold tracking-wider break-all select-all"
+          className="rounded-lg border border-border-strong bg-surface p-4 text-center font-mono text-2xl font-bold tracking-wider break-all select-all"
         >
           {groupSecret(setup.secret)}
         </p>
         <label className="flex flex-col gap-2">
-          <span className="text-xl font-bold">앱에 뜬 6자리</span>
+          <span className="text-lg font-extrabold tracking-[-0.01em]">앱에 뜬 6자리</span>
           <input
             className={inputClass}
             value={enrollOtp}
@@ -141,7 +141,12 @@ export function LoginForm() {
             {errorText(enroll.error)}
           </p>
         )}
-        <Button type="submit" size="lg" disabled={!OTP_PATTERN.test(enrollOtp) || enroll.isPending}>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-16 rounded-2xl text-xl"
+          disabled={!OTP_PATTERN.test(enrollOtp) || enroll.isPending}
+        >
           {enroll.isPending ? '확인 중…' : '연결하고 로그인'}
         </Button>
       </form>
@@ -151,9 +156,9 @@ export function LoginForm() {
   const loginError = login.isError && !toSetup(login.error) ? errorText(login.error) : null;
 
   return (
-    <form onSubmit={submitLogin} className="flex w-full max-w-xl flex-col gap-6" noValidate>
+    <form onSubmit={submitLogin} className="flex w-full flex-col gap-5" noValidate>
       <label className="flex flex-col gap-2">
-        <span className="text-xl font-bold">아이디</span>
+        <span className="text-lg font-extrabold tracking-[-0.01em]">아이디</span>
         <input
           className={inputClass}
           value={loginId}
@@ -163,7 +168,7 @@ export function LoginForm() {
         />
       </label>
       <label className="flex flex-col gap-2">
-        <span className="text-xl font-bold">비밀번호</span>
+        <span className="text-lg font-extrabold tracking-[-0.01em]">비밀번호</span>
         <input
           className={inputClass}
           type="password"
@@ -174,7 +179,7 @@ export function LoginForm() {
       </label>
       <div className="flex flex-col gap-2">
         <label className="flex flex-col gap-2">
-          <span className="text-xl font-bold">OTP 6자리</span>
+          <span className="text-lg font-extrabold tracking-[-0.01em]">OTP 6자리</span>
           <input
             className={inputClass}
             value={otp}
@@ -184,7 +189,7 @@ export function LoginForm() {
             aria-describedby="otp-hint"
           />
         </label>
-        <span id="otp-hint" className="text-base text-muted-foreground">
+        <span id="otp-hint" className="text-sm text-muted-foreground">
           처음 로그인해서 아직 OTP 앱을 연결하지 않았다면 비워 두세요.
         </span>
       </div>
@@ -193,7 +198,7 @@ export function LoginForm() {
           {notice ?? loginError}
         </p>
       )}
-      <Button type="submit" size="lg" disabled={!canLogin}>
+      <Button type="submit" size="lg" className="h-16 rounded-2xl text-xl" disabled={!canLogin}>
         {login.isPending ? '로그인 중…' : '로그인'}
       </Button>
     </form>

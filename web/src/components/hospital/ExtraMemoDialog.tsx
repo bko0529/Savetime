@@ -57,7 +57,7 @@ export function ExtraMemoDialog({ open, pending, error, onSubmit, onCancel }: Pr
               maxLength={MEMO_MAX}
               // 메모는 대원에게 그대로 보인다. 환자를 알아볼 수 있는 내용은 쓰지 않게 안내한다
               placeholder="예: CT 고장, 2번 입구로 오세요"
-              className="h-12 rounded-lg border-2 border-input px-3 text-xl"
+              className="h-12 rounded-md border border-input bg-card px-3 text-xl"
               autoFocus
             />
           </label>

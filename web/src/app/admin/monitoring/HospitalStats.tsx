@@ -53,7 +53,7 @@ export function HospitalStats() {
   return (
     <section aria-labelledby="stats-title" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id="stats-title" className="text-2xl font-bold">
+        <h2 id="stats-title" className="section-title text-2xl">
           병원 응답 통계
         </h2>
         <div role="group" aria-label="기간" className="flex gap-2">
@@ -88,9 +88,9 @@ export function HospitalStats() {
         <p className="text-lg text-muted-foreground">이 기간에 요청을 받은 병원이 없어요.</p>
       )}
       {hospitals.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">병원</th>
               <th className="p-3">요청</th>
               <th className="p-3">응답률</th>
@@ -107,13 +107,13 @@ export function HospitalStats() {
               return (
                 <Fragment key={h.hospitalId}>
                   <tr
-                    className={cn('border-b', h.rejectSpike && 'bg-destructive/10 font-bold')}
+                    className={cn('border-b', h.rejectSpike && 'bg-brand-soft font-bold')}
                     aria-label={h.name}
                   >
                     <td className="p-3 font-bold">
                       {h.name}
                       {h.rejectSpike && (
-                        <span className="ml-2 rounded bg-destructive px-2 py-0.5 text-base text-white">
+                        <span className="ml-2 rounded-full bg-brand px-2.5 py-0.5 text-base text-white">
                           거절 급증
                         </span>
                       )}

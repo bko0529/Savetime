@@ -32,8 +32,8 @@ export function UnreadBadge() {
       href="/admin/monitoring#notifications"
       aria-label={`읽지 않은 알림 ${n}개`}
       className={cn(
-        'rounded-lg border-2 px-3 py-1 text-lg font-bold tabular-nums',
-        n > 0 ? 'border-destructive bg-destructive text-white' : 'border-input',
+        'rounded-full border px-3 py-1 text-lg font-bold tabular-nums',
+        n > 0 ? 'btn-solid-brand border-transparent text-white' : 'border-border-strong bg-card',
       )}
     >
       알림 {n}
@@ -68,7 +68,7 @@ export function Notifications() {
       aria-labelledby="notifications-title"
       className="flex flex-col gap-4"
     >
-      <h2 id="notifications-title" className="text-2xl font-bold">
+      <h2 id="notifications-title" className="section-title text-2xl">
         관리자 알림
       </h2>
       {(list.isError || read.isError) && (
@@ -88,8 +88,10 @@ export function Notifications() {
                 onClick={() => !i.read && i.id !== undefined && read.mutate(i.id)}
                 aria-label={`${i.text}${i.read ? '' : ' (안 읽음)'}`}
                 className={cn(
-                  'flex w-full items-center justify-between gap-4 rounded-lg border-2 px-4 py-3 text-left text-lg',
-                  i.read ? 'border-input text-muted-foreground' : 'border-foreground font-bold',
+                  'flex w-full items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 text-left text-lg shadow-[var(--shadow-card)]',
+                  i.read
+                    ? 'border-border text-muted-foreground'
+                    : 'border-brand/40 bg-brand-soft font-bold',
                 )}
               >
                 <span>

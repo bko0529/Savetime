@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { cn } from '@/lib/utils';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
@@ -23,7 +24,7 @@ type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
 export const STAFF_NAME_MAX = 40;
 
 const inputClass =
-  'h-14 rounded-lg border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+  'h-14 rounded-md border border-input bg-card px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 // 근무 시작: 담당자 이름만 받는다 (SFR-117)
 function StartShift({ onStarted }: { onStarted: () => void }) {
@@ -107,7 +108,7 @@ export function ShiftScreen({
       {connection === 'disconnected' && (
         <p
           role="alert"
-          className="sticky top-0 z-40 rounded-lg bg-destructive px-4 py-4 text-2xl font-extrabold text-white"
+          className="sticky top-0 z-40 rounded-lg btn-solid-brand px-4 py-4 text-2xl font-extrabold text-white"
         >
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
@@ -135,7 +136,7 @@ export function ShiftScreen({
       {shift === null ? (
         <StartShift onStarted={() => setStartedHere(true)} />
       ) : alarm.kind === 'on' ? (
-        <p className="rounded-lg border-2 border-foreground px-4 py-3 text-2xl font-bold">
+        <p className="w-fit rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-2xl font-bold text-success">
           🔔 알림 켜짐 · {shift.staffName} 님 근무 중
         </p>
       ) : (
@@ -167,33 +168,54 @@ export function ShiftScreen({
             }
             socket={socket}
           />
-          <h2 className="text-2xl font-bold">요청 목록</h2>
-          <RequestList
-            items={incoming.items}
-            nowMs={incoming.nowMs}
-            selectedId={selectedId}
-            onOpen={setSelectedId}
-          />
-          {selectedId !== null && (
-            <RequestDetail
-              key={selectedId}
-              requestId={selectedId}
-              nowMs={incoming.nowMs}
-              onClose={() => setSelectedId(null)}
-            />
-          )}
+          {/* 상세를 열면 목록은 왼쪽, 상세는 오른쪽 칸 (대원 앱 시안과 같은 배치).
+              병원 PC(1280px 이상)에서만 나란히 두고, 그보다 좁으면 예전처럼 목록 아래에 연다 */}
+          <div
+            className={cn(
+              'grid items-start gap-6',
+              selectedId !== null && 'xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]',
+            )}
+          >
+            <section className="tile overflow-hidden">
+              <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
+                <h2 className="section-title text-2xl">요청 목록</h2>
+                {/* 서버가 주는 순서 그대로다 (SFR-155). 이상 수치로 바꾸지 않는다는 걸 화면에도 적어 둔다 */}
+                <span className="text-base text-muted-foreground">남은 시간 짧은 순</span>
+              </div>
+              <RequestList
+                items={incoming.items}
+                nowMs={incoming.nowMs}
+                selectedId={selectedId}
+                onOpen={setSelectedId}
+              />
+            </section>
+            {selectedId !== null && (
+              // 목록을 내려 봐도 상세가 따라오게 위에 붙인다
+              <div className="xl:sticky xl:top-6">
+                <RequestDetail
+                  key={selectedId}
+                  requestId={selectedId}
+                  nowMs={incoming.nowMs}
+                  onClose={() => setSelectedId(null)}
+                />
+              </div>
+            )}
+          </div>
 
-          <h2 className="text-2xl font-bold">도착 예정</h2>
-          {arriving.isError && (
-            <p role="alert" className="text-xl font-bold text-destructive">
-              {errorText(arriving.error)}
-            </p>
-          )}
-          <IncomingList
-            items={arriving.items}
-            notices={arriving.notices}
-            onDismiss={arriving.dismiss}
-          />
+          {/* 요청 목록과 같은 카드 모양: 제목 줄 아래에 표 */}
+          <section className="tile overflow-hidden">
+            <h2 className="section-title border-b border-border px-5 py-4 text-2xl">도착 예정</h2>
+            {arriving.isError && (
+              <p role="alert" className="px-5 pt-4 text-xl font-bold text-destructive">
+                {errorText(arriving.error)}
+              </p>
+            )}
+            <IncomingList
+              items={arriving.items}
+              notices={arriving.notices}
+              onDismiss={arriving.dismiss}
+            />
+          </section>
         </>
       )}
     </div>

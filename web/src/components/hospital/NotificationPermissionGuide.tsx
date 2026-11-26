@@ -6,7 +6,7 @@ export function NotificationPermissionGuide({ reason }: { reason: 'denied' | 'un
     <div
       role="status"
       aria-label="브라우저 알림 안내"
-      className="flex flex-col gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100"
+      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-foreground"
     >
       <p className="text-xl font-extrabold">
         ⚠ 브라우저 알림을 허용해야 다른 창을 볼 때도 알 수 있어요

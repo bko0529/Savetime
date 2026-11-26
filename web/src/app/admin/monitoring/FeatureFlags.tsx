@@ -50,7 +50,7 @@ export function FeatureFlags() {
 
   return (
     <section aria-labelledby="flags-title" className="flex flex-col gap-4">
-      <h2 id="flags-title" className="text-2xl font-bold">
+      <h2 id="flags-title" className="section-title text-2xl">
         기능 켜고 끄기
       </h2>
       <p className="text-lg text-muted-foreground">

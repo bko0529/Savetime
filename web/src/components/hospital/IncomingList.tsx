@@ -41,12 +41,13 @@ type Props = {
 // 도착 예정 목록 (SFR-121, H-03). 구급차 위치·지도는 보여 주지 않고 도착 예상 시간만 (D-71)
 export function IncomingList({ items, notices, onDismiss }: Props) {
   return (
+    // 카드(도착 예정 칸) 안에 들어가므로 알림·빈 문구는 안쪽 여백을 두고, 표는 카드 끝까지 채운다
     <div className="flex flex-col gap-4">
       {notices.map((n) => (
         <div
           key={n.requestId}
           role="alert"
-          className="flex items-center justify-between gap-4 rounded-lg border-2 border-destructive px-4 py-3 text-xl font-bold text-destructive"
+          className="mx-5 mt-4 flex items-center justify-between gap-4 rounded-lg border border-brand/40 bg-brand-soft px-4 py-3 text-xl font-bold text-brand-deep"
         >
           <span>
             R-{n.requestId} {REMOVED_TEXT[n.reason]}
@@ -57,11 +58,11 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
         </div>
       ))}
       {items.length === 0 ? (
-        <p className="text-xl text-muted-foreground">도착 예정 환자가 없어요.</p>
+        <p className="px-5 py-6 text-xl text-muted-foreground">도착 예정 환자가 없어요.</p>
       ) : (
-        <table className="w-full border-collapse text-xl">
+        <table className="data-table data-table-flush text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">번호</th>
               <th className="p-3">환자</th>
               <th className="p-3">상태</th>
@@ -93,7 +94,7 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
                         requestId={item.id}
                         version={item.version ?? 1}
                         used={!!item.extraMemoUsed}
-                        className="h-12 border-2 text-lg"
+                        className="h-12 text-lg"
                       />
                     </div>
                   )}

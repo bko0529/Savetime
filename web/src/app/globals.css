@@ -224,6 +224,44 @@
     background: var(--color-brand-soft);
     color: var(--color-brand-deep);
   }
+  /* 표: 둥근 흰 카드 안에 넣고, 머리줄은 연한 회색. 줄 사이는 얇은 선.
+     둥근 모서리를 쓰려면 border-collapse 대신 separate 로 두고 선은 칸(td·th)에 긋는다 */
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    box-shadow: var(--shadow-card);
+  }
+  .data-table th,
+  .data-table td {
+    border-bottom: 1px solid var(--color-border);
+  }
+  .data-table tbody tr:last-child > td {
+    border-bottom: 0;
+  }
+  .data-table thead th {
+    background: var(--color-surface);
+    color: var(--color-muted-foreground);
+    font-weight: 700;
+  }
+  .data-table th:first-child,
+  .data-table td:first-child {
+    padding-left: 1.25rem;
+  }
+  .data-table th:last-child,
+  .data-table td:last-child {
+    padding-right: 1.25rem;
+  }
+  /* 이미 카드 안에 있는 표: 바깥 테두리·그림자·둥근 모서리를 빼고 카드에 맡긴다 */
+  .data-table-flush {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
   .btn-solid-primary {
     background: var(--gradient-primary);
     box-shadow:

@@ -137,7 +137,7 @@ export function SignupReview() {
 
   return (
     <section aria-labelledby="signups-title" className="flex flex-col gap-4">
-      <h2 id="signups-title" className="text-2xl font-bold">
+      <h2 id="signups-title" className="section-title text-2xl">
         가입 승인 대기 {list.isSuccess && <span className="tabular-nums">{countText}</span>}
       </h2>
       {list.isError && (
@@ -149,9 +149,9 @@ export function SignupReview() {
         <p className="text-lg text-muted-foreground">기다리는 가입 신청이 없어요.</p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">이름</th>
               <th className="p-3">소속</th>
               <th className="p-3">사번</th>
@@ -241,7 +241,7 @@ function ReviewDialog({
           공무원증 사진과 신청 정보가 맞는지 확인하세요. 승인·반려하면 사진은 바로 지워져요.
         </DialogDescription>
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="flex min-h-48 items-center justify-center rounded-lg border-2 border-input bg-muted">
+          <div className="flex min-h-48 items-center justify-center rounded-lg border border-input bg-surface">
             {photo.url ? (
               // blob URL 이라 next/image 최적화를 쓰지 않는다
               <img
@@ -300,7 +300,7 @@ function ReviewDialog({
                 value={etcText}
                 onChange={(e) => setEtcText(e.target.value)}
                 maxLength={ETC_MAX}
-                className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+                className="h-12 rounded-md border border-input bg-card px-3 text-lg"
               />
             )}
           </fieldset>

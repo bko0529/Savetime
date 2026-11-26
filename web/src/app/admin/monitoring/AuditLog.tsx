@@ -27,7 +27,7 @@ export function AuditLog() {
 
   return (
     <section aria-labelledby="audit-title" className="flex flex-col gap-4">
-      <h2 id="audit-title" className="text-2xl font-bold">
+      <h2 id="audit-title" className="section-title text-2xl">
         관리자 작업 이력
       </h2>
       {logs.isError && (
@@ -39,9 +39,9 @@ export function AuditLog() {
         <p className="text-lg text-muted-foreground">아직 기록된 작업이 없어요.</p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">시각</th>
               <th className="p-3">관리자</th>
               <th className="p-3">작업</th>

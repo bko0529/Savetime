@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand/Brand';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RequireAdmin, useAdminAuth } from './AdminAuth';
@@ -40,13 +41,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <RequireAdmin>
       <div className="flex flex-1 flex-col">
         {/* 병원 웹·대원 앱과 같은 위쪽 띠 */}
-        <header className="surface-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 px-8 py-4">
+        <header className="surface-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 overflow-hidden border-b border-border/70 px-8 py-4">
+          {/* 대원 앱 시안과 같은 로고 + '세이브타임 관리자' */}
           <Link
             href="/admin"
-            className="flex items-baseline gap-2 text-2xl font-extrabold tracking-tight"
+            className="relative flex items-center gap-3 text-xl font-extrabold tracking-tight"
           >
-            세이브타임
-            <span className="text-base font-bold text-brand">관리자</span>
+            <BrandLogo className="size-10 rounded-xl" />
+            세이브타임 관리자
           </Link>
           <nav aria-label="관리자 메뉴" className="flex gap-2">
             {ADMIN_MENUS.map((m) => {
@@ -89,7 +91,7 @@ export function ComingSoon({
 }) {
   return (
     <AdminShell>
-      <h1 className="text-3xl font-bold">{title}</h1>
+      <h1 className="section-title text-3xl">{title}</h1>
       <p className="text-xl">아직 준비 중이에요. 아래 기능이 차례로 들어와요.</p>
       <ul className="flex flex-col gap-2 text-lg">
         {items.map((i) => (

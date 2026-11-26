@@ -49,12 +49,9 @@ export function HospitalPcs({
   const items = pcs.data ?? [];
 
   return (
-    <section
-      aria-labelledby="pcs-title"
-      className="flex flex-col gap-4 rounded-lg border-2 border-foreground p-6"
-    >
+    <section aria-labelledby="pcs-title" className="tile flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between gap-4">
-        <h2 id="pcs-title" className="text-2xl font-bold">
+        <h2 id="pcs-title" className="section-title text-2xl">
           {hospital.name} 등록 PC
         </h2>
         <Button variant="outline" onClick={onClose}>
@@ -71,9 +68,9 @@ export function HospitalPcs({
         <p className="text-lg text-muted-foreground">등록된 PC가 없어요.</p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">PC 이름</th>
               <th className="p-3">등록 시각</th>
               <th className="p-3">마지막 사용</th>

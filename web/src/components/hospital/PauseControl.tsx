@@ -72,7 +72,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
     return (
       <div
         role="status"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border-2 border-destructive bg-destructive/10 px-4 py-3"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3"
       >
         <div className="flex flex-col gap-1">
           <p className="text-2xl font-extrabold text-destructive">
@@ -107,7 +107,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
       <Button
         size="lg"
         variant="outline"
-        className="h-12 w-fit border-2 text-lg"
+        className="h-12 w-fit text-lg"
         onClick={() => {
           toggle.reset();
           setConfirming(true);

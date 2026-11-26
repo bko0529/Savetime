@@ -117,7 +117,7 @@ export function HospitalAdmin() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold">병원 관리</h1>
+      <h1 className="section-title text-3xl">병원 관리</h1>
       <form onSubmit={search} className="flex max-w-xl gap-3" role="search">
         <input
           aria-label="병원 이름"
@@ -125,7 +125,7 @@ export function HospitalAdmin() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={40}
-          className="h-12 flex-1 rounded-lg border-2 border-input px-3 text-lg"
+          className="h-12 flex-1 rounded-md border border-input bg-card px-3 text-lg"
         />
         <Button type="submit" size="lg">
           검색
@@ -141,9 +141,9 @@ export function HospitalAdmin() {
         <p className="text-lg text-muted-foreground">찾는 병원이 없어요.</p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
+        <table className="data-table text-lg">
           <thead>
-            <tr className="border-b-2 border-foreground text-left">
+            <tr className="text-left">
               <th className="p-3">병원</th>
               <th className="p-3">계정</th>
               <th className="p-3">등록 PC</th>
@@ -295,7 +295,7 @@ function ConfirmDialog({
               onChange={(e) => setReason(e.target.value)}
               maxLength={KEY_REASON_MAX}
               placeholder="예: 키 유출 의심, 병원 탈퇴"
-              className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+              className="h-12 rounded-md border border-input bg-card px-3 text-lg"
             />
           </label>
         )}
@@ -352,7 +352,7 @@ function IssuedKeyDialog({
         </DialogDescription>
         <p
           aria-label="라이선스 키"
-          className="rounded-lg border-2 border-foreground bg-muted p-4 text-center font-mono text-2xl font-bold tracking-wider break-all"
+          className="rounded-lg border border-border-strong bg-surface p-4 text-center font-mono text-2xl font-bold tracking-wider break-all"
         >
           {issued?.key}
         </p>

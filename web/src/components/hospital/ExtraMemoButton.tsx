@@ -84,7 +84,7 @@ export function ExtraMemoButton({ requestId, version, used, className }: Props) 
         <Button
           size="lg"
           variant="outline"
-          className={className ?? 'h-14 w-fit border-2 text-xl'}
+          className={className ?? 'h-14 w-fit text-xl'}
           disabled={send.isPending}
           onClick={() => {
             send.reset();

@@ -21,7 +21,9 @@ export function LicenseBanner({ daysLeft }: { daysLeft: number | undefined }) {
     <div
       role="status"
       className={`flex items-center justify-between gap-4 rounded-lg px-4 py-3 text-xl font-bold ${
-        red ? 'bg-destructive text-white' : 'border-2 border-foreground bg-muted'
+        red
+          ? 'btn-solid-brand bg-destructive text-white'
+          : 'border border-warning/40 bg-warning-soft'
       }`}
     >
       <p>라이선스 키가 {daysLeft}일 뒤 만료돼요 · 관리자에게 재발급을 요청하세요</p>

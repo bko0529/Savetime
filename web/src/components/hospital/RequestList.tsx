@@ -11,6 +11,11 @@ const STATUS_TEXT: Record<string, string> = {
   approved: '승인',
 };
 
+const STATUS_TONE: Record<string, string> = {
+  waiting: 'bg-warning-soft text-warning',
+  approved: 'bg-success-soft text-success',
+};
+
 type Props = {
   items: HwRequestItem[];
   nowMs: number;
@@ -22,12 +27,13 @@ type Props = {
 // 구급대 소속은 API 에도 없고 여기서도 보여 주지 않는다 (D-98)
 export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
   if (items.length === 0) {
-    return <p className="text-xl text-muted-foreground">지금 응답할 요청이 없어요.</p>;
+    return <p className="px-5 py-6 text-xl text-muted-foreground">지금 응답할 요청이 없어요.</p>;
   }
   return (
-    <table className="w-full border-collapse text-xl">
+    // 카드(요청 목록 칸) 안에 들어가므로 표 자체의 테두리·그림자는 뺀다
+    <table className="data-table data-table-flush text-lg">
       <thead>
-        <tr className="border-b-2 border-foreground text-left">
+        <tr className="text-left">
           <th className="p-3">번호</th>
           <th className="p-3">주 증상</th>
           <th className="p-3">이상 수치</th>
@@ -41,17 +47,19 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
           const id = item.id!;
           const waiting = item.status === 'waiting';
           const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
+          const selected = selectedId === id;
           return (
             <tr
               key={id}
-              className={cn('border-b', selectedId === id && 'bg-accent')}
-              aria-selected={selectedId === id}
+              // 지금 상세를 연 줄은 연한 빨강 바탕 + 빨간 글자
+              className={cn(selected && 'bg-brand-soft text-brand-deep')}
+              aria-selected={selected}
             >
               <td className="p-3">
                 {/* 행 전체가 아니라 버튼을 둬야 키보드(Tab·Enter)로도 열 수 있다 */}
                 <button
                   type="button"
-                  className="font-bold underline underline-offset-4"
+                  className="font-bold whitespace-nowrap underline underline-offset-4"
                   onClick={() => onOpen(id)}
                 >
                   {item.label}
@@ -60,19 +68,29 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
               <td className="p-3">{item.chiefComplaint ?? '—'}</td>
               <td className="p-3">
                 {item.abnormalCount ? (
-                  <span className="font-bold text-destructive">⚠ 이상 {item.abnormalCount}</span>
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 px-2.5 py-0.5 text-base font-bold whitespace-nowrap text-destructive">
+                    ⚠ 이상 {item.abnormalCount}
+                  </span>
                 ) : (
                   '—'
                 )}
               </td>
-              <td className="p-3">
+              <td className="p-3 whitespace-nowrap">
                 {item.etaMin != null
                   ? `${item.etaSource === 'straight' ? '약 ' : ''}${item.etaMin}분`
                   : '—'}
               </td>
               <td className="p-3">
-                {STATUS_TEXT[item.status ?? ''] ?? item.status}
-                {item.respondedBy ? ` · ${item.respondedBy}` : ''}
+                {/* 상태마다 색 칩. 색만으로 구분하지 않게 글자도 그대로 쓴다 */}
+                <span
+                  className={cn(
+                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-base font-bold whitespace-nowrap',
+                    STATUS_TONE[item.status ?? ''] ?? 'bg-surface text-muted-foreground',
+                  )}
+                >
+                  {STATUS_TEXT[item.status ?? ''] ?? item.status}
+                  {item.respondedBy ? ` · ${item.respondedBy}` : ''}
+                </span>
               </td>
               <td className={cn('p-3 tabular-nums', urgent && 'font-extrabold text-destructive')}>
                 {waiting && item.respondUntil ? remainingText(item.respondUntil, nowMs) : '—'}
