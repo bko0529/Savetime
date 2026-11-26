@@ -26,7 +26,7 @@ function renderList(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <AdminAuthProvider keepLogin={false}>
+      <AdminAuthProvider>
         <SignedIn>{ui}</SignedIn>
       </AdminAuthProvider>
     </QueryClientProvider>,
