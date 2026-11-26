@@ -75,7 +75,7 @@ export default function RequestScreen() {
     return r.ok;
   };
 
-  /** 병원 상세 → 전화 확인 (SFR-032). 전화 확인 화면은 6단계에서 붙는다 */
+  /** 병원 상세 → 전화 확인 (SFR-032). 상태가 phone_check 가 되면 전화 확인 화면으로 따라간다 */
   const phone = (id: string) => {
     setDetail(null);
     void run(actions.startPhone(id));
