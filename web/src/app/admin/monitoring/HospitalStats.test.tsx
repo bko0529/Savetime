@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 describe('관리자 병원 응답 통계 (SFR-106)', () => {
-  it("'최근 7일'로 열면 A병원 응답률 80%·평균 응답 60초가 보이고, 핵심 지표 '요청→출발'이 맨 위에 (인수 기준)", async () => {
+  it("'최근 7일'로 열면 A병원 응답률 80%·평균 응답 60초가 보인다 (인수 기준)", async () => {
     const server = fakeServer({ 'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원')) });
     renderStats();
     await screen.findByRole('row', { name: 'A병원' });
@@ -80,7 +80,8 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
     expect(a.textContent).toContain('80%');
     expect(a.textContent).toContain('1분');
     expect(a.textContent).toContain('25%');
-    expect(screen.getByText(/평균 요청 → 출발/).textContent).toContain('1분 10초');
+    // 전체 평균 '평균 요청 → 출발' 상자는 화면에서 뺐다 (병원별 '요청→출발' 칸은 그대로)
+    expect(screen.queryByText(/평균 요청 → 출발/)).toBeNull();
     expect(screen.getByRole('button', { name: '최근 7일' }).getAttribute('aria-pressed')).toBe(
       'true',
     );

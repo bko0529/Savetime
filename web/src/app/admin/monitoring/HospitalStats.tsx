@@ -83,12 +83,6 @@ export function HospitalStats() {
           {errorText(stats.error)}
         </p>
       )}
-      {stats.isSuccess && (
-        <p className="well w-fit px-4 py-2.5 text-lg font-semibold">
-          평균 요청 → 출발{' '}
-          <strong className="tabular-nums">{durationText(stats.data.avgRequestToDepartSec)}</strong>
-        </p>
-      )}
       {stats.isSuccess && hospitals.length === 0 && (
         <p className="well px-5 py-6 text-center text-base text-muted-foreground">
           이 기간에 요청을 받은 병원이 없어요.
@@ -115,7 +109,8 @@ export function HospitalStats() {
       )}
       {shown.length > 0 && (
         // 병원이 많아도 화면이 길어지지 않게 상자 안에서 스크롤 (제목 줄은 위에 고정)
-        <div className="panel-table max-h-[440px] overflow-y-auto">
+        // 상세를 펼치면 높이 제한을 풀어 상세가 한 화면에 다 보이게 한다
+        <div className={cn('panel-table overflow-y-auto', openId === null && 'max-h-[440px]')}>
           <table className="data-table data-table-flush">
             <thead className="sticky top-0 z-10 bg-surface">
               <tr className="text-left">
@@ -229,7 +224,7 @@ function HospitalDetail({ stat }: { stat: HospitalStat }) {
     ['가장 많은 거절 사유', stat.topRejectReason ? REASON_LABEL[stat.topRejectReason] : '—'],
   ];
   return (
-    <div className="flex flex-col gap-4" aria-label={`${stat.name} 상세`}>
+    <div className="flex flex-col gap-3" aria-label={`${stat.name} 상세`}>
       <p className="text-lg font-extrabold">
         {stat.name} 상세
         {stat.sampleTooSmall && (
@@ -245,9 +240,9 @@ function HospitalDetail({ stat }: { stat: HospitalStat }) {
       </p>
       <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (
-          <div key={label} className="well flex flex-col gap-1 px-4 py-3">
+          <div key={label} className="well flex flex-col gap-0.5 px-4 py-2.5">
             <dt className="text-sm text-muted-foreground">{label}</dt>
-            <dd className="text-lg font-bold tabular-nums">{value}</dd>
+            <dd className="text-[17px] font-bold tabular-nums">{value}</dd>
           </div>
         ))}
       </dl>

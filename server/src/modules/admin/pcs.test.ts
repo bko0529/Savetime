@@ -227,7 +227,8 @@ test('알림 목록: 새 PC 등록이 알림이 되고, 30분 안 재발생은 �
       [['pc_change', 'A병원 PC 등록 · 응급실 접수대', 1, false]],
     );
     // 누르면 병원 관리 화면으로 가도록 병원 ID·이름을 같이 준다
-    const hospitalId = (await h.pool.query("SELECT id FROM hospital WHERE name = 'A병원'")).rows[0].id;
+    const hospitalId = (await h.pool.query("SELECT id FROM hospital WHERE name = 'A병원'")).rows[0]
+      .id;
     assert.equal(res.body.items[0].refId, Number(hospitalId));
     assert.equal(res.body.items[0].hospitalName, 'A병원');
 

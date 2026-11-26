@@ -94,7 +94,10 @@ async function issueTokens(ctx: AdminContext, adminId: string) {
      VALUES ('admin', $1, $2, now() + make_interval(hours => $3))`,
     [adminId, hashRefreshToken(refreshToken), ctx.sessionHours],
   );
-  return { accessToken: await signAdminAccessToken(ctx.jwtKey, adminId, ctx.accessMinutes), refreshToken };
+  return {
+    accessToken: await signAdminAccessToken(ctx.jwtKey, adminId, ctx.accessMinutes),
+    refreshToken,
+  };
 }
 
 export function adminAuthRouter(ctx: AdminContext): Router {
