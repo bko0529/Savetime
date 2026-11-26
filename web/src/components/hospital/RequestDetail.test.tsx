@@ -94,6 +94,35 @@ describe('요청 상세 (SFR-118)', () => {
     expect(card.textContent).toContain('맥박X확인 불가');
   });
 
+  it('과거력·KTAS 등 앱이 받는 항목을 모두 보여 주고, 비운 칸은 입력 안 함', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          assessment: {
+            chiefComplaint: '흉통',
+            sex: 'M',
+            ageBand: '60s',
+            history: '고혈압·당뇨',
+            ktas: 2,
+            trauma: 'no',
+            unknownFields: [],
+          },
+          abnormalFields: [],
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    const card = await screen.findByRole('region', { name: '환자 평가 정보' });
+    expect(card.textContent).toContain('과거력고혈압·당뇨');
+    expect(card.textContent).toContain('KTAS2단계');
+    // 비운 선택 항목도 줄은 있다
+    expect(card.textContent).toContain('체온입력 안 함');
+    expect(card.textContent).toContain('혈당입력 안 함');
+    // 외상 없음이면 외상 원인 줄은 없다
+    expect(card.textContent).not.toContain('외상 원인');
+  });
+
   it('수술 가능 여부를 우리 병원 카드 맨 위에', async () => {
     fakeServer({
       'GET /hw/requests/102': {

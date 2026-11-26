@@ -4,6 +4,7 @@ export type Assessment = components['schemas']['Assessment'];
 type Field = keyof Assessment;
 
 // 환자 평가 칸 → 병원 직원이 읽는 한국어 (SFR-108 입력 항목과 같은 순서)
+// 요구사항(SFR-108) 순서: 필수 항목 다음 선택 항목(과거력·체온·혈당·KTAS)
 export const FIELD_LABEL: Partial<Record<Field, string>> = {
   sex: '성별',
   ageBand: '나이대',
@@ -12,15 +13,15 @@ export const FIELD_LABEL: Partial<Record<Field, string>> = {
   pulse: '맥박',
   resp: '호흡수',
   spo2: '산소포화도',
-  temp: '체온',
-  glucose: '혈당',
   painSite: '통증 부위',
   painScore: '통증 정도',
-  onset: '발생 시각',
+  onset: '증상 시작 시간',
   trauma: '외상',
   traumaCause: '외상 원인',
-  history: '병력',
-  ktas: 'Pre-KTAS',
+  history: '과거력',
+  temp: '체온',
+  glucose: '혈당',
+  ktas: 'KTAS',
 };
 
 const SEX: Record<string, string> = { M: '남', F: '여', U: '확인 불가' };
@@ -81,6 +82,8 @@ export function fieldText(a: Assessment, field: Field): string | null {
       return TRAUMA[String(value)] ?? String(value);
     case 'traumaCause':
       return TRAUMA_CAUSE[String(value)] ?? String(value);
+    case 'ktas':
+      return `${value}단계`;
     default:
       return String(value);
   }
