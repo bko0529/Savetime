@@ -6,7 +6,9 @@ import { useEffect } from 'react';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
+import { StatusScreen } from '@/components/brand/StatusScreen';
 import { LicenseBanner } from '@/components/hospital/LicenseBanner';
+import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/hospital/Logo';
 import { ShiftScreen } from './ShiftScreen';
 
@@ -31,13 +33,34 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
   }, [session.error, router]);
 
   if (session.isPending || isUnregistered(session.error)) {
-    return <p className="p-8 text-xl">확인 중…</p>;
+    return (
+      <StatusScreen title="확인 중…" heading={false}>
+        이 PC가 등록된 병원 PC인지 확인하고 있어요.
+      </StatusScreen>
+    );
   }
   if (session.isError) {
+    // 서버가 꺼졌거나 연결이 안 될 때: 빈 화면에 글자 한 줄 대신, 무엇이 문제인지와 다시 시도 버튼
     return (
-      <p role="alert" className="p-8 text-xl font-bold text-destructive">
-        {errorText(session.error)}
-      </p>
+      <StatusScreen
+        eyebrow="연결 확인"
+        tone="danger"
+        title="병원 웹을 열지 못했어요"
+        action={
+          <Button
+            size="lg"
+            className="h-14 rounded-xl px-8 text-xl"
+            disabled={session.isFetching}
+            onClick={() => void session.refetch()}
+          >
+            {session.isFetching ? '다시 확인하는 중…' : '다시 시도'}
+          </Button>
+        }
+      >
+        <p role="alert" className="font-bold text-destructive">
+          {errorText(session.error)}
+        </p>
+      </StatusScreen>
     );
   }
 

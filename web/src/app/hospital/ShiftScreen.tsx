@@ -27,8 +27,7 @@ export const STAFF_NAME_MAX = 40;
 
 // 대원 앱 Lovable 시안처럼 둥근 흰 카드 + 옅은 그림자
 const cardClass = 'tile rounded-2xl';
-const inputClass =
-  'h-[56px] rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+const inputClass = 'field h-[56px] rounded-xl text-xl';
 
 // 근무 시작: 담당자 이름만 받는다 (SFR-117)
 function StartShift({ onStarted }: { onStarted: () => void }) {
@@ -170,7 +169,7 @@ export function ShiftScreen({
 
         {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
         {shift !== null && alarm.kind !== 'on' && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-line bg-danger-soft px-6 py-4 shadow-[var(--shadow-card)]">
             <div className="flex flex-col gap-2">
               <p className="text-[26px] font-extrabold text-danger-strong">
                 {offMessage(alarm, startedHere)}
@@ -183,7 +182,7 @@ export function ShiftScreen({
             </div>
             <Button
               size="lg"
-              className="h-[64px] rounded-[12px]"
+              className="h-[64px] rounded-xl"
               onClick={() => turnOn.mutate()}
               disabled={turnOn.isPending || connection !== 'connected'}
             >

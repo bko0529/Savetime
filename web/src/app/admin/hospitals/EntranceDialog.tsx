@@ -26,7 +26,7 @@ const FALLBACK_CENTER: Point = { lat: 36.815, lng: 127.1139 };
 const inKorea = (p: Point) => p.lat >= 33 && p.lat <= 39 && p.lng >= 124 && p.lng <= 132;
 const fixed6 = (n: number) => n.toFixed(6);
 
-const inputClass = 'h-12 w-full rounded-md border border-input bg-card px-3 text-lg tabular-nums';
+const inputClass = 'field h-12 rounded-xl text-lg tabular-nums';
 
 // 응급실 입구 좌표 지정 (SFR-145, A-03). 지도에서 입구를 눌러 찍고 저장한다.
 // 저장하면 이 병원의 도착 판정(앱 목적지·병원 웹 도착 확인 200m)이 이 좌표로 바뀐다.
@@ -118,7 +118,7 @@ export function EntranceDialog({
             ref={mapBox}
             role="application"
             aria-label="응급실 입구를 찍을 지도"
-            className="h-80 w-full rounded-lg border border-input bg-surface"
+            className="h-80 w-full well rounded-xl"
           />
         )}
         {mapState === 'loading' && (

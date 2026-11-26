@@ -73,7 +73,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
     return (
       <div
         role="status"
-        className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4"
+        className="flex w-full flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-line bg-danger-soft px-6 py-4 shadow-[var(--shadow-card)]"
       >
         <div className="flex flex-col gap-1">
           <p className="text-[24px] font-extrabold text-danger-strong">
@@ -93,7 +93,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
         </div>
         <Button
           size="lg"
-          className="h-[56px] rounded-[12px] text-xl"
+          className="h-[56px] rounded-xl text-xl"
           disabled={toggle.isPending}
           onClick={() => toggle.mutate(false)}
         >
@@ -108,7 +108,7 @@ export function PauseControl({ paused, pausedAt, waitingCount, socket }: Props) 
       <Button
         size="lg"
         variant="outline"
-        className="ml-auto h-[48px] w-fit rounded-[10px] border-2 bg-card px-5 text-lg"
+        className="ml-auto h-[48px] w-fit rounded-xl bg-card px-5 text-lg"
         onClick={() => {
           toggle.reset();
           setConfirming(true);

@@ -142,7 +142,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
             onChange={(e) => setApproveMemo(e.target.value.slice(0, MEMO_MAX))}
             maxLength={MEMO_MAX}
             placeholder="예: 3번 출입구로 오세요"
-            className="h-[52px] w-full rounded-[10px] border-2 border-input px-3 text-[19px] font-normal text-foreground"
+            className="field h-[52px] rounded-xl text-[19px] font-normal"
           />
         </label>
       )}
@@ -150,7 +150,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className="h-[72px] w-full rounded-xl text-[26px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => send(approve())}
           >
@@ -159,7 +159,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           <Button
             size="lg"
             variant="destructive"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className="h-[72px] w-full rounded-xl text-[26px] font-extrabold"
             disabled={answer.isPending}
             onClick={() => {
               answer.reset();
@@ -174,7 +174,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         <Button
           size="lg"
           variant="outline"
-          className="h-[56px] w-full rounded-[12px] border-2 border-destructive text-xl text-destructive"
+          className="h-[56px] w-full rounded-xl border-2 border-destructive text-xl text-destructive"
           disabled={answer.isPending}
           onClick={() => {
             answer.reset();

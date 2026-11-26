@@ -17,8 +17,7 @@ export type RegisteredPc = { id: number; name: string; lastUsedAt: string | null
 
 export const PC_NAME_MAX = 40;
 
-const inputClass =
-  'h-[56px] w-full rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+const inputClass = 'field h-[56px] rounded-xl text-xl';
 
 function formatLastUsed(iso: string | null): string {
   if (!iso) return '사용 기록 없음';
@@ -104,14 +103,14 @@ export function RegisterForm() {
       </label>
 
       {choosingReplacement && (
-        <fieldset className="flex flex-col gap-2 rounded-[12px] border-2 border-destructive bg-danger-soft p-4">
+        <fieldset className="flex flex-col gap-2 rounded-xl border-2 border-destructive bg-danger-soft p-4">
           <legend className="px-2 text-xl font-bold text-destructive">
             이 병원은 PC 3대가 모두 등록돼 있어요. 바꿀 PC를 골라 주세요.
           </legend>
           {fullPcs.map((pc) => (
             <label
               key={pc.id}
-              className="flex min-h-[52px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border border-line bg-card px-4 py-2 text-lg"
+              className="flex min-h-[52px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-card px-4 py-2 text-lg"
             >
               <input
                 type="radio"
@@ -135,7 +134,7 @@ export function RegisterForm() {
         </p>
       )}
 
-      <Button type="submit" size="lg" className="rounded-[12px]" disabled={!canSubmit}>
+      <Button type="submit" size="lg" className="rounded-xl" disabled={!canSubmit}>
         {register.isPending ? '등록 중…' : choosingReplacement ? '이 PC로 바꿔 등록' : '이 PC 등록'}
       </Button>
     </form>

@@ -260,14 +260,14 @@ function SuspendDialog({
               value={etcText}
               onChange={(e) => setEtcText(e.target.value)}
               maxLength={ETC_MAX}
-              className="h-12 rounded-md border border-input bg-card px-3 text-lg"
+              className="field h-12 rounded-xl text-lg"
             />
           )}
         </fieldset>
         {warned && (
           <p
             role="alert"
-            className="btn-solid-brand rounded-lg px-4 py-3 text-lg font-bold text-white"
+            className="btn-solid-brand rounded-xl px-4 py-3 text-lg font-bold text-white"
           >
             진행 중 이송 1건이 있어요. 팀의 마지막 대원이면 이송이 &apos;취소&apos;로 끝나요.
           </p>

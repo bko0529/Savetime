@@ -18,8 +18,7 @@ type OtpSetup = { setupToken: string; secret: string };
 
 const OTP_PATTERN = /^\d{6}$/;
 
-const inputClass =
-  'h-14 rounded-xl border border-input bg-card px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
+const inputClass = 'field h-14 rounded-xl text-xl';
 
 // otpauth://totp/세이브타임:admin?secret=ABCD...&issuer=... 에서 OTP 앱에 직접 입력할 키만 꺼낸다.
 // QR 라이브러리 없이 키를 글자로 보여주기로 했다 (관리자는 몇 명뿐이라 한 번만 입력하면 됨).
@@ -121,7 +120,7 @@ export function LoginForm() {
         </ol>
         <p
           data-testid="otp-secret"
-          className="rounded-lg border border-border-strong bg-surface p-4 text-center font-mono text-2xl font-bold tracking-wider break-all select-all"
+          className="well rounded-xl border-border-strong p-4 text-center font-mono text-2xl font-extrabold tracking-wider break-all select-all"
         >
           {groupSecret(setup.secret)}
         </p>

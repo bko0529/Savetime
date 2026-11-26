@@ -73,7 +73,7 @@ export function UnacceptableButton({ requestId, version }: Props) {
       <Button
         size="lg"
         variant="destructive"
-        className="h-[52px] w-fit rounded-[10px] px-5 text-lg"
+        className="h-[52px] w-fit rounded-xl px-5 text-lg"
         disabled={send.isPending}
         onClick={() => {
           send.reset();

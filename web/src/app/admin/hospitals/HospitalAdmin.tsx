@@ -299,7 +299,7 @@ function ConfirmDialog({
               onChange={(e) => setReason(e.target.value)}
               maxLength={KEY_REASON_MAX}
               placeholder="예: 키 유출 의심, 병원 탈퇴"
-              className="h-12 rounded-md border border-input bg-card px-3 text-lg"
+              className="field h-12 rounded-xl text-lg"
             />
           </label>
         )}
@@ -356,7 +356,7 @@ function IssuedKeyDialog({
         </DialogDescription>
         <p
           aria-label="라이선스 키"
-          className="rounded-lg border border-border-strong bg-surface p-4 text-center font-mono text-2xl font-bold tracking-wider break-all"
+          className="well rounded-xl border-border-strong p-4 text-center font-mono text-2xl font-extrabold tracking-wider break-all"
         >
           {issued?.key}
         </p>

@@ -55,14 +55,14 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
         <div
           key={n.requestId}
           role="alert"
-          className="mx-6 mb-4 flex items-center justify-between gap-4 rounded-[12px] border border-danger-line bg-danger-soft px-4 py-3 text-[19px] font-bold text-danger-strong"
+          className="mx-6 mb-4 flex items-center justify-between gap-4 rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-[19px] font-bold text-danger-strong"
         >
           <span>
             R-{n.requestId} {REMOVED_TEXT[n.reason]}
           </span>
           <Button
             variant="outline"
-            className="rounded-[10px] bg-card text-foreground"
+            className="rounded-xl bg-card text-foreground"
             onClick={() => onDismiss(n.requestId)}
           >
             확인
@@ -115,7 +115,7 @@ export function IncomingList({ items, notices, onDismiss }: Props) {
                           requestId={item.id}
                           version={item.version ?? 1}
                           used={!!item.extraMemoUsed}
-                          className="h-[52px] rounded-[10px] border-2 px-5 text-lg"
+                          className="h-[52px] rounded-xl border-2 px-5 text-lg"
                         />
                       </div>
                     )}

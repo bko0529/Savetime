@@ -32,8 +32,8 @@ const STATUS_TEXT: Record<string, string> = {
   rejected: '거절함',
 };
 
-const tileClass =
-  'flex items-center justify-center rounded-[12px] bg-surface px-3 py-3 text-center text-[19px] font-extrabold tabular-nums';
+const tileClass = 'well flex flex-col rounded-xl p-3 text-[18px] font-extrabold tabular-nums';
+const tileLabel = 'text-[13px] font-semibold text-muted-foreground';
 
 export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
 
@@ -77,7 +77,7 @@ export function RequestDetail({
             요청 R-{requestId}
           </h2>
         </div>
-        <Button variant="outline" className="rounded-[10px]" onClick={onClose}>
+        <Button variant="outline" className="rounded-xl" onClick={onClose}>
           닫기
         </Button>
       </div>
@@ -122,7 +122,7 @@ function DetailError({ error }: { error: unknown }) {
   if (error instanceof ApiError && error.code === 'REQUEST_CLOSED') {
     const status = (error.details as { status?: string } | null)?.status;
     return (
-      <p role="alert" className="rounded-[12px] bg-neutral-soft p-4 text-[22px] font-bold">
+      <p role="alert" className="rounded-xl bg-neutral-soft p-4 text-[22px] font-bold">
         이미 끝난 요청이에요{status ? ` (${STATUS_TEXT[status] ?? status})` : ''}. 환자 정보는 볼 수
         없어요.
       </p>
@@ -167,16 +167,26 @@ function DetailBody({
 
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-[10px]">
-        <span className={tileClass}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
+      {/* 대원 앱 Lovable 시안: 작은 회색 칸마다 위에 이름표(상태·응답 시간·도착), 아래에 값 */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-[10px]">
+        <div className={tileClass}>
+          <span className={tileLabel}>상태</span>
+          <span className="mt-1">{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
+        </div>
         {waiting && detail.respondUntil && (
-          <span
-            className={cn(tileClass, urgent && 'bg-danger-soft font-extrabold text-destructive')}
-          >
-            남은 시간 {remainingText(detail.respondUntil, nowMs)}
-          </span>
+          <div className={cn(tileClass, urgent && 'border-danger-line bg-danger-soft')}>
+            <span className={tileLabel}>응답 시간</span>
+            <span className={cn('mt-1', urgent && 'font-extrabold text-destructive')}>
+              남은 시간 {remainingText(detail.respondUntil, nowMs)}
+            </span>
+          </div>
         )}
-        {eta && <span className={tileClass}>{eta}</span>}
+        {eta && (
+          <div className={tileClass}>
+            <span className={tileLabel}>도착</span>
+            <span className="mt-1">{eta}</span>
+          </div>
+        )}
       </div>
 
       <p className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] break-words">
@@ -189,7 +199,7 @@ function DetailBody({
           <div
             key={field}
             className={cn(
-              'min-w-0 rounded-xl border border-transparent bg-surface px-3 py-2.5',
+              'well min-w-0 rounded-xl px-3 py-2.5',
               abnormal.has(field) && 'border-danger-line bg-danger-soft',
             )}
           >
@@ -207,19 +217,19 @@ function DetailBody({
         ))}
       </dl>
 
-      <p className="rounded-[12px] bg-surface px-4 py-3 text-[19px] font-semibold tabular-nums">
+      <p className="rounded-xl bg-surface px-4 py-3 text-[19px] font-semibold tabular-nums">
         <span className="font-extrabold">우리 병원</span>: 응급실 {beds?.er ?? '정보 없음'} · 수술실{' '}
         {beds?.or ?? '정보 없음'} · 중환자실 {beds?.icu ?? '정보 없음'}
       </p>
 
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
-        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
+        <p className="rounded-xl bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
       {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
       {detail.extraMemo && (
-        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
+        <p className="rounded-xl bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
           추가 메모: {detail.extraMemo}
         </p>
       )}

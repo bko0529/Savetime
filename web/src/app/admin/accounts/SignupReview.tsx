@@ -252,7 +252,7 @@ function ReviewDialog({
           공무원증 사진과 신청 정보가 맞는지 확인하세요. 승인·반려하면 사진은 바로 지워져요.
         </DialogDescription>
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="flex min-h-48 items-center justify-center rounded-lg border border-input bg-surface">
+          <div className="flex min-h-48 items-center justify-center well rounded-xl">
             {photo.url ? (
               // blob URL 이라 next/image 최적화를 쓰지 않는다
               <img
@@ -311,7 +311,7 @@ function ReviewDialog({
                 value={etcText}
                 onChange={(e) => setEtcText(e.target.value)}
                 maxLength={ETC_MAX}
-                className="h-12 rounded-md border border-input bg-card px-3 text-lg"
+                className="field h-12 rounded-xl text-lg"
               />
             )}
           </fieldset>

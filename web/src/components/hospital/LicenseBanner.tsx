@@ -20,7 +20,7 @@ export function LicenseBanner({ daysLeft }: { daysLeft: number | undefined }) {
   return (
     <div
       role="status"
-      className={`flex items-center justify-between gap-4 rounded-[14px] px-5 py-3 text-[19px] font-bold ${
+      className={`flex items-center justify-between gap-4 rounded-2xl px-5 py-3 text-[19px] font-bold ${
         red
           ? 'bg-destructive text-white'
           : 'border border-warning-strong/30 bg-warning-soft text-warning-strong'
