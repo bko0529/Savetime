@@ -8,7 +8,6 @@ import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { Chip } from '@/components/hospital/Chip';
 import { EndShiftButton } from '@/components/hospital/EndShiftButton';
-import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
 import { PauseControl } from '@/components/hospital/PauseControl';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
@@ -107,7 +106,7 @@ export function ShiftScreen({
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
 }) {
-  const { socket, connection, alarm, turnOn, notificationBlocked } = useHospitalAlarm(createSocket);
+  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
   usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
@@ -170,10 +169,6 @@ export function ShiftScreen({
 
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[20px] px-[32px] pt-[20px] pb-[48px]">
         {notice}
-        {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
-        {shift !== null && notificationBlocked && (
-          <NotificationPermissionGuide reason={notificationBlocked} />
-        )}
 
         {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
         {shift !== null && alarm.kind !== 'on' && (

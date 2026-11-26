@@ -70,9 +70,12 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
       // 상단 막대의 왼쪽. 알림·연결 상태는 ShiftScreen 이 알고 있어서 막대 자체는 거기서 그린다
       brand={
         <div className="flex min-w-0 items-center gap-3">
-          <BrandLogo className="size-10 rounded-xl" />
-          <p className="flex min-w-0 items-baseline gap-2 leading-tight">
-            <span className="text-[22px] font-extrabold tracking-[-0.02em]">SaveTime</span>
+          {/* 시안처럼 로고를 흰 상자 없이 크게 */}
+          <BrandLogo className="size-14 rounded-none bg-transparent shadow-none" />
+          <p className="flex min-w-0 items-center gap-3 leading-tight">
+            <span className="text-[26px] font-extrabold tracking-[-0.02em] text-[oklch(0.3_0.08_265)]">
+              SaveTime
+            </span>
             <span aria-hidden className="text-line">
               |
             </span>

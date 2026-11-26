@@ -192,7 +192,7 @@ function RemainingChip({ detail, nowMs }: { detail: Detail; nowMs: number }) {
             : 'border-warning-strong/30 bg-warning-soft text-warning-strong',
         )}
       >
-        남은{' '}
+        남은 시간 :{' '}
         <span className={cn('tabular-nums', urgent && 'font-extrabold text-destructive')}>
           {remainingText(detail.respondUntil, nowMs)}
         </span>
