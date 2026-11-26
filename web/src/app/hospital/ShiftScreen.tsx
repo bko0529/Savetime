@@ -128,7 +128,7 @@ export function ShiftScreen({
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
         {/* 위쪽 띠: 대원 앱 Lovable 시안처럼 둥근 카드 안에 로고·제목, 오른쪽에 알림·연결 상태 + 심전도 선 */}
         <header className="surface-header relative flex flex-wrap items-center justify-between gap-x-6 gap-y-3 overflow-hidden rounded-2xl border border-border px-5 py-4">
-          <EcgLine className="top-1/2 left-1/2 w-56 -translate-x-1/2 -translate-y-1/2 opacity-60" />
+          <EcgLine className="top-1/2 left-1/2 hidden w-56 -translate-x-1/2 -translate-y-1/2 opacity-60 xl:block" />
           <div className="relative min-w-0">{brand}</div>
           <div className="relative flex flex-wrap items-center gap-[10px]">
             {shift !== null && alarm.kind === 'on' && (

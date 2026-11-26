@@ -268,7 +268,7 @@ function ReviewDialog({
               <p className="text-lg text-muted-foreground">사진 불러오는 중…</p>
             )}
           </div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-lg">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-lg [&_dt]:whitespace-nowrap">
             <dt className="font-bold">이름</dt>
             <dd>{signup.name}</dd>
             <dt className="font-bold">계급</dt>

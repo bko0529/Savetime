@@ -14,6 +14,13 @@ export default function AdminLoginPage() {
             </span>
             <h1 className="text-[28px] font-extrabold tracking-[-0.02em]">관리자 로그인</h1>
           </div>
+          {/* 관리자 토큰은 보안 때문에 화면 메모리에만 둔다(AdminAuth.tsx). 새로고침하면 로그인이 풀리는 게
+              고장이 아니라는 걸 로그인 화면에서 미리 알려 준다 */}
+          <p className="well rounded-xl px-4 py-3 text-[15px] leading-relaxed text-muted-foreground">
+            <span className="font-bold text-foreground">새로고침하면 다시 로그인해야 해요.</span>{' '}
+            보안을 위해 로그인은 이 화면을 열어 둔 동안만 유지돼요. 로그인한 뒤에는 위쪽 메뉴로
+            이동해 주세요.
+          </p>
           <LoginForm />
         </div>
       </main>

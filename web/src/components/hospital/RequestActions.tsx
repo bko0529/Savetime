@@ -119,20 +119,28 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
   return (
     // 'contents': 아래 승인·거절 줄이 상세 카드 전체를 기준으로 화면 아래에 붙게 한다
     <div className="contents">
-      {answer.isError && (
+      {answer.isError && !(canAnswer && overApproval) && (
         <p role="alert" className="text-xl font-bold text-destructive">
           {answerErrorText(answer.error)}
         </p>
       )}
+      {/* 과승인 경고: 이유와 '그래도 승인'을 한 빨간 상자에 묶어, 한 번 더 결정하는 자리라는 게 보이게 한다 */}
       {canAnswer && overApproval && (
-        <Button
-          size="lg"
-          className="h-14 w-fit text-xl"
-          disabled={answer.isPending}
-          onClick={() => send(approve({ overApprovalConfirmed: true }))}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-line bg-danger-soft px-5 py-4"
         >
-          그래도 승인
-        </Button>
+          <p className="text-xl font-bold text-danger-strong">{answerErrorText(answer.error)}</p>
+          <Button
+            size="lg"
+            variant="destructive"
+            className="h-14 w-fit rounded-xl text-xl"
+            disabled={answer.isPending}
+            onClick={() => send(approve({ overApprovalConfirmed: true }))}
+          >
+            그래도 승인
+          </Button>
+        </div>
       )}
       {canAnswer && (
         <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
