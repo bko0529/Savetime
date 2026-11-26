@@ -118,7 +118,8 @@ export function EntranceDialog({
             ref={mapBox}
             role="application"
             aria-label="응급실 입구를 찍을 지도"
-            className="h-80 w-full well rounded-xl"
+            // 지도를 못 불러오면 빈 회색 상자만 남지 않게 숨긴다 (지도는 ref 로 붙여서 상자 자체는 남겨 둔다)
+            className={`h-80 w-full well rounded-xl ${mapState === 'failed' ? 'hidden' : ''}`}
           />
         )}
         {mapState === 'loading' && (
