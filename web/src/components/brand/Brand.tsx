@@ -1,27 +1,31 @@
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
-// 세이브타임 로고 (대원 앱 Lovable 시안과 같은 그림, web/public/savetime-logo.png).
-// 꾸밈용이라 화면 읽기 프로그램에는 숨긴다. 옆에 '세이브타임'·화면 제목 글자가 따로 있다
-export function BrandLogo({ className }: { className?: string }) {
+// 세이브타임 로고 가이드 색 (119 남색·119 빨강). 빨강은 십자 세로획 하나에만 쓴다
+export const LOGO_NAVY = '#14284B';
+export const LOGO_RED = '#E60012';
+
+// 세이브타임 심볼 (로고 가이드의 '원라인 스톱워치').
+// 시계판을 그리던 선 하나가 왼쪽에서 그대로 십자의 가로획이 되고, 빨간 세로획이 십자를 완성한다.
+// 그림 파일 대신 SVG 로 그려서 어느 크기에서도 선이 또렷하고 비율이 그대로다.
+// 32px 이하에서는 가이드대로 선을 굵게(symbol-small). 꾸밈용이라 화면 읽기 프로그램에는 숨긴다
+export function BrandLogo({ className, small }: { className?: string; small?: boolean }) {
+  const w = small ? 12 : 10;
   return (
-    <span
+    <svg
       aria-hidden
-      className={cn(
-        'grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]',
-        className,
-      )}
+      viewBox="0 0 100 100"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('size-11 shrink-0', className)}
     >
-      <Image
-        src="/savetime-logo.png"
-        alt=""
-        width={160}
-        height={142}
-        // 화면 맨 위에 있어서 늦게 불러오면 빈 동그라미가 잠깐 보인다
-        loading="eager"
-        className="size-full object-contain"
-      />
-    </span>
+      {/* 위쪽 꼭지(버튼)와 몸통을 잇는 짧은 줄기 */}
+      <path d="M41 12H59M50 12V28" stroke={LOGO_NAVY} strokeWidth={w} />
+      {/* 시계판: 12시에서 시계 방향으로 9시까지 → 그대로 가로획 */}
+      <path d="M50 28A32 32 0 1 1 18 60H65" stroke={LOGO_NAVY} strokeWidth={w} />
+      {/* 빨간 세로획 */}
+      <path d="M50 41V80" stroke={LOGO_RED} strokeWidth={w} />
+    </svg>
   );
 }
 
@@ -55,7 +59,7 @@ export function AdminTopBar() {
       />
       <EcgLine className="right-6 bottom-0 w-44 text-brand/30" />
       <p className="relative mx-auto flex w-full max-w-[1440px] items-center gap-3 text-xl font-extrabold tracking-tight">
-        <BrandLogo className="size-10 rounded-xl" />
+        <BrandLogo className="size-10" />
         세이브타임 관리자
       </p>
     </header>

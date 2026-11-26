@@ -71,9 +71,9 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
       brand={
         <div className="flex min-w-0 items-center gap-3">
           {/* 시안처럼 로고를 흰 상자 없이 크게 */}
-          <BrandLogo className="size-14 rounded-none bg-transparent shadow-none" />
+          <BrandLogo className="size-12" />
           <p className="flex min-w-0 items-center gap-3 leading-tight">
-            <span className="text-[26px] font-extrabold tracking-[-0.02em] text-[oklch(0.3_0.08_265)]">
+            <span className="text-[26px] font-extrabold tracking-[-0.02em] text-[#14284B]">
               SaveTime
             </span>
             <span aria-hidden className="text-line">

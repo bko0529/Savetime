@@ -56,7 +56,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               href="/admin"
               className="flex items-center gap-3 text-xl font-extrabold tracking-tight"
             >
-              <BrandLogo className="size-10 rounded-xl" />
+              <BrandLogo className="size-10" />
               세이브타임 관리자
             </Link>
             {/* 메뉴: 회색 틀 안의 버튼 묶음, 지금 화면은 검정 */}
