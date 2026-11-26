@@ -200,7 +200,7 @@ export function SignupReview() {
                   <td className="px-3 py-4 tabular-nums">{timeText(s.createdAt)}</td>
                   <td className="px-3 py-4 text-right">
                     <Button onClick={() => setOpen(s)} aria-label={`${s.name} 신청 확인`}>
-                      사진 보고 확인
+                      사진 확인
                     </Button>
                   </td>
                 </tr>

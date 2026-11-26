@@ -4,11 +4,11 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { ChevronRight, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { UIEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { cn } from '@/lib/utils';
+import { ExpandableBox } from '../ExpandableBox';
 import { useAdminApi } from '../useAdminApi';
 
 type NotificationList =
@@ -99,11 +99,8 @@ export function Notifications({
   }
 
   // 스크롤이 끝에 가까워지면 다음 쪽 (30개씩)
-  function onScroll(e: UIEvent<HTMLDivElement>) {
-    const el = e.currentTarget;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 80 && list.hasNextPage) {
-      if (!list.isFetchingNextPage) void list.fetchNextPage();
-    }
+  function loadMore() {
+    if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage();
   }
 
   return (
@@ -149,47 +146,49 @@ export function Notifications({
         </p>
       )}
       {items.length > 0 && (
-        <div
-          onScroll={onScroll}
-          className="max-h-[420px] overflow-y-auto pr-1"
-          data-testid={unreadOnly ? undefined : 'notifications-scroll'}
+        <ExpandableBox
+          title={title}
+          label={unreadOnly ? '새 알림 더 보기' : '알림 더 보기'}
+          showMore={items.length > 4 || !!list.hasNextPage}
+          loadingMore={list.isFetchingNextPage}
+          onScrollEnd={loadMore}
+          boxClassName="max-h-[330px]"
         >
-          <ul className="flex flex-col gap-2">
-            {items.map((i) => {
-              const href = notificationHref(i);
-              return (
-                <li key={i.id}>
-                  <button
-                    type="button"
-                    onClick={() => open(i)}
-                    aria-label={`${i.text}${i.read ? '' : ' (안 읽음)'}${href ? ' · 열기' : ''}`}
-                    className={cn(
-                      'flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3.5 text-left text-base transition',
-                      i.read
-                        ? 'border-border bg-surface/60 text-muted-foreground hover:bg-surface'
-                        : 'border-brand/40 bg-brand-soft/45 font-bold text-foreground hover:bg-brand-soft/75',
-                    )}
-                  >
-                    <span>
-                      {!i.read && <span aria-hidden>● </span>}
-                      {i.text}
-                      {(i.occurrences ?? 1) > 1 && (
-                        <span className="ml-2 tabular-nums">· {i.occurrences}회</span>
+          {() => (
+            <ul className="flex flex-col gap-2">
+              {items.map((i) => {
+                const href = notificationHref(i);
+                return (
+                  <li key={i.id}>
+                    <button
+                      type="button"
+                      onClick={() => open(i)}
+                      aria-label={`${i.text}${i.read ? '' : ' (안 읽음)'}${href ? ' · 열기' : ''}`}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3.5 text-left text-base transition',
+                        i.read
+                          ? 'border-border bg-surface/60 text-muted-foreground hover:bg-surface'
+                          : 'border-brand/40 bg-brand-soft/45 font-bold text-foreground hover:bg-brand-soft/75',
                       )}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2 text-base font-normal tabular-nums">
-                      {i.lastAt ? timeText(i.lastAt) : ''}
-                      {href && <ChevronRight aria-hidden className="size-4" />}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {list.isFetchingNextPage && (
-            <p className="py-3 text-center text-sm text-muted-foreground">불러오는 중…</p>
+                    >
+                      <span>
+                        {!i.read && <span aria-hidden>● </span>}
+                        {i.text}
+                        {(i.occurrences ?? 1) > 1 && (
+                          <span className="ml-2 tabular-nums">· {i.occurrences}회</span>
+                        )}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 text-base font-normal tabular-nums">
+                        {i.lastAt ? timeText(i.lastAt) : ''}
+                        {href && <ChevronRight aria-hidden className="size-4" />}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </div>
+        </ExpandableBox>
       )}
       {unreadOnly && (
         <Link

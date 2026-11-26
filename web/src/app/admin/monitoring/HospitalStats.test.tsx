@@ -200,6 +200,30 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
     expect(screen.getByText(/에 맞는 병원이 없어요/)).toBeTruthy();
   });
 
+  it('상세 창 안에서도 기간을 바꿀 수 있고, 그 기간에 기록이 없으면 안내', async () => {
+    fakeServer({
+      'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원')),
+      'GET /admin/stats/hospitals?days=30': reply(30, stat(1, 'A병원', { requests: 44 })),
+      'GET /admin/stats/hospitals?days=0': reply(0),
+    });
+    renderStats();
+    fireEvent.click(await screen.findByRole('row', { name: 'A병원' }));
+    const dialog = await screen.findByRole('dialog');
+    const group = within(dialog).getByRole('group', { name: '상세 기간' });
+    fireEvent.click(within(group).getByRole('button', { name: '최근 30일' }));
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByLabelText('A병원 상세').textContent).toContain(
+        '44건',
+      ),
+    );
+    fireEvent.click(
+      within(
+        within(screen.getByRole('dialog')).getByRole('group', { name: '상세 기간' }),
+      ).getByRole('button', { name: '전체' }),
+    );
+    expect(await screen.findByText(/전체 기간 동안 이 병원이 받은 요청이 없어요/)).toBeTruthy();
+  });
+
   it("'전체'를 누르면 전체 기간(days=0) 통계를 받는다", async () => {
     const server = fakeServer({
       'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원')),

@@ -1,6 +1,7 @@
 'use client';
 
 import { REJECT_REASONS } from '@/components/hospital/RejectReasonDialog';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { components } from '@/lib/api/schema';
 import { cn } from '@/lib/utils';
@@ -250,6 +251,9 @@ function RejectChart({ stat }: { stat: HospitalStat }) {
 
 // 병원 상세 큰 창 (SFR-106): 핵심 숫자 + 평소·전체 평균 비교 그래프 + 전체 중 위치 + 거절 사유
 export function HospitalDetailDialog({
+  open,
+  name,
+  onChangeDays,
   stat,
   all,
   week,
@@ -258,6 +262,10 @@ export function HospitalDetailDialog({
   loadingBaseline,
   onClose,
 }: {
+  open: boolean;
+  name: string;
+  // 창 안의 기간 버튼 (바꾸면 표와 창이 함께 그 기간으로)
+  onChangeDays: (d: Days) => void;
   stat: HospitalStat | null;
   all: HospitalStat[];
   week: HospitalStat | undefined;
@@ -266,7 +274,50 @@ export function HospitalDetailDialog({
   loadingBaseline: boolean;
   onClose: () => void;
 }) {
-  if (!stat) return null;
+  if (!open) return null;
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <DialogTitle className="text-2xl font-extrabold">{name} 상세 통계</DialogTitle>
+        {stat?.sampleTooSmall && (
+          <span className="text-sm text-muted-foreground">
+            · 표본 부족 (요청 10건 미만이라 비율은 참고만)
+          </span>
+        )}
+        {stat?.rejectSpike && (
+          <span className="rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
+            거절 급증 (최근 7일이 30일보다 20%p 이상 높음)
+          </span>
+        )}
+      </div>
+      {/* 창 안에서도 기간을 바꾼다 */}
+      <div role="group" aria-label="상세 기간" className="mr-8 flex gap-1.5">
+        {([7, 30, 0] as Days[]).map((d) => (
+          <Button
+            key={d}
+            size="sm"
+            variant={days === d ? 'default' : 'outline'}
+            aria-pressed={days === d}
+            onClick={() => onChangeDays(d)}
+          >
+            {d === 0 ? '전체' : `최근 ${d}일`}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+  if (!stat) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="gap-5 p-6 sm:max-w-6xl">
+          {header}
+          <DialogDescription className="text-base">
+            {periodText(days)} 동안 이 병원이 받은 요청이 없어요. 다른 기간을 골라 보세요.
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   const tiles: [string, string][] = [
     ['받은 요청', `${stat.requests ?? 0}건`],
     ['응답률', percent(stat.responseRate)],
@@ -281,22 +332,7 @@ export function HospitalDetailDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto p-6 sm:max-w-6xl">
-        <div className="flex flex-wrap items-center gap-2">
-          <DialogTitle className="text-2xl font-extrabold">{stat.name} 상세 통계</DialogTitle>
-          <span className="rounded-full bg-surface px-3 py-1 text-sm font-bold">
-            {periodText(days)}
-          </span>
-          {stat.sampleTooSmall && (
-            <span className="text-sm text-muted-foreground">
-              · 표본 부족 (요청 10건 미만이라 비율은 참고만)
-            </span>
-          )}
-          {stat.rejectSpike && (
-            <span className="rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
-              거절 급증 (최근 7일이 30일보다 20%p 이상 높음)
-            </span>
-          )}
-        </div>
+        {header}
         <DialogDescription className="sr-only">
           병원 응답 통계와 평소·전체 평균 비교
         </DialogDescription>

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { ApiError, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { ExpandableBox } from '../ExpandableBox';
 import { useAdminApi } from '../useAdminApi';
 import { ResetPasswordButton } from './ResetPassword';
 
@@ -116,60 +117,68 @@ export function ParamedicAdmin() {
         </p>
       )}
       {items.length > 0 && (
-        <div className="panel-table">
-          <table className="data-table data-table-flush">
-            <thead>
-              <tr className="text-left">
-                <th className="px-3 py-3.5">이름</th>
-                <th className="px-3 py-3.5">사번</th>
-                <th className="px-3 py-3.5">소속</th>
-                <th className="px-3 py-3.5">상태</th>
-                <th className="px-3 py-3.5">
-                  <span className="sr-only">작업</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-3 py-4 font-extrabold">{p.name}</td>
-                  <td className="px-3 py-4 tabular-nums">{p.employeeNo}</td>
-                  <td className="px-3 py-4">
-                    {p.agencyName} · {p.safetyCenter}
-                  </td>
-                  <td className="px-3 py-4">
-                    {STATUS_TEXT[p.status ?? ''] ?? p.status}
-                    {p.hasActiveTransport && (
-                      <span className="ml-2 font-bold text-destructive">· 이송 중</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-4">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {/* 비밀번호를 잊은 대원 (SFR-021) */}
-                      <ResetPasswordButton paramedic={p} />
-                      {p.status === 'approved' && (
-                        <Button
-                          variant="destructive"
-                          onClick={() => setPending({ kind: 'suspend', paramedic: p })}
-                        >
-                          정지
-                        </Button>
-                      )}
-                      {p.status === 'suspended' && (
-                        <Button
-                          variant="outline"
-                          onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
-                        >
-                          정지 해제
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+        // 화면에는 낮은 상자(스크롤), '대원 더 보기'를 누르면 큰 창에 전체 목록
+        <ExpandableBox
+          title="대원 계정"
+          label="대원 더 보기"
+          showMore={items.length > 4}
+          boxClassName="panel-table max-h-[340px]"
+        >
+          {() => (
+            <table className="data-table data-table-flush">
+              <thead className="sticky top-0 z-10 bg-surface">
+                <tr className="text-left">
+                  <th className="px-3 py-3.5">이름</th>
+                  <th className="px-3 py-3.5">사번</th>
+                  <th className="px-3 py-3.5">소속</th>
+                  <th className="px-3 py-3.5">상태</th>
+                  <th className="px-3 py-3.5">
+                    <span className="sr-only">작업</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-4 font-extrabold">{p.name}</td>
+                    <td className="px-3 py-4 tabular-nums">{p.employeeNo}</td>
+                    <td className="px-3 py-4">
+                      {p.agencyName} · {p.safetyCenter}
+                    </td>
+                    <td className="px-3 py-4">
+                      {STATUS_TEXT[p.status ?? ''] ?? p.status}
+                      {p.hasActiveTransport && (
+                        <span className="ml-2 font-bold text-destructive">· 이송 중</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {/* 비밀번호를 잊은 대원 (SFR-021) */}
+                        <ResetPasswordButton paramedic={p} />
+                        {p.status === 'approved' && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => setPending({ kind: 'suspend', paramedic: p })}
+                          >
+                            정지
+                          </Button>
+                        )}
+                        {p.status === 'suspended' && (
+                          <Button
+                            variant="outline"
+                            onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
+                          >
+                            정지 해제
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </ExpandableBox>
       )}
 
       {pending?.kind === 'suspend' && (

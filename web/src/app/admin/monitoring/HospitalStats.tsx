@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { cn } from '@/lib/utils';
+import { ExpandableBox } from '../ExpandableBox';
 import { useAdminApi } from '../useAdminApi';
 import {
   durationText,
@@ -50,6 +51,8 @@ export function HospitalStats() {
   const weekData = days === 7 ? stats.data : week.data;
   const monthData = days === 30 ? stats.data : month.data;
   const opened = hospitals.find((h) => h.hospitalId === openId) ?? null;
+  // 창 안에서 기간을 바꿔 그 기간에 기록이 없어도 창 제목(병원 이름)은 남긴다
+  const [openedName, setOpenedName] = useState('');
   // 병원 이름으로 걸러 보기 (받아 둔 목록 안에서)
   const [search, setSearch] = useState('');
   const keyword = search.trim();
@@ -105,91 +108,109 @@ export function HospitalStats() {
         </p>
       )}
       {shown.length > 0 && (
-        // 병원이 많아도 화면이 길어지지 않게 상자 안에서 스크롤 (제목 줄은 위에 고정)
-        <div className="panel-table max-h-[440px] overflow-y-auto">
-          <table className="data-table data-table-flush">
-            <thead className="sticky top-0 z-10 bg-surface">
-              <tr className="text-left">
-                <th className="px-3 py-3.5">병원</th>
-                <th className="px-3 py-3.5">요청</th>
-                <th className="px-3 py-3.5">응답률</th>
-                <th className="px-3 py-3.5">평균 응답</th>
-                <th className="px-3 py-3.5">승인 취소율</th>
-                <th className="px-3 py-3.5">요청→첫 승인</th>
-                <th className="px-3 py-3.5">요청→출발</th>
-                <th className="px-3 py-3.5">거절 사유</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((h) => {
-                const open = () => setOpenId(h.hospitalId ?? null);
-                return (
-                  // 줄을 누르면(또는 Enter) 그 병원 상세 통계가 큰 창으로 열린다
-                  <tr
-                    key={h.hospitalId}
-                    className={cn(
-                      'cursor-pointer hover:bg-surface',
-                      h.rejectSpike && 'bg-urgent font-bold',
-                    )}
-                    aria-label={h.name}
-                    aria-haspopup="dialog"
-                    tabIndex={0}
-                    onClick={open}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        open();
-                      }
-                    }}
-                  >
-                    <td className="px-3 py-4 font-extrabold">
-                      {h.name}
-                      {h.rejectSpike && (
-                        <span className="ml-2 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
-                          거절 급증
-                        </span>
+        // 화면에는 낮은 상자(스크롤), '병원 더 보기'를 누르면 큰 창에 전체 표
+        <ExpandableBox
+          title="병원 응답 통계"
+          label="병원 더 보기"
+          showMore={shown.length > 3}
+          boxClassName="panel-table max-h-[300px]"
+        >
+          {() => (
+            <table className="data-table data-table-flush">
+              <thead className="sticky top-0 z-10 bg-surface">
+                <tr className="text-left">
+                  <th className="px-3 py-3.5">병원</th>
+                  <th className="px-3 py-3.5">요청</th>
+                  <th className="px-3 py-3.5">응답률</th>
+                  <th className="px-3 py-3.5">평균 응답</th>
+                  <th className="px-3 py-3.5">승인 취소율</th>
+                  <th className="px-3 py-3.5">요청→첫 승인</th>
+                  <th className="px-3 py-3.5">요청→출발</th>
+                  <th className="px-3 py-3.5">거절 사유</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((h) => {
+                  const open = () => {
+                    setOpenId(h.hospitalId ?? null);
+                    setOpenedName(h.name ?? '');
+                  };
+                  return (
+                    // 줄을 누르면(또는 Enter) 그 병원 상세 통계가 큰 창으로 열린다
+                    <tr
+                      key={h.hospitalId}
+                      className={cn(
+                        'cursor-pointer hover:bg-surface',
+                        h.rejectSpike && 'bg-urgent font-bold',
                       )}
-                    </td>
-                    <td className="px-3 py-4 tabular-nums">{h.requests}</td>
-                    {h.sampleTooSmall ? (
-                      <td colSpan={5} className="px-3 py-4 text-muted-foreground">
-                        표본 부족 (요청 10건 미만)
+                      aria-label={h.name}
+                      aria-haspopup="dialog"
+                      tabIndex={0}
+                      onClick={open}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          open();
+                        }
+                      }}
+                    >
+                      <td className="px-3 py-4 font-extrabold">
+                        {h.name}
+                        {h.rejectSpike && (
+                          <span className="ml-2 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-white">
+                            거절 급증
+                          </span>
+                        )}
                       </td>
-                    ) : (
-                      <>
-                        <td className="px-3 py-4 tabular-nums">{percent(h.responseRate)}</td>
-                        <td className="px-3 py-4 tabular-nums">{durationText(h.avgResponseSec)}</td>
-                        <td className="px-3 py-4 tabular-nums">
-                          {percent(h.approvalCancelRate)}
-                          {(h.unacceptableCount ?? 0) > 0 && (
-                            <span className="ml-1 text-base text-muted-foreground">
-                              (수용 불가 {h.unacceptableCount})
-                            </span>
-                          )}
+                      <td className="px-3 py-4 tabular-nums">{h.requests}</td>
+                      {h.sampleTooSmall ? (
+                        <td colSpan={5} className="px-3 py-4 text-muted-foreground">
+                          표본 부족 (요청 10건 미만)
                         </td>
-                        <td className="px-3 py-4 tabular-nums">
-                          {durationText(h.avgRequestToFirstApprovalSec)}
-                        </td>
-                        <td className="px-3 py-4 tabular-nums">
-                          {durationText(h.avgRequestToDepartSec)}
-                        </td>
-                      </>
-                    )}
-                    <td className="px-3 py-4 font-bold">
-                      <span className="flex items-center justify-between gap-2">
-                        {h.topRejectReason ? REASON_LABEL[h.topRejectReason] : '—'}
-                        <Maximize2 aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      ) : (
+                        <>
+                          <td className="px-3 py-4 tabular-nums">{percent(h.responseRate)}</td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgResponseSec)}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {percent(h.approvalCancelRate)}
+                            {(h.unacceptableCount ?? 0) > 0 && (
+                              <span className="ml-1 text-base text-muted-foreground">
+                                (수용 불가 {h.unacceptableCount})
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgRequestToFirstApprovalSec)}
+                          </td>
+                          <td className="px-3 py-4 tabular-nums">
+                            {durationText(h.avgRequestToDepartSec)}
+                          </td>
+                        </>
+                      )}
+                      <td className="px-3 py-4 font-bold">
+                        <span className="flex items-center justify-between gap-2">
+                          {h.topRejectReason ? REASON_LABEL[h.topRejectReason] : '—'}
+                          <Maximize2
+                            aria-hidden
+                            className="size-4 shrink-0 text-muted-foreground"
+                          />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </ExpandableBox>
       )}
       <HospitalDetailDialog
+        open={openId !== null}
+        name={openedName}
         stat={opened}
+        onChangeDays={setDays}
         all={hospitals}
         week={weekData?.hospitals?.find((x) => x.hospitalId === openId)}
         month={monthData?.hospitals?.find((x) => x.hospitalId === openId)}
