@@ -50,7 +50,7 @@ export function HospitalStats() {
     queryFn: () => api<Stats>(`/admin/stats/hospitals?days=${days}`),
   });
   const hospitals = stats.data?.hospitals ?? [];
-  // 처음엔 5곳만, '병원 더 보기'로 10곳씩
+  // 처음엔 3곳만, '병원 더 보기'로 10곳씩
   const shown = useShowMore(hospitals);
 
   return (

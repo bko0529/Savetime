@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
-// 관리자 목록을 처음엔 몇 개만 보여 주고 '더 보기'로 늘린다.
+// 관리자 목록을 처음엔 3개만 보여 주고 '더 보기'로 늘린다.
 // 받아 둔 항목을 다 보여 줬는데 서버에 다음 쪽이 있으면 그때 서버에서 더 받는다
 export function useShowMore<T>(
   items: T[],
   {
-    first = 5,
+    first = 3,
     step = 10,
     hasNextPage = false,
     fetchNextPage,
@@ -56,12 +56,25 @@ export function ShowMoreButtons({
     <div className="flex flex-wrap gap-2">
       {hasMore && (
         // 화살표는 꾸밈이라 이름에서 뺀다 ('더 보기'로 읽힘)
-        <Button variant="outline" size="lg" disabled={loading} onClick={onMore} aria-label={label}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-[10px] px-3 text-[15px] font-semibold"
+          disabled={loading}
+          onClick={onMore}
+          aria-label={label}
+        >
           {loading ? '불러오는 중…' : `${label} ▾`}
         </Button>
       )}
       {canCollapse && (
-        <Button variant="ghost" size="lg" onClick={onCollapse} aria-label="접기">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 rounded-[10px] px-3 text-[15px] font-semibold text-muted-foreground"
+          onClick={onCollapse}
+          aria-label="접기"
+        >
           접기 ▴
         </Button>
       )}

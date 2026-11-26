@@ -24,7 +24,7 @@ export function AuditLog() {
   });
 
   const items = logs.data?.pages.flatMap((p) => p.items) ?? [];
-  // 처음엔 5개만, '더 보기'로 10개씩 (받아 둔 게 모자라면 서버에서 다음 쪽)
+  // 처음엔 3개만, '더 보기'로 10개씩 (받아 둔 게 모자라면 서버에서 다음 쪽)
   const shown = useShowMore(items, {
     hasNextPage: logs.hasNextPage,
     fetchNextPage: logs.fetchNextPage,
