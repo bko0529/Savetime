@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { MEMO_MAX } from './ExtraMemoDialog';
@@ -55,6 +56,12 @@ const STALE_CODES = new Set([
   'VERSION_CONFLICT',
   'INVALID_TRANSITION',
 ]);
+
+// 인계 시안: 승인(검정)·거절(빨강)은 그라데이션·그림자 없이 평평한 색으로
+const flat = {
+  approve: 'bg-foreground bg-none shadow-none hover:bg-foreground/90',
+  reject: 'bg-destructive bg-none shadow-none hover:bg-destructive/90',
+};
 
 type Props = {
   requestId: number;
@@ -128,13 +135,13 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
       {canAnswer && overApproval && (
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-line bg-danger-soft px-5 py-4"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-danger-line bg-danger-soft px-5 py-4"
         >
           <p className="text-xl font-bold text-danger-strong">{answerErrorText(answer.error)}</p>
           <Button
             size="lg"
             variant="destructive"
-            className="h-14 w-fit rounded-xl text-xl"
+            className={cn('h-14 w-fit rounded-[12px] text-xl', flat.reject)}
             disabled={answer.isPending}
             onClick={() => send(approve({ overApprovalConfirmed: true }))}
           >
@@ -150,7 +157,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
             onChange={(e) => setApproveMemo(e.target.value.slice(0, MEMO_MAX))}
             maxLength={MEMO_MAX}
             placeholder="예: 3번 출입구로 오세요"
-            className="field h-[52px] rounded-xl text-[19px] font-normal"
+            className="h-[52px] w-full rounded-[10px] border-2 border-input px-3 text-[19px] font-normal text-foreground"
           />
         </label>
       )}
@@ -158,7 +165,10 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
-            className="h-[72px] w-full rounded-xl text-[26px] font-extrabold"
+            className={cn(
+              'h-[72px] w-full rounded-[12px] text-[26px] font-extrabold',
+              flat.approve,
+            )}
             disabled={answer.isPending}
             onClick={() => send(approve())}
           >
@@ -167,7 +177,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           <Button
             size="lg"
             variant="destructive"
-            className="h-[72px] w-full rounded-xl text-[26px] font-extrabold"
+            className={cn('h-[72px] w-full rounded-[12px] text-[26px] font-extrabold', flat.reject)}
             disabled={answer.isPending}
             onClick={() => {
               answer.reset();
@@ -182,7 +192,7 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
         <Button
           size="lg"
           variant="outline"
-          className="h-[56px] w-full rounded-xl border-2 border-destructive text-xl text-destructive"
+          className="h-[56px] w-full rounded-[12px] border-2 border-destructive text-xl text-destructive"
           disabled={answer.isPending}
           onClick={() => {
             answer.reset();

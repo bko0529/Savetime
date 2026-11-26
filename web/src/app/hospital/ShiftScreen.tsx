@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
-import { EcgLine } from '@/components/brand/Brand';
 import { Chip } from '@/components/hospital/Chip';
+import { EndShiftButton } from '@/components/hospital/EndShiftButton';
 import { NewRequestOverlay } from '@/components/hospital/NewRequestOverlay';
 import { NotificationPermissionGuide } from '@/components/hospital/NotificationPermissionGuide';
 import { IncomingList } from '@/components/hospital/IncomingList';
@@ -25,9 +25,9 @@ type Shift = { id?: number; staffName?: string; alarmOn?: boolean };
 
 export const STAFF_NAME_MAX = 40;
 
-// 대원 앱 Lovable 시안처럼 둥근 흰 카드 + 옅은 그림자
-const cardClass = 'tile rounded-2xl';
-const inputClass = 'field h-[56px] rounded-xl text-xl';
+const cardClass = 'rounded-[16px] border border-line bg-card';
+const inputClass =
+  'h-[56px] rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 // 근무 시작: 담당자 이름만 받는다 (SFR-117)
 function StartShift({ onStarted }: { onStarted: () => void }) {
@@ -125,32 +125,33 @@ export function ShiftScreen({
           연결 끊김 — 새 요청을 받을 수 없어요
         </p>
       )}
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line bg-card px-[32px] py-[14px]">
+        {brand}
+        <div className="flex flex-wrap items-center gap-[10px]">
+          {shift !== null && alarm.kind === 'on' && (
+            <Chip tone="success" className="px-4 py-2 text-[18px]">
+              <span aria-hidden className="size-[10px] rounded-full bg-success-dot" />
+              <span>🔔 알림 켜짐 · {shift.staffName} 님 근무 중</span>
+            </Chip>
+          )}
+          {connection === 'connected' && (
+            <Chip tone="success" className="border border-success-dot/40 bg-card">
+              <span aria-hidden className="size-2 rounded-full bg-success-dot" />
+              실시간 연결됨
+            </Chip>
+          )}
+          {connection === 'disconnected' && (
+            <Chip tone="danger" className="border border-danger-line">
+              <span aria-hidden className="size-2 rounded-full bg-destructive" />
+              연결 끊김
+            </Chip>
+          )}
+          {/* 근무 중일 때만 '근무 종료' (인계 시안의 위쪽 막대 오른쪽 끝) */}
+          {shift !== null && <EndShiftButton staffName={shift.staffName} />}
+        </div>
+      </header>
+
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[24px] px-[32px] pt-[24px] pb-[48px]">
-        {/* 위쪽 띠: 대원 앱 Lovable 시안처럼 둥근 카드 안에 로고·제목, 오른쪽에 알림·연결 상태 + 심전도 선 */}
-        <header className="surface-header relative flex flex-wrap items-center justify-between gap-x-6 gap-y-3 overflow-hidden rounded-2xl border border-border px-5 py-4">
-          <EcgLine className="top-1/2 left-1/2 hidden w-56 -translate-x-1/2 -translate-y-1/2 opacity-60 xl:block" />
-          <div className="relative min-w-0">{brand}</div>
-          <div className="relative flex flex-wrap items-center gap-[10px]">
-            {shift !== null && alarm.kind === 'on' && (
-              <Chip tone="success" className="px-4 py-2 text-[18px]">
-                <span aria-hidden className="size-[10px] rounded-full bg-success-dot" />
-                <span>🔔 알림 켜짐 · {shift.staffName} 님 근무 중</span>
-              </Chip>
-            )}
-            {connection === 'connected' && (
-              <Chip tone="success" className="border border-success-dot/40 bg-card">
-                <span aria-hidden className="size-2 rounded-full bg-success-dot" />
-                실시간 연결됨
-              </Chip>
-            )}
-            {connection === 'disconnected' && (
-              <Chip tone="danger" className="border border-danger-line">
-                <span aria-hidden className="size-2 rounded-full bg-destructive" />
-                연결 끊김
-              </Chip>
-            )}
-          </div>
-        </header>
         {notice}
         {/* 알림 권한이 없으면 허용할 때까지 위에 계속 (SFR-136). 근무 중일 때만 */}
         {shift !== null && notificationBlocked && (
@@ -169,7 +170,7 @@ export function ShiftScreen({
 
         {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
         {shift !== null && alarm.kind !== 'on' && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-line bg-danger-soft px-6 py-4 shadow-[var(--shadow-card)]">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4">
             <div className="flex flex-col gap-2">
               <p className="text-[26px] font-extrabold text-danger-strong">
                 {offMessage(alarm, startedHere)}
@@ -182,7 +183,7 @@ export function ShiftScreen({
             </div>
             <Button
               size="lg"
-              className="h-[64px] rounded-xl"
+              className="h-[64px] rounded-[12px]"
               onClick={() => turnOn.mutate()}
               disabled={turnOn.isPending || connection !== 'connected'}
             >
@@ -195,8 +196,13 @@ export function ShiftScreen({
           <>
             <div className="flex flex-wrap items-center justify-between gap-4">
               {incoming.waiting.length > 0 && (
-                <p className="text-[30px] font-extrabold tracking-[-0.02em] text-destructive">
-                  🔴 새 이송 요청 {incoming.waiting.length}건
+                // 인계 시안: 이모지 대신 14px 빨간 점 + 연한 링 (탭 제목은 그대로 🔴)
+                <p className="flex items-center gap-3 text-[30px] font-extrabold tracking-[-0.02em] text-destructive">
+                  <span
+                    aria-hidden
+                    className="size-[14px] shrink-0 rounded-full bg-destructive shadow-[0_0_0_6px_var(--danger-soft)]"
+                  />
+                  <span>새 이송 요청 {incoming.waiting.length}건</span>
                 </p>
               )}
               <PauseControl
@@ -216,7 +222,7 @@ export function ShiftScreen({
                 className={cn(cardClass, 'min-w-[min(100%,560px)] flex-[1.5] overflow-hidden')}
               >
                 <div className="flex items-baseline justify-between gap-3 px-6 py-4">
-                  <h2 className="section-title text-[24px] tracking-[-0.02em]">요청 목록</h2>
+                  <h2 className="text-[24px] font-extrabold tracking-[-0.02em]">요청 목록</h2>
                   <span className="text-[15px] text-muted-foreground">남은 시간 짧은 순</span>
                 </div>
                 <RequestList
@@ -239,7 +245,7 @@ export function ShiftScreen({
             </div>
 
             <section className={cn(cardClass, 'relative overflow-hidden')}>
-              <h2 className="section-title px-6 py-4 text-[24px] tracking-[-0.02em]">도착 예정</h2>
+              <h2 className="px-6 py-4 text-[24px] font-extrabold tracking-[-0.02em]">도착 예정</h2>
               <span className="absolute top-5 right-6 text-[15px] text-muted-foreground">
                 구급차 위치는 표시하지 않아요
               </span>

@@ -23,7 +23,7 @@ type Props = {
 };
 
 const cellClass =
-  'flex min-h-[110px] items-center justify-center rounded-2xl bg-white/15 px-5 py-4 ring-1 ring-white/25 text-[36px] leading-tight font-extrabold break-words';
+  'flex min-h-[110px] items-center justify-center rounded-[14px] bg-overlay-cell px-5 py-4 text-[36px] leading-tight font-extrabold break-words';
 
 export function formatRemaining(respondUntil: string, nowMs: number): string {
   const sec = Math.max(0, Math.floor((Date.parse(respondUntil) - nowMs) / 1000));
@@ -46,7 +46,7 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
         <DialogContent
           showCloseButton={false}
           overlayClassName="bg-foreground/60"
-          className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none flex-col items-center justify-center-safe gap-10 overflow-y-auto rounded-[24px] border-0 btn-solid-brand p-10 text-center text-white ring-0 sm:max-w-none"
+          className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-none flex-col items-center justify-center-safe gap-10 overflow-y-auto rounded-[20px] bg-destructive p-10 text-center text-white ring-0 sm:max-w-none"
         >
           <DialogTitle className="flex flex-col items-center gap-5 text-[64px] leading-tight font-extrabold tracking-[-0.02em]">
             {pendingCount > 1 && (
@@ -72,7 +72,8 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
           <Button
             size="lg"
             autoFocus
-            className="h-[88px] min-w-[300px] rounded-xl bg-white bg-none text-[34px] font-extrabold text-destructive shadow-[var(--shadow-lift)] hover:bg-white/90"
+            // bg-none: 기본 버튼의 검정 그라데이션이 흰 바탕을 덮지 않게
+            className="h-[88px] min-w-[300px] rounded-[12px] bg-white bg-none text-[34px] font-extrabold text-destructive shadow-none hover:bg-white/90"
             onClick={() => onConfirm(request.id)}
           >
             확인

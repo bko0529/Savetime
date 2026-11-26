@@ -46,15 +46,22 @@ describe('요청 상세 (SFR-118)', () => {
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
 
     expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
-    expect(screen.getByText('도착 예상 12분')).toBeTruthy();
-    expect(screen.getByText(/응급실 5\/20 · 수술실 1\/4 · 중환자실 0\/10/)).toBeTruthy();
+    // 도착 예상 칸: 이름표 '도착 예상' + 값 '12분'
+    expect(screen.getByText('도착 예상')).toBeTruthy();
+    expect(screen.getByText('12분')).toBeTruthy();
+    // 우리 병원 병상 3칸 (빈 병상 / 전체)
+    const beds = screen.getByRole('region', { name: '우리 병원 병상' });
+    expect(beds.textContent).toContain('응급실5/20');
+    expect(beds.textContent).toContain('수술실1/4');
+    expect(beds.textContent).toContain('중환자실0/10');
     // 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
     const spo2 = screen.getByText('⚠ 86%');
     expect(spo2.className).toContain('text-destructive');
     expect(screen.getByText('88회/분').className).not.toContain('text-destructive');
     expect(screen.getByText('60대')).toBeTruthy();
     // 남은 시간 25초 → 빨간색
-    expect(screen.getByText('남은 시간 0:25').className).toContain('text-destructive');
+    expect(screen.getByText('남은 시간')).toBeTruthy();
+    expect(screen.getByText('0:25').className).toContain('text-destructive');
   });
 
   it('길찾기 전 추정 시간은 (추정)으로', async () => {
@@ -62,7 +69,7 @@ describe('요청 상세 (SFR-118)', () => {
       'GET /hw/requests/102': { status: 200, body: detail({ etaSource: 'straight', etaMin: 9 }) },
     });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
-    expect(await screen.findByText('도착 예상 약 9분 (추정)')).toBeTruthy();
+    expect(await screen.findByText('약 9분 (추정)')).toBeTruthy();
   });
 
   // 상세는 열람 기록 때문에 다시 받지 않는다. 확정 뒤 시간은 도착 예정 목록(이미 받아 둔 값)을 따른다
@@ -85,7 +92,7 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([{ id: 102, status: 'confirmed', etaMin: 4 }]);
-    expect(await screen.findByText('도착 예상 4분')).toBeTruthy();
+    expect(await screen.findByText('4분')).toBeTruthy();
     expect(screen.queryByText(/추정/)).toBeNull();
   });
 

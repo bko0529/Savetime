@@ -106,7 +106,7 @@ export function RejectReasonDialog({
             {REJECT_REASONS.map((r) => (
               <label
                 key={r.value}
-                className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-4 text-[18px] font-semibold transition hover:border-border-strong has-checked:border-destructive has-checked:bg-danger-soft has-checked:font-extrabold has-focus-visible:ring-4 has-focus-visible:ring-ring/40"
+                className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-[12px] border-2 border-line px-4 text-[18px] font-semibold has-checked:border-destructive has-checked:bg-danger-soft has-checked:font-extrabold has-focus-visible:ring-4 has-focus-visible:ring-ring/40"
               >
                 <input
                   type="radio"

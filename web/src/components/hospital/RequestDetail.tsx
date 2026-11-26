@@ -32,8 +32,38 @@ const STATUS_TEXT: Record<string, string> = {
   rejected: '거절함',
 };
 
-const tileClass = 'well flex flex-col rounded-xl p-3 text-[18px] font-extrabold tabular-nums';
-const tileLabel = 'text-[13px] font-semibold text-muted-foreground';
+// 상태·남은 시간·도착 예상 칸 (인계 시안: 연한 바탕, 위에 작은 이름표, 아래 큰 값)
+const tileClass = 'flex min-w-0 flex-col gap-1 rounded-[12px] bg-surface px-4 py-3';
+const tileLabel = 'text-[14px] font-semibold text-muted-foreground';
+const tileValue = 'text-[22px] leading-tight font-extrabold tabular-nums break-words';
+
+// '도착 예상 8분' → 이름표 '도착 예상' + 값 '8분'. 도착한 뒤('13:28 도착')는 이름표 '도착'
+function etaTile(eta: string): { label: string; value: string } {
+  const prefix = '도착 예상 ';
+  return eta.startsWith(prefix)
+    ? { label: '도착 예상', value: eta.slice(prefix.length) }
+    : { label: '도착', value: eta };
+}
+
+// 병상 값 '6/20'(빈 병상/전체) → 큰 숫자 6 + 작은 /20
+function BedTile({ label, value }: { label: string; value: string | null | undefined }) {
+  const [avail, total] = value ? value.split('/') : [];
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-[12px] border border-line px-4 py-3">
+      <span className="text-[16px] text-muted-foreground">{label}</span>
+      {value ? (
+        <span className="tabular-nums">
+          <span className="text-[22px] font-extrabold">{avail}</span>
+          {total !== undefined && (
+            <span className="text-[15px] font-semibold text-muted-foreground">/{total}</span>
+          )}
+        </span>
+      ) : (
+        <span className="text-[16px] font-bold">정보 없음</span>
+      )}
+    </div>
+  );
+}
 
 export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
 
@@ -68,7 +98,7 @@ export function RequestDetail({
   return (
     <section
       aria-label="요청 상세"
-      className="tile flex flex-col gap-4 rounded-2xl p-[24px] shadow-[var(--shadow-lift)]"
+      className="flex flex-col gap-4 rounded-[16px] border-2 border-foreground bg-card p-[24px]"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -77,7 +107,7 @@ export function RequestDetail({
             요청 R-{requestId}
           </h2>
         </div>
-        <Button variant="outline" className="rounded-xl" onClick={onClose}>
+        <Button variant="outline" className="rounded-[10px]" onClick={onClose}>
           닫기
         </Button>
       </div>
@@ -122,7 +152,7 @@ function DetailError({ error }: { error: unknown }) {
   if (error instanceof ApiError && error.code === 'REQUEST_CLOSED') {
     const status = (error.details as { status?: string } | null)?.status;
     return (
-      <p role="alert" className="rounded-xl bg-neutral-soft p-4 text-[22px] font-bold">
+      <p role="alert" className="rounded-[12px] bg-neutral-soft p-4 text-[22px] font-bold">
         이미 끝난 요청이에요{status ? ` (${STATUS_TEXT[status] ?? status})` : ''}. 환자 정보는 볼 수
         없어요.
       </p>
@@ -167,24 +197,24 @@ function DetailBody({
 
   return (
     <>
-      {/* 대원 앱 Lovable 시안: 작은 회색 칸마다 위에 이름표(상태·응답 시간·도착), 아래에 값 */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-[10px]">
         <div className={tileClass}>
           <span className={tileLabel}>상태</span>
-          <span className="mt-1">{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
+          <span className={tileValue}>{STATUS_TEXT[detail.status ?? ''] ?? detail.status}</span>
         </div>
         {waiting && detail.respondUntil && (
-          <div className={cn(tileClass, urgent && 'border-danger-line bg-danger-soft')}>
-            <span className={tileLabel}>응답 시간</span>
-            <span className={cn('mt-1', urgent && 'font-extrabold text-destructive')}>
-              남은 시간 {remainingText(detail.respondUntil, nowMs)}
+          // 30초 이하면 칸이 빨강 연한 바탕 + 빨간 숫자
+          <div className={cn(tileClass, urgent && 'bg-danger-soft')}>
+            <span className={tileLabel}>남은 시간</span>
+            <span className={cn(tileValue, urgent && 'text-destructive')}>
+              {remainingText(detail.respondUntil, nowMs)}
             </span>
           </div>
         )}
         {eta && (
           <div className={tileClass}>
-            <span className={tileLabel}>도착</span>
-            <span className="mt-1">{eta}</span>
+            <span className={tileLabel}>{etaTile(eta).label}</span>
+            <span className={tileValue}>{etaTile(eta).value}</span>
           </div>
         )}
       </div>
@@ -194,12 +224,12 @@ function DetailBody({
       </p>
 
       {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
+      <dl className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
         {rows.map(({ field, text }) => (
           <div
             key={field}
             className={cn(
-              'well min-w-0 rounded-xl px-3 py-2.5',
+              'min-w-0 rounded-[10px] border border-line px-3 py-2',
               abnormal.has(field) && 'border-danger-line bg-danger-soft',
             )}
           >
@@ -217,19 +247,24 @@ function DetailBody({
         ))}
       </dl>
 
-      <p className="rounded-xl bg-surface px-4 py-3 text-[19px] font-semibold tabular-nums">
-        <span className="font-extrabold">우리 병원</span>: 응급실 {beds?.er ?? '정보 없음'} · 수술실{' '}
-        {beds?.or ?? '정보 없음'} · 중환자실 {beds?.icu ?? '정보 없음'}
-      </p>
+      {/* 우리 병원 병상: 응급실·수술실·중환자실 3칸 (이름표 왼쪽, 빈 병상 숫자 오른쪽) */}
+      <section aria-label="우리 병원 병상" className="flex flex-col gap-2">
+        <h3 className="text-[16px] font-extrabold">우리 병원 병상</h3>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
+          <BedTile label="응급실" value={beds?.er} />
+          <BedTile label="수술실" value={beds?.or} />
+          <BedTile label="중환자실" value={beds?.icu} />
+        </div>
+      </section>
 
       {(detail.status === 'approved' || detail.status === 'confirmed') && (
-        <p className="rounded-xl bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
+        <p className="rounded-[12px] bg-success-soft px-4 py-3 text-[19px] font-bold text-success-strong">
           {detail.respondedBy} 님이 승인함{detail.memo ? ` · 메모: ${detail.memo}` : ''}
         </p>
       )}
       {/* 한 번 보낸 추가 메모는 버튼 대신 내용을 보여 준다 (SFR-140) */}
       {detail.extraMemo && (
-        <p className="rounded-xl bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
+        <p className="rounded-[12px] bg-info-soft px-4 py-3 text-[19px] font-bold text-info-strong">
           추가 메모: {detail.extraMemo}
         </p>
       )}

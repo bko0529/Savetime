@@ -109,7 +109,7 @@
   /* 대원 앱 시안의 보조 색: 표 줄 선, 관리자 바탕, 꺼짐 칩, 급한 줄, 진한 초록, 빨강 칩 */
   --line-soft: oklch(0.935 0.006 250);
   --line: oklch(0.89 0.008 250);
-  --selected: oklch(0.955 0.03 27);
+  --selected: oklch(0.97 0.01 250);
   --overlay-cell: oklch(0.47 0.2 27);
   --success-dot: oklch(0.6 0.12 175);
   --info-soft: oklch(0.955 0.018 245);

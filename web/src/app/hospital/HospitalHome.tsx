@@ -69,18 +69,15 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
     <ShiftScreen
       // 상단 막대의 왼쪽. 알림·연결 상태는 ShiftScreen 이 알고 있어서 막대 자체는 거기서 그린다
       brand={
-        // 대원 앱 Lovable 시안: 로고 + 큰 화면 제목, 그 아래 작은 글씨로 병원·PC 이름
         <div className="flex min-w-0 items-center gap-3">
           <Logo />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
-            <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.02em] whitespace-nowrap">
-              {shift ? '이송 요청' : '근무 시작'}
-            </h1>
-            <p className="text-[16px] text-muted-foreground">
-              <span className="font-bold text-foreground">{hospital?.name}</span> · {pc?.name}
-            </p>
-          </div>
+          <p className="flex min-w-0 flex-col leading-tight">
+            <span className="text-[20px] font-extrabold">{hospital?.name}</span>
+            <span className="text-[15px] text-muted-foreground">{pc?.name}</span>
+          </p>
+          {/* 근무를 시작한 뒤에도 '근무 시작'이면 지금 무엇을 하는 화면인지 헷갈린다 */}
+          {/* 인계 시안의 위쪽 막대에는 화면 제목이 따로 보이지 않는다. 화면 읽기 프로그램·탭 이동용으로만 둔다 */}
+          <h1 className="sr-only">{shift ? '이송 요청' : '근무 시작'}</h1>
         </div>
       }
       // 근무 중일 때만, 근무마다 새로 그린다(key) → 닫아도 다음 근무 시작 때 다시 보인다 (SFR-168)

@@ -84,7 +84,7 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     expect(dialog.textContent).toContain('R-101');
     expect(dialog.textContent).toContain('흉통');
     expect(server.callsTo(LIST).length).toBeGreaterThan(before);
-    expect(screen.getByText('🔴 새 이송 요청 1건')).toBeDefined();
+    expect(screen.getByText('새 이송 요청 1건')).toBeDefined();
     expect(document.title).toBe('🔴 새 이송 요청 1건');
     expect(alarm.startAlarmLoop).toHaveBeenCalledTimes(1);
     expect(alarm.showRequestNotification).toHaveBeenCalledWith(101, 'R-101');
@@ -118,7 +118,7 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(alarm.stopAlarmLoop).toHaveBeenCalledTimes(stopsBefore);
-    expect(screen.getByText('🔴 새 이송 요청 2건')).toBeDefined();
+    expect(screen.getByText('새 이송 요청 2건')).toBeDefined();
   });
 
   it('다른 PC 응답·만료로 요청이 끝나면(request.changed) 창·소리·제목이 멈춘다', async () => {

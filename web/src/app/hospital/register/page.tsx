@@ -8,7 +8,7 @@ export default function RegisterPage() {
         <Logo />
         세이브타임 병원 웹
       </p>
-      <div className="tile flex w-full max-w-[560px] flex-col gap-6 rounded-2xl p-[32px] shadow-[var(--shadow-lift)]">
+      <div className="flex w-full max-w-[560px] flex-col gap-6 rounded-[18px] border border-line bg-card p-[32px]">
         <h1 className="text-[30px] font-extrabold tracking-[-0.02em]">병원 PC 등록</h1>
         <RegisterForm />
       </div>
