@@ -202,12 +202,6 @@ export function RequestActions({
           </Button>
         </div>
       )}
-      {canAnswer && (
-        <p className="text-center text-[14px] text-muted-foreground">
-          다른 PC에서 먼저 응답하면 &lsquo;다른 PC에서 이미 승인했어요&rsquo;로 바뀌어요 · 열람
-          기록이 남아요
-        </p>
-      )}
       {canCancelApproval && (
         <Button
           size="lg"

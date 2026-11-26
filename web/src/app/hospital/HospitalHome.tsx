@@ -9,7 +9,6 @@ import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { StatusScreen } from '@/components/brand/StatusScreen';
 import { LicenseBanner } from '@/components/hospital/LicenseBanner';
 import { Button } from '@/components/ui/button';
-import { BrandLogo } from '@/components/brand/Brand';
 import { ShiftScreen } from './ShiftScreen';
 
 type Session = ApiPaths['/hw/session']['get']['responses'][200]['content']['application/json'];
@@ -70,8 +69,6 @@ export function HospitalHome({ createSocket }: { createSocket?: () => HospitalSo
       // 상단 막대의 왼쪽. 알림·연결 상태는 ShiftScreen 이 알고 있어서 막대 자체는 거기서 그린다
       brand={
         <div className="flex min-w-0 items-center gap-3">
-          {/* 시안처럼 로고를 흰 상자 없이 크게 */}
-          <BrandLogo className="size-12" />
           <p className="flex min-w-0 items-center gap-3 leading-tight">
             <span className="text-[26px] font-extrabold tracking-[-0.02em] text-[#14284B]">
               SaveTime

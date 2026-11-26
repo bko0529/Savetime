@@ -301,9 +301,6 @@ export function ShiftScreen({
                     onOpen={openRequest}
                     seenIds={seenIds}
                   />
-                  <p className="text-[14px] leading-relaxed text-muted-foreground">
-                    이상 수치가 있어도 순서는 남은 시간 순 그대로예요 (앱은 위급도를 판정하지 않음)
-                  </p>
                 </section>
                 <div className="min-w-[min(100%,480px)] flex-1">
                   {selectedId !== null ? (
@@ -325,9 +322,6 @@ export function ShiftScreen({
                 <h2 className="px-6 py-4 text-[24px] font-extrabold tracking-[-0.02em]">
                   도착 예정
                 </h2>
-                <span className="absolute top-5 right-6 text-[15px] text-muted-foreground">
-                  구급차 위치는 표시하지 않아요
-                </span>
                 {arriving.isError && (
                   <p role="alert" className="px-6 pb-4 text-xl font-bold text-destructive">
                     {errorText(arriving.error)}
