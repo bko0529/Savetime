@@ -117,6 +117,7 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
 
   it("거절 사유를 펼치면 '병원 웹 직접' 1건·'전화 확인' 3건이 나뉘어 보인다 (인수 기준)", async () => {
     fakeServer({
+      'GET /admin/stats/hospitals?days=30': reply(30, stat(1, 'A병원')),
       'GET /admin/stats/hospitals?days=7': reply(
         7,
         stat(1, 'A병원', {
@@ -138,6 +139,44 @@ describe('관리자 병원 응답 통계 (SFR-106)', () => {
     expect(detail.textContent).toContain('해당 전문의 부재 1');
     expect(detail.textContent).toContain('전화 확인 3건');
     expect(detail.textContent).toContain('수술실 부족 3');
+  });
+
+  it('상세에 이 병원 평소(30일)와 전체 병원 평균 비교가 나온다', async () => {
+    const server = fakeServer({
+      'GET /admin/stats/hospitals?days=7': reply(
+        7,
+        stat(1, 'A병원', { requests: 20, responseRate: 0.5 }),
+        stat(2, 'B병원', { requests: 20, responseRate: 0.9 }),
+      ),
+      'GET /admin/stats/hospitals?days=30': reply(
+        30,
+        stat(1, 'A병원', { requests: 80, responseRate: 0.7 }),
+        stat(2, 'B병원', { requests: 80, responseRate: 0.9 }),
+      ),
+    });
+    renderStats();
+    // 펼치기 전에는 30일 통계를 받지 않는다
+    await screen.findByRole('row', { name: 'A병원' });
+    expect(server.callsTo('GET /admin/stats/hospitals?days=30')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('row', { name: 'A병원' }));
+    const self = await screen.findByRole('region', { name: '이 병원 평소와 비교' });
+    // 응답률: 최근 7일 50% vs 평소 70% → ▼ 20%p (나빠짐)
+    expect(self.textContent).toContain('응답률50%70%▼ 20%p');
+    const avg = screen.getByRole('region', { name: '전체 병원 평균과 비교' });
+    // 전체 평균 (0.5×20 + 0.9×20)/40 = 70% → ▼ 20%p
+    expect(avg.textContent).toContain('응답률50%70%▼ 20%p');
+    expect(avg.textContent).toContain('병원 2곳의 평균');
+  });
+
+  it('비교할 병원이 1곳뿐이면 전체 평균 대신 안내', async () => {
+    fakeServer({
+      'GET /admin/stats/hospitals?days=7': reply(7, stat(1, 'A병원')),
+      'GET /admin/stats/hospitals?days=30': reply(30, stat(1, 'A병원')),
+    });
+    renderStats();
+    fireEvent.click(await screen.findByRole('row', { name: 'A병원' }));
+    expect(await screen.findByText(/2곳 이상 있어야 해요/)).toBeTruthy();
   });
 
   it('병원 이름으로 검색하면 그 병원만 보인다', async () => {

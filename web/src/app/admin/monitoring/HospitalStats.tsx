@@ -10,6 +10,14 @@ import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
 import { cn } from '@/lib/utils';
 import { useAdminApi } from '../useAdminApi';
+import {
+  comparableCount,
+  diffOf,
+  METRICS,
+  valueText,
+  weightedAverage,
+  type MetricKey,
+} from './compareStats';
 
 type Stats =
   ApiPaths['/admin/stats/hospitals']['get']['responses'][200]['content']['application/json'];
@@ -50,6 +58,15 @@ export function HospitalStats() {
     queryFn: () => api<Stats>(`/admin/stats/hospitals?days=${days}`),
   });
   const hospitals = stats.data?.hospitals ?? [];
+  // 상세를 펼쳤을 때만 다른 기간도 받는다 ('이 병원 평소와 비교'에 7일·30일이 둘 다 필요)
+  const other = days === 7 ? 30 : 7;
+  const otherStats = useQuery({
+    queryKey: ['admin', 'stats', other],
+    queryFn: () => api<Stats>(`/admin/stats/hospitals?days=${other}`),
+    enabled: openId !== null,
+  });
+  const week = days === 7 ? stats.data : otherStats.data;
+  const month = days === 30 ? stats.data : otherStats.data;
   // 병원 이름으로 걸러 보기 (받아 둔 목록 안에서)
   const [search, setSearch] = useState('');
   const keyword = search.trim();
@@ -197,6 +214,15 @@ export function HospitalStats() {
                       <tr className="border-b bg-muted">
                         <td colSpan={8} className="p-5">
                           <HospitalDetail stat={h} />
+                          <CompareSection
+                            name={h.name ?? ''}
+                            week={week?.hospitals?.find((x) => x.hospitalId === h.hospitalId)}
+                            month={month?.hospitals?.find((x) => x.hospitalId === h.hospitalId)}
+                            mine={h}
+                            all={hospitals}
+                            days={days}
+                            loading={otherStats.isPending && openId !== null}
+                          />
                         </td>
                       </tr>
                     )}
@@ -208,6 +234,117 @@ export function HospitalStats() {
         </div>
       )}
     </section>
+  );
+}
+
+const TONE: Record<string, string> = {
+  good: 'text-success-strong',
+  bad: 'text-destructive',
+  same: 'text-muted-foreground',
+};
+
+// 비교 표 한 개: 지표 | 이 병원 | 비교 값 | 차이 (좋아졌으면 초록, 나빠졌으면 빨강)
+function CompareTable({
+  title,
+  note,
+  mineLabel,
+  otherLabel,
+  mine,
+  other,
+}: {
+  title: string;
+  note: string;
+  mineLabel: string;
+  otherLabel: string;
+  mine: (key: MetricKey) => number | null | undefined;
+  other: (key: MetricKey) => number | null | undefined;
+}) {
+  return (
+    <section aria-label={title} className="well flex flex-col gap-2 px-4 py-3">
+      <h3 className="text-base font-extrabold">{title}</h3>
+      <p className="text-sm text-muted-foreground">{note}</p>
+      <table className="w-full text-[15px]">
+        <thead>
+          <tr className="text-left text-sm text-muted-foreground">
+            <th className="py-1 font-semibold">지표</th>
+            <th className="py-1 font-semibold">{mineLabel}</th>
+            <th className="py-1 font-semibold">{otherLabel}</th>
+            <th className="py-1 font-semibold">차이</th>
+          </tr>
+        </thead>
+        <tbody>
+          {METRICS.map((m) => {
+            const d = diffOf(m, mine(m.key), other(m.key));
+            return (
+              <tr key={m.key} className="border-t border-border/60">
+                <td className="py-1.5">{m.label}</td>
+                <td className="py-1.5 font-bold tabular-nums">{valueText(m, mine(m.key))}</td>
+                <td className="py-1.5 tabular-nums">{valueText(m, other(m.key))}</td>
+                <td className={cn('py-1.5 font-bold tabular-nums', d && TONE[d.tone])}>
+                  {d?.text ?? '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+// 비교 창 두 개: ① 이 병원 평소(최근 30일)와 최근 7일 ② 같은 기간 전체 병원 평균과 이 병원
+function CompareSection({
+  name,
+  week,
+  month,
+  mine,
+  all,
+  days,
+  loading,
+}: {
+  name: string;
+  week: HospitalStat | undefined;
+  month: HospitalStat | undefined;
+  mine: HospitalStat;
+  all: HospitalStat[];
+  days: Days;
+  loading: boolean;
+}) {
+  const others = comparableCount(all);
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-2" aria-label={`${name} 비교`}>
+      {loading ? (
+        <p className="well px-4 py-3 text-sm text-muted-foreground">평소 통계를 불러오는 중…</p>
+      ) : week && month ? (
+        <CompareTable
+          title="이 병원 평소와 비교"
+          note="최근 7일을 이 병원의 평소(최근 30일)와 비교해요"
+          mineLabel="최근 7일"
+          otherLabel="평소(30일)"
+          mine={(k) => week[k]}
+          other={(k) => month[k]}
+        />
+      ) : (
+        <p className="well px-4 py-3 text-sm text-muted-foreground">
+          평소와 비교할 기간의 기록이 없어요.
+        </p>
+      )}
+      {others >= 2 ? (
+        <CompareTable
+          title="전체 병원 평균과 비교"
+          note={`최근 ${days}일, 요청 10건 이상인 병원 ${others}곳의 평균 (요청 수로 가중)`}
+          mineLabel="이 병원"
+          otherLabel="전체 평균"
+          mine={(k) => mine[k]}
+          other={(k) => weightedAverage(all, k)}
+        />
+      ) : (
+        <p className="well px-4 py-3 text-sm text-muted-foreground">
+          전체 평균과 비교하려면 요청 10건 이상인 병원이 2곳 이상 있어야 해요. 지금은 {others}
+          곳이에요.
+        </p>
+      )}
+    </div>
   );
 }
 
