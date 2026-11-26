@@ -12,6 +12,9 @@ type Props = {
   nowMs: number;
   selectedId: number | null;
   onOpen: (id: number) => void;
+  // 이 화면에서 한 번이라도 연 요청. 아직 안 연 대기 요청은 빨갛게 깜빡이고 NEW 를 붙인다.
+  // 없으면 강조하지 않는다
+  seenIds?: ReadonlySet<number>;
 };
 
 function etaText(item: HwRequestItem): string | null {
@@ -21,7 +24,7 @@ function etaText(item: HwRequestItem): string | null {
 
 // 요청 목록 (SFR-135): 요청 하나를 카드 하나로. 서버가 남은 시간 짧은 순으로 준다 —
 // 이상 수치로 순서를 바꾸지 않는다 (SFR-155, D-38). 구급대 소속은 API 에도 없고 여기서도 보여 주지 않는다 (D-98)
-export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
+export function RequestList({ items, nowMs, selectedId, onOpen, seenIds }: Props) {
   if (items.length === 0) {
     return (
       <p className="rounded-[16px] border border-line bg-card px-5 py-8 text-center text-[18px] text-muted-foreground">
@@ -37,6 +40,7 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
         const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
         const selected = selectedId === id;
         const eta = etaText(item);
+        const isNew = waiting && !!seenIds && !seenIds.has(id);
         return (
           <li
             key={id}
@@ -46,7 +50,10 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
             className={cn(
               'flex cursor-pointer flex-col gap-2 rounded-[16px] border bg-card px-5 py-4 shadow-[var(--shadow-card)] transition-colors hover:border-border-strong',
               selected ? 'border-2 border-foreground' : 'border-line',
+              // 깜빡임 모양은 globals.css 의 .request-new
+              isNew && 'request-new border-2',
             )}
+            data-new={isNew || undefined}
           >
             <div className="flex items-start justify-between gap-3">
               <p className="min-w-0 text-[18px] font-extrabold break-words">
@@ -62,6 +69,11 @@ export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
                   {item.label}
                 </button>
                 {item.chiefComplaint ? ` · ${item.chiefComplaint}` : ''}
+                {isNew && (
+                  <span className="ml-2 inline-flex rounded-full bg-destructive px-2 py-0.5 align-middle text-[12px] font-bold text-white">
+                    NEW
+                  </span>
+                )}
               </p>
               {waiting && item.respondUntil ? (
                 <span

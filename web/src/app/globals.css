@@ -382,3 +382,27 @@
       var(--shadow-success);
   }
 }
+
+/* 병원 웹: 아직 안 연 새 요청 카드는 반투명한 빨간색으로 깜빡인다. 열면 멈춘다 */
+@keyframes request-new-blink {
+  0%,
+  100% {
+    background-color: color-mix(in oklab, var(--color-destructive) 8%, var(--color-card));
+    border-color: color-mix(in oklab, var(--color-destructive) 35%, transparent);
+  }
+  50% {
+    background-color: color-mix(in oklab, var(--color-destructive) 30%, var(--color-card));
+    border-color: color-mix(in oklab, var(--color-destructive) 90%, transparent);
+  }
+}
+.request-new {
+  animation: request-new-blink 1.2s ease-in-out infinite;
+}
+/* 'PC 애니메이션 줄이기'를 켠 경우 깜빡이지 않고 빨간 배경만 */
+@media (prefers-reduced-motion: reduce) {
+  .request-new {
+    animation: none;
+    background-color: color-mix(in oklab, var(--color-destructive) 20%, var(--color-card));
+    border-color: var(--color-destructive);
+  }
+}

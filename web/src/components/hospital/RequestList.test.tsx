@@ -106,6 +106,33 @@ describe('요청 목록 (SFR-135)', () => {
     expect(onOpen).toHaveBeenLastCalledWith(7);
   });
 
+  it('아직 안 연 대기 요청은 깜빡이고 NEW, 연 요청·승인한 요청은 그대로', () => {
+    render(
+      <RequestList
+        items={[
+          item(1, 60),
+          item(2, 80),
+          item(3, 90, { status: 'approved', respondedBy: '박서연' }),
+        ]}
+        nowMs={NOW}
+        selectedId={null}
+        onOpen={() => {}}
+        seenIds={new Set([2])}
+      />,
+    );
+    const cards = screen.getAllByRole('listitem');
+    expect(cards[0].className).toContain('request-new');
+    expect(within(cards[0]).getByText('NEW')).toBeTruthy();
+    expect(cards[1].className).not.toContain('request-new');
+    expect(cards[2].className).not.toContain('request-new');
+    expect(screen.getAllByText('NEW')).toHaveLength(1);
+  });
+
+  it('연 요청 목록을 넘기지 않으면 강조하지 않는다', () => {
+    render(<RequestList items={[item(1, 60)]} nowMs={NOW} selectedId={null} onOpen={() => {}} />);
+    expect(screen.queryByText('NEW')).toBeNull();
+  });
+
   it('요청이 없으면 안내 문구', () => {
     render(<RequestList items={[]} nowMs={NOW} selectedId={null} onOpen={() => {}} />);
     expect(screen.getByText('지금 응답할 요청이 없어요.')).toBeTruthy();

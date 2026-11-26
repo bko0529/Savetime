@@ -115,6 +115,14 @@ export function ShiftScreen({
   // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
   // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // 이 탭에서 연 요청. 아직 안 연 대기 요청 카드는 깜빡여서 새 요청이 한눈에 보이게 한다.
+  // 화면 표시용이라 탭 메모리에만 둔다 (새로고침하면 대기 요청이 다시 깜빡임)
+  const [seenIds, setSeenIds] = useState<ReadonlySet<number>>(new Set());
+  const openRequest = (id: number) => {
+    setSelectedId(id);
+    setSeenIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  };
+  const newCount = incoming.waiting.filter((r) => !seenIds.has(r.id)).length;
   // 요청 / 도착 예정 탭. 탭도 화면 안에서만 바꾼다 (주소를 바꾸면 알림 켜짐이 끊김)
   const [tab, setTab] = useState<'requests' | 'incoming'>('requests');
   // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
@@ -270,6 +278,11 @@ export function ShiftScreen({
                         · 남은 시간 짧은 순
                       </span>
                     </h2>
+                    {newCount > 0 && (
+                      <Chip tone="danger" className="border border-danger-line py-0.5 text-[14px]">
+                        새 요청 {newCount}건
+                      </Chip>
+                    )}
                     {/* 대기 요청이 있는 동안 소리가 반복된다 (useNewRequests) */}
                     {incoming.waiting.length > 0 && alarm.kind === 'on' && (
                       <Chip tone="danger" className="border border-danger-line py-0.5 text-[14px]">
@@ -281,7 +294,8 @@ export function ShiftScreen({
                     items={incoming.items}
                     nowMs={incoming.nowMs}
                     selectedId={selectedId}
-                    onOpen={setSelectedId}
+                    onOpen={openRequest}
+                    seenIds={seenIds}
                   />
                   <p className="text-[14px] leading-relaxed text-muted-foreground">
                     이상 수치가 있어도 순서는 남은 시간 순 그대로예요 (앱은 위급도를 판정하지 않음)
