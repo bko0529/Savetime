@@ -6,14 +6,10 @@ import { INCOMING_KEY, type HwIncoming } from '@/app/hospital/useIncoming';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
-import {
-  FIELD_LABEL,
-  fieldText,
-  isUrgent,
-  remainingText,
-  type Assessment,
-} from '@/lib/assessment/labels';
+import { fieldText, isUrgent, remainingText, type Assessment } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
+import { AssessmentRows } from './AssessmentRows';
+import { detailKey } from './detailKey';
 import { ExtraMemoButton } from './ExtraMemoButton';
 import { etaText } from './IncomingList';
 import { RequestActions } from './RequestActions';
@@ -56,7 +52,7 @@ function CardTitle({ children }: { children: ReactNode }) {
   );
 }
 
-export const detailKey = (id: number) => ['hw', 'requests', 'detail', id] as const;
+export { detailKey };
 
 // 요청 상세 (SFR-118, H-02). 열 때마다 서버가 열람 기록을 남기므로(SFR-137)
 // 창을 다시 누르거나 다른 창에서 돌아올 때 저절로 다시 받지 않는다. 요청이 바뀌었다는 알림이 올 때만 다시 받는다
@@ -175,7 +171,12 @@ function etaLine(detail: Detail, incomingItem: HwIncoming | undefined): string |
 // 제목: 'R-102 · 남 60대 · 두통' (값이 없으면 빼고 잇는다)
 function titleText(detail: Detail, requestId: number): string {
   const a = (detail.assessment ?? {}) as Assessment;
-  const who = [fieldText(a, 'sex'), fieldText(a, 'ageBand')].filter(Boolean).join(' ');
+  // 확인 불가는 '성별 X'·'나이 X' 로 짧게
+  const sex = fieldText(a, 'sex');
+  const age = fieldText(a, 'ageBand');
+  const who = [sex === '확인 불가' ? '성별 X' : sex, age === '확인 불가' ? '나이 X' : age]
+    .filter(Boolean)
+    .join(' ');
   return [detail.label ?? `R-${requestId}`, who, a.chiefComplaint].filter(Boolean).join(' · ');
 }
 
@@ -223,15 +224,8 @@ function DetailBody({
 }) {
   const eta = etaLine(detail, incomingItem);
   const a = (detail.assessment ?? {}) as Assessment;
-  const abnormal = new Set(detail.abnormalFields ?? []);
   const beds = detail.ourHospital?.beds;
   const capability = detail.ourHospital?.capability;
-  // 제목에 이미 있는 성별·나이대는 카드에서 뺀다
-  const rows = (Object.keys(FIELD_LABEL) as (keyof typeof FIELD_LABEL)[]).flatMap((field) => {
-    if (field === 'sex' || field === 'ageBand') return [];
-    const text = fieldText(a, field);
-    return text === null ? [] : [{ field, text }];
-  });
   // 확정 전 길찾기로 잰 시간이면 '(길찾기)'를 붙인다 (직선거리 추정은 이미 '(추정)')
   const etaShown = eta ? etaRow(eta) : null;
   const etaValue =
@@ -249,23 +243,12 @@ function DetailBody({
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-label="환자 평가 정보" className={cardClass}>
           <CardTitle>환자 평가 정보</CardTitle>
-          {/* 정상 범위 밖 값은 빨간색 + ⚠ (색만으로 구분하지 않게). 위급도 판정은 하지 않는다 (D-38) */}
-          <dl className="flex flex-col">
-            {rows.map(({ field, text }) => (
-              <div key={field} className={rowClass}>
-                <dt className="shrink-0 text-[16px] text-muted-foreground">{FIELD_LABEL[field]}</dt>
-                <dd
-                  className={cn(
-                    'text-right text-[17px] font-bold break-words',
-                    abnormal.has(field) && 'font-extrabold text-destructive',
-                  )}
-                  data-abnormal={abnormal.has(field) || undefined}
-                >
-                  {abnormal.has(field) ? `⚠ ${text}` : text}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {/* 제목에 이미 있는 주 증상·성별·나이대는 뺀다. 확인 불가는 X, 이상 수치는 ⚠ 빨강 */}
+          <AssessmentRows
+            assessment={a}
+            abnormalFields={detail.abnormalFields}
+            skip={['sex', 'ageBand']}
+          />
         </section>
 
         <section aria-label="우리 병원" className={cardClass}>

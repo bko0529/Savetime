@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { envelope, FakeSocket } from '@/testing/fakeSocket';
-import { fakeServer, renderWithQuery } from '@/testing/render';
+import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
@@ -185,5 +185,59 @@ describe('도착 예정 목록의 추가 메모 (SFR-140)', () => {
     const section = await incomingTable();
     await within(section).findByText('R-103');
     expect(within(section).queryByRole('button', { name: '추가 메모' })).toBeNull();
+  });
+});
+
+describe('도착 예정 줄을 펼쳐 환자 정보 보기', () => {
+  const DETAIL = 'GET /hw/requests/102';
+  const detailBody = {
+    id: 102,
+    label: 'R-102',
+    status: 'confirmed',
+    version: 1,
+    respondUntil: new Date().toISOString(),
+    serverNow: new Date().toISOString(),
+    assessment: {
+      chiefComplaint: '뇌출혈 의심',
+      sex: 'M',
+      ageBand: '60s',
+      consciousness: 'pain',
+      bp: '160/95',
+      pulse: 88,
+      unknownFields: ['spo2'],
+    },
+    abnormalFields: ['consciousness'],
+    etaMin: 7,
+    etaSource: 'route',
+    ourHospital: { capability: null, beds: null },
+  };
+
+  it('줄을 누르면 환자 평가 전체가 펼쳐지고(열람 기록 API), 확인 불가는 X, 다시 누르면 접힌다', async () => {
+    server.set(DETAIL, { status: 200, body: detailBody });
+    const section = await incomingTable();
+    const row = (await within(section).findByText('R-102')).closest('tr')!;
+    // 펼치기 전에는 환자 상세를 부르지 않는다 (열람 기록이 남으니까)
+    expect(server.callsTo(DETAIL)).toHaveLength(0);
+
+    fireEvent.click(within(row).getByText('남·60대 · 뇌출혈 의심'));
+    expect(await screen.findByText('⚠ 통증 반응 (P)')).toBeTruthy();
+    expect(screen.getByText('160/95 mmHg')).toBeTruthy();
+    // 산소포화도는 대원이 '확인 불가'로 보냄 → X
+    const spo2 = screen.getByText('산소포화도').parentElement!;
+    expect(spo2.querySelector('[data-unknown]')!.textContent).toBe('X확인 불가');
+    expect(server.callsTo(DETAIL)).toHaveLength(1);
+
+    fireEvent.click(within(row).getByRole('button', { name: '환자 정보 접기 ▴' }));
+    await waitFor(() => expect(screen.queryByText('⚠ 통증 반응 (P)')).toBeNull());
+  });
+
+  it('도착 1시간이 지나 서버가 막으면 안내만', async () => {
+    server.set(DETAIL, {
+      status: 409,
+      body: apiError('REQUEST_CLOSED', { status: 'arrived' }),
+    });
+    const section = await incomingTable();
+    fireEvent.click(await within(section).findByRole('button', { name: '환자 정보 보기 ▾' }));
+    expect(await screen.findByText('환자 정보는 도착 후 1시간까지만 볼 수 있어요.')).toBeTruthy();
   });
 });

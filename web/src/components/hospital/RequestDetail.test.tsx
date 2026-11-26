@@ -67,6 +67,33 @@ describe('요청 상세 (SFR-118)', () => {
     expect(screen.getByText(/지금 유효한 승인 0건 · 응급실 병상 5개/)).toBeTruthy();
   });
 
+  it("대원이 '확인 불가'로 보낸 칸은 X, 성별·나이를 모르면 제목에 '성별 X'·'나이 X'", async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          assessment: {
+            chiefComplaint: '의식 저하',
+            sex: 'U',
+            ageBand: '60s',
+            bp: 'unknown',
+            unknownFields: ['ageBand', 'pulse'],
+          },
+          abnormalFields: [],
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'R-102 · 성별 X 나이 X · 의식 저하' }),
+    ).toBeTruthy();
+    const card = screen.getByRole('region', { name: '환자 평가 정보' });
+    // 혈압('unknown')과 맥박(unknownFields) 둘 다 X
+    expect(card.querySelectorAll('[data-unknown]')).toHaveLength(2);
+    expect(card.textContent).toContain('혈압X확인 불가');
+    expect(card.textContent).toContain('맥박X확인 불가');
+  });
+
   it('수술 가능 여부를 우리 병원 카드 맨 위에', async () => {
     fakeServer({
       'GET /hw/requests/102': {
