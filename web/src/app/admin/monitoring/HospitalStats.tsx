@@ -115,9 +115,9 @@ export function HospitalStats() {
           showMore={shown.length > 3}
           boxClassName="panel-table max-h-[300px]"
         >
-          {() => (
+          {(expanded) => (
             <table className="data-table data-table-flush">
-              <thead className="sticky top-0 z-10 bg-surface">
+              <thead className={cn('sticky z-10 bg-surface', expanded ? 'top-[68px]' : 'top-0')}>
                 <tr className="text-left">
                   <th className="px-3 py-3.5">병원</th>
                   <th className="px-3 py-3.5">요청</th>

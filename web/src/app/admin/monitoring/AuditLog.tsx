@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
@@ -52,10 +53,10 @@ export function AuditLog() {
           onScrollEnd={loadMore}
           boxClassName="panel-table max-h-[330px]"
         >
-          {() => (
+          {(expanded) => (
             <table className="data-table data-table-flush">
               {/* 스크롤해도 제목 줄은 위에 고정 */}
-              <thead className="sticky top-0 z-10 bg-surface">
+              <thead className={cn('sticky z-10 bg-surface', expanded ? 'top-[68px]' : 'top-0')}>
                 <tr className="text-left">
                   <th className="px-3 py-3.5">시각</th>
                   <th className="px-3 py-3.5">관리자</th>
