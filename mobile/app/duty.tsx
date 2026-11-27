@@ -17,6 +17,8 @@ import {
   QR_PREFIX,
   joinTeam,
   listColleagues,
+  MEMO_MAX,
+  saveMemo,
   sendInvite,
   setMyRole,
   startDuty,
@@ -58,6 +60,18 @@ export default function DutyScreen() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(serverNow());
+  // 나만 보는 대원 메모 (SFR-143)
+  const [memoFor, setMemoFor] = useState<number | null>(null);
+  const [memoText, setMemoText] = useState('');
+  const storeMemo = async () => {
+    if (memoFor === null) return;
+    const e = await saveMemo(memoFor, memoText);
+    if (e) return setErr(e);
+    setPool((l) =>
+      l.map((x) => (x.paramedicId === memoFor ? { ...x, myMemo: memoText.trim() || null } : x)),
+    );
+    setMemoFor(null);
+  };
 
   useEffect(() => {
     const id = setInterval(() => setNow(serverNow()), 1000);
@@ -449,7 +463,24 @@ export default function DutyScreen() {
                       </Txt>
                     </>
                   }
-                  sub={`${c.safetyCenter ?? ''}${c.onDuty ? ' · 근무 중' : ''}${c.myMemo ? ` · ${c.myMemo}` : ''}`}
+                  sub={`${c.safetyCenter ?? ''}${c.onDuty ? ' · 근무 중' : ''}`}
+                  memo={
+                    <Pressable
+                      onPress={() => {
+                        setMemoFor(c.paramedicId!);
+                        setMemoText(c.myMemo ?? '');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${c.name} 메모 ${c.myMemo ? '고치기' : '쓰기'}`}
+                      hitSlop={8}
+                    >
+                      <Txt
+                        style={{ fontSize: 12, color: c.myMemo ? color.accentDeep : color.muted }}
+                      >
+                        {c.myMemo ? `메모 · ${c.myMemo}` : '+ 메모'}
+                      </Txt>
+                    </Pressable>
+                  }
                   right={
                     c.inTeam ? (
                       <Pill tone="neutral" dot={false}>
@@ -487,6 +518,33 @@ export default function DutyScreen() {
               );
             })}
           </Tile>
+          {memoFor !== null ? (
+            <Tile style={{ marginTop: 8, padding: 14, gap: 8 }}>
+              <Txt style={{ fontFamily: font.bold, fontSize: 14 }}>
+                {pool.find((x) => x.paramedicId === memoFor)?.name ?? '대원'} 메모 (나만 보여요,{' '}
+                {MEMO_MAX}자)
+              </Txt>
+              <Field
+                value={memoText}
+                onChangeText={(t) => setMemoText(t.slice(0, MEMO_MAX))}
+                placeholder="예: 3센터 운전 담당"
+                accessibilityLabel="대원 메모"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <BigButton
+                  variant="outline"
+                  size="sm"
+                  style={{ flex: 1 }}
+                  onPress={() => setMemoFor(null)}
+                >
+                  취소
+                </BigButton>
+                <BigButton size="sm" style={{ flex: 1 }} onPress={() => void storeMemo()}>
+                  메모 저장
+                </BigButton>
+              </View>
+            </Tile>
+          ) : null}
           <Txt style={[text.caption, { marginTop: 6, color: color.muted }]}>
             초대받은 대원이 &apos;수락&apos;해야 팀원이 돼요. 초대는 5분 뒤 만료돼요.
           </Txt>
@@ -510,11 +568,14 @@ function Row({
   avatar,
   title,
   sub,
+  memo,
   right,
 }: {
   avatar: ReactNode;
   title: ReactNode;
   sub?: string;
+  /** 이름 아래 작게: 나만 보는 메모 (SFR-143) */
+  memo?: ReactNode;
   right?: ReactNode;
 }) {
   return (
@@ -537,6 +598,7 @@ function Row({
             {sub}
           </Txt>
         ) : null}
+        {memo}
       </View>
       {right}
     </View>

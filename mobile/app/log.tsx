@@ -23,10 +23,13 @@ import {
   TYPES,
   type LogData,
 } from '../src/journal/form';
+import { AI_LABEL, organize, type AiSuggestions } from '../src/journal/ai';
 import { getJournal, saveJournal } from '../src/journal/storage';
+import { configStore } from '../src/state/config';
+import { useStore } from '../src/state/store';
 import { actions, getEngine, hospital, loadJournalDraft } from '../src/transport/engine';
 import { usePatient, resetPatient } from '../src/transport/patientStore';
-import { BigButton, Field, Label, PhoneScreen, Tile, Txt } from '../src/ui/kit';
+import { BigButton, Field, Label, Notice, PhoneScreen, Tile, Txt } from '../src/ui/kit';
 import { color, font, radius, text } from '../src/ui/theme';
 
 export default function LogScreen() {
@@ -97,6 +100,8 @@ function LogBody({
 }) {
   const router = useRouter();
   const [patientName, setPatientName] = useState(''); // PDF 에만, 저장 안 함
+  // AI 일지 정리는 기능 토글이 켜졌을 때만 (SFR-167, QUR-013)
+  const aiOn = useStore(configStore).featureFlags.journalAi;
   const [busy, setBusy] = useState<'pdf' | 'print' | 'save' | null>(null);
   const set = <K extends keyof LogData>(k: K, val: LogData[K]) => setF({ ...f, [k]: val });
   const toggle = (k: 'symptoms' | 'history' | 'care', item: string) =>
@@ -440,6 +445,22 @@ function LogBody({
           }
         </Section>
 
+        {aiOn ? (
+          <AiOrganize
+            names={patientName.trim() ? [patientName.trim()] : []}
+            onApply={(k, v) => {
+              // 제안을 일지 칸에 넣는다: 주 호소 → 주 호소, 병력 → 기타 병력, 나머지는 평가소견 뒤에 붙인다
+              if (k === 'chiefComplaint') set('complaint', v);
+              else if (k === 'history') set('historyEtc', v);
+              else {
+                const head =
+                  k === 'treatment' ? '처치' : k === 'medicalDirection' ? '의료지도' : '';
+                set('opinion', [f.opinion, head ? `${head}: ${v}` : v].filter(Boolean).join(' · '));
+              }
+            }}
+          />
+        ) : null}
+
         <Tile style={{ padding: 16, gap: 8 }}>
           <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>
             PDF에만 넣는 환자 성명 (선택)
@@ -625,5 +646,87 @@ function Rows({ rows }: { rows: [string, string | undefined | false][] }) {
         </View>
       ))}
     </View>
+  );
+}
+
+/**
+ * AI 일지 정리 (SFR-167): 메모를 적고 'AI로 정리' → 항목별 제안 → 하나씩 '적용'.
+ * 이름 칸 값은 서버가 메모에서 지우는 데만 쓰고 저장하지 않는다 (SER-017)
+ */
+function AiOrganize({
+  names,
+  onApply,
+}: {
+  names: string[];
+  onApply: (k: keyof AiSuggestions, v: string) => void;
+}) {
+  const [memo, setMemo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sugg, setSugg] = useState<AiSuggestions | null>(null);
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+
+  const run = async () => {
+    setBusy(true);
+    setErr('');
+    const r = await organize(memo, names);
+    setBusy(false);
+    if (typeof r === 'string') return setErr(r);
+    setSugg(r.suggestions);
+    setApplied(new Set());
+  };
+
+  const items = sugg
+    ? (Object.keys(AI_LABEL) as (keyof AiSuggestions)[]).filter((k) => sugg[k]?.trim())
+    : [];
+  return (
+    <Tile style={{ marginBottom: 12, padding: 16, gap: 10 }}>
+      <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>AI로 일지 정리 (제안)</Txt>
+      <Txt style={[text.caption, { color: color.muted }]}>
+        현장 메모를 적으면 항목별로 나눠 제안해요. 이름·전화번호·주민번호·주소는 서버가 지우고
+        보내며, 메모는 저장하지 않아요.
+      </Txt>
+      <Field
+        value={memo}
+        onChangeText={(t) => setMemo(t.slice(0, 2000))}
+        placeholder="예: 30분 전부터 가슴 통증, 고혈압 약 복용, 산소 4L 투여"
+        multiline
+        style={{ height: 96, paddingTop: 12, textAlignVertical: 'top' }}
+        accessibilityLabel="AI 정리 메모"
+      />
+      <BigButton
+        size="sm"
+        busy={busy}
+        onPress={() => void run()}
+        icon={<Sparkles size={16} color={color.primaryText} />}
+      >
+        AI로 정리
+      </BigButton>
+      {err ? <Notice tone="warn">{err}</Notice> : null}
+      {sugg && items.length === 0 ? <Notice tone="info">제안할 내용이 없어요</Notice> : null}
+      {items.map((k) => (
+        <View
+          key={k}
+          style={{ gap: 6, padding: 12, borderRadius: radius.sm, backgroundColor: color.surface }}
+        >
+          <Txt style={{ fontFamily: font.bold, fontSize: 13, color: color.muted }}>
+            {AI_LABEL[k]}
+          </Txt>
+          <Txt style={{ fontSize: 15 }}>{sugg![k]}</Txt>
+          <BigButton
+            variant={applied.has(k) ? 'ghost' : 'outline'}
+            size="sm"
+            disabled={applied.has(k)}
+            onPress={() => {
+              onApply(k, sugg![k]!.trim());
+              setApplied((a) => new Set(a).add(k));
+            }}
+            accessibilityLabel={`${AI_LABEL[k]} 적용`}
+          >
+            {applied.has(k) ? '적용함' : '적용'}
+          </BigButton>
+        </View>
+      ))}
+    </Tile>
   );
 }

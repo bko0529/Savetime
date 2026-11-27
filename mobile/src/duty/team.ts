@@ -188,6 +188,20 @@ export async function listColleagues(q = ''): Promise<Colleague[]> {
   return r.items;
 }
 
+/**
+ * 나만 보는 한 줄 메모 (SFR-143, 20자): 다른 대원 이름 아래에 작게. 쓴 대원에게만 보이고 이름 대신 쓰지 않는다.
+ * 빈 글이면 지운다 (서버 규칙)
+ */
+export const MEMO_MAX = 20;
+export async function saveMemo(paramedicId: number, memo: string): Promise<string | null> {
+  try {
+    await api('PUT', `/memos/${paramedicId}`, { body: { memo: memo.trim().slice(0, MEMO_MAX) } });
+    return null;
+  } catch (e) {
+    return message(e, '메모를 저장하지 못했어요');
+  }
+}
+
 export async function sendInvite(paramedicId: number): Promise<string | null> {
   try {
     await api('POST', '/teams/current/invites', { body: { toParamedicId: paramedicId } });
