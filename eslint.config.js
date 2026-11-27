@@ -22,12 +22,13 @@ export default tseslint.config(
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
-    // mobile 의 설정 파일(jest.config.js 등)은 Node CommonJS
-    files: ['mobile/*.js'],
+    // mobile 의 설정 파일(jest.config.js · app.config.js · plugins/ 빌드 설정)은 Node CommonJS
+    files: ['mobile/*.js', 'mobile/plugins/*.js'],
     languageOptions: {
       sourceType: 'commonjs',
-      globals: { module: 'writable', require: 'readonly' },
+      globals: { module: 'writable', require: 'readonly', process: 'readonly' },
     },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   prettier,
 );
