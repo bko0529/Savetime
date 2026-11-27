@@ -7,11 +7,11 @@
  * - ?id=… 로 열면 저장해 둔 일지를 다시 본다
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, FileDown, Pencil, Printer, Sparkles } from 'lucide-react-native';
+import { Check, FileText, Pencil, Sparkles } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useAuth } from '../src/auth/AuthProvider';
-import { printSheet, sharePdf } from '../src/journal/exportPdf';
+import { sharePdf } from '../src/journal/exportPdf';
 import {
   CARE,
   GRADES,
@@ -102,7 +102,7 @@ function LogBody({
   const [patientName, setPatientName] = useState(''); // PDF 에만, 저장 안 함
   // AI 일지 정리는 기능 토글이 켜졌을 때만 (SFR-167, QUR-013)
   const aiOn = useStore(configStore).featureFlags.journalAi;
-  const [busy, setBusy] = useState<'pdf' | 'print' | 'save' | null>(null);
+  const [busy, setBusy] = useState<'pdf' | 'save' | null>(null);
   const set = <K extends keyof LogData>(k: K, val: LogData[K]) => setF({ ...f, [k]: val });
   const toggle = (k: 'symptoms' | 'history' | 'care', item: string) =>
     set(k, f[k].includes(item) ? f[k].filter((x) => x !== item) : [...f[k], item]);
@@ -134,11 +134,10 @@ function LogBody({
     </View>
   );
 
-  const pdf = async (kind: 'pdf' | 'print') => {
-    setBusy(kind);
+  const pdf = async () => {
+    setBusy('pdf');
     try {
-      if (kind === 'pdf') await sharePdf(f, patientName.trim() || undefined);
-      else await printSheet(f, patientName.trim() || undefined);
+      await sharePdf(f, patientName.trim() || undefined);
     } catch (e) {
       Alert.alert('PDF를 만들지 못했어요', e instanceof Error ? e.message : '다시 시도해 주세요');
     } finally {
@@ -175,28 +174,29 @@ function LogBody({
         subtitle="별지 제5호서식 · 앱에서 입력한 내용이 자동으로 채워져요"
         footer={
           <>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <BigButton
-                style={{ flex: 1 }}
-                busy={busy === 'pdf'}
-                onPress={() => void pdf('pdf')}
-                icon={<FileDown size={18} color={color.primaryText} />}
-              >
-                PDF 공유
-              </BigButton>
-              <BigButton
-                variant="outline"
-                style={{ flex: 1 }}
-                busy={busy === 'print'}
-                onPress={() => void pdf('print')}
-                icon={<Printer size={18} color={color.foreground} />}
-              >
-                인쇄
-              </BigButton>
-            </View>
-            <BigButton variant="success" busy={busy === 'save'} onPress={() => void save()}>
-              {savedId ? '고친 내용 저장하고 홈으로' : '저장하고 홈으로'}
+            {/* Lovable 과 같게: 서식 보기 하나 + 글자 버튼 '저장하고 홈으로'.
+                PDF 를 만들어 휴대폰 공유 창을 열면 미리보기·인쇄·파일 저장·메신저 전송을 한 곳에서 고를 수 있다 */}
+            <BigButton
+              busy={busy === 'pdf'}
+              onPress={() => void pdf()}
+              icon={<FileText size={18} color={color.primaryText} />}
+            >
+              제출용 서식으로 보기 · 인쇄
             </BigButton>
+            <Pressable
+              onPress={() => void save()}
+              disabled={busy === 'save'}
+              accessibilityRole="button"
+              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Txt style={{ fontFamily: font.semibold, fontSize: 14, color: color.muted }}>
+                {busy === 'save'
+                  ? '저장하는 중…'
+                  : savedId
+                    ? '고친 내용 저장하고 홈으로'
+                    : '저장하고 홈으로'}
+              </Txt>
+            </Pressable>
           </>
         }
       >

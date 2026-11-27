@@ -78,7 +78,7 @@ test('환자 성명은 PDF 에만 들어가고 저장 데이터에는 없다 (SE
   await render(<LogScreen />);
   await screen.findByText('순천향대 천안병원');
   await fireEvent.changeText(screen.getByLabelText('PDF에만 넣는 환자 성명'), '홍길동');
-  await fireEvent.press(screen.getByRole('button', { name: 'PDF 공유' }));
+  await fireEvent.press(screen.getByRole('button', { name: '제출용 서식으로 보기 · 인쇄' }));
   await waitFor(() => expect(mockShare).toHaveBeenCalled());
   expect((mockShare.mock.calls[0] as unknown[])[1]).toBe('홍길동');
   await fireEvent.press(screen.getByRole('button', { name: '저장하고 홈으로' }));

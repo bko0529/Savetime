@@ -2,10 +2,11 @@
  * 구급대원 앱 공용 부품. Lovable components/phone.tsx 를 React Native 로 옮겼다.
  * 모든 화면이 이 부품을 쓰므로 여기서 색·여백을 고치면 전체가 같이 바뀐다.
  */
-import type { ReactNode } from 'react';
-import { Check } from 'lucide-react-native';
+import { useState, type ReactNode } from 'react';
+import { Check, ChevronDown } from 'lucide-react-native';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +20,15 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  RadialGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import { color, font, onSchemeChange, radius, shadow, text } from './theme';
 
 /** 글자: 기본 글꼴을 Pretendard 로 */
@@ -53,6 +62,76 @@ export function EcgLine({
         strokeLinejoin="round"
       />
     </Svg>
+  );
+}
+
+/**
+ * 은은한 빛 바탕 (Lovable surface-header + 흐린 빛 두 개). 웹의 blur 는 앱에 없어서
+ * 가운데가 진하고 바깥으로 투명해지는 원형 그라디언트로 같은 느낌을 낸다.
+ * 빛 위치는 Lovable 의 absolute 위치(px)를 가운데 좌표로 바꾼 값
+ */
+export type Glow = {
+  /** 오른쪽 끝에서 가운데까지 거리 (음수 = 화면 안쪽) 또는 왼쪽 기준 x */
+  x: number;
+  fromRight?: boolean;
+  y: number;
+  r: number;
+  tone: 'accent' | 'ink';
+  opacity: number;
+};
+export const HEADER_GLOWS: Glow[] = [
+  { x: 56, fromRight: true, y: 24, r: 170, tone: 'accent', opacity: 0.15 },
+  { x: 8, y: 80, r: 120, tone: 'ink', opacity: 0.06 },
+];
+export const LOGIN_GLOWS: Glow[] = [
+  { x: 64, fromRight: true, y: 88, r: 200, tone: 'accent', opacity: 0.15 },
+  { x: 32, y: 272, r: 170, tone: 'ink', opacity: 0.06 },
+];
+export function GlowBackdrop({ glows }: { glows: Glow[] }) {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  return (
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      {box.w > 0 ? (
+        <Svg width={box.w} height={box.h}>
+          <Defs>
+            {/* 155도 방향: 왼쪽 위 → 오른쪽 아래 */}
+            <LinearGradient id="bg" x1="0" y1="0" x2="0.42" y2="1">
+              <Stop offset="0" stopColor={color.glowStart} />
+              <Stop offset="0.55" stopColor={color.glowMid} />
+              <Stop offset="1" stopColor={color.glowEnd} />
+            </LinearGradient>
+            {glows.map((g, i) => (
+              <RadialGradient key={i} id={`g${i}`} cx="0.5" cy="0.5" r="0.5">
+                <Stop
+                  offset="0"
+                  stopColor={g.tone === 'accent' ? color.accent : color.foreground}
+                  stopOpacity={g.opacity}
+                />
+                <Stop
+                  offset="1"
+                  stopColor={g.tone === 'accent' ? color.accent : color.foreground}
+                  stopOpacity={0}
+                />
+              </RadialGradient>
+            ))}
+          </Defs>
+          <Rect x={0} y={0} width={box.w} height={box.h} fill="url(#bg)" />
+          {glows.map((g, i) => (
+            <Circle
+              key={i}
+              cx={g.fromRight ? box.w - g.x : g.x}
+              cy={g.y}
+              r={g.r}
+              fill={`url(#g${i})`}
+            />
+          ))}
+        </Svg>
+      ) : null}
+    </View>
   );
 }
 
@@ -94,6 +173,7 @@ export function PhoneScreen({
   return (
     <SafeAreaView style={s.screen} edges={['top', 'left', 'right']}>
       <View style={[s.header, accent && s.headerAccent]}>
+        {accent ? null : <GlowBackdrop glows={HEADER_GLOWS} />}
         <View style={s.headerEcg} pointerEvents="none">
           <EcgLine tint={accent ? color.accentText : color.accent} opacity={accent ? 0.3 : 0.45} />
         </View>
@@ -492,6 +572,124 @@ export function Chips<T extends string>({
   );
 }
 
+/**
+ * 드롭다운 (Lovable 의 <select className="field">). 휴대폰에는 웹 select 가 없어서
+ * 입력칸 모양 버튼을 누르면 아래에서 목록이 올라오게 했다 (라이브러리 추가 없이 Modal 로)
+ */
+export function Select({
+  value,
+  options,
+  onChange,
+  placeholder = '선택',
+  label,
+}: {
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+  placeholder?: string;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} ${value || placeholder}`}
+        style={[s.field, { flexDirection: 'row', alignItems: 'center' }]}
+      >
+        <Txt style={{ flex: 1, fontSize: 16, color: value ? color.foreground : color.muted }}>
+          {value || placeholder}
+        </Txt>
+        <ChevronDown size={18} color={color.foreground} />
+      </Pressable>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          style={s.sheetBackdrop}
+          onPress={() => setOpen(false)}
+          accessibilityLabel="닫기"
+        />
+        <View style={s.sheet}>
+          <Txt style={{ fontFamily: font.extrabold, fontSize: 16, marginBottom: 8 }}>{label}</Txt>
+          <ScrollView style={{ maxHeight: 360 }}>
+            {[placeholder === '선택' ? '' : null, ...options]
+              .filter((o): o is string => o !== null)
+              .map((o) => {
+                const on = o === value;
+                return (
+                  <Pressable
+                    key={o || '__none'}
+                    onPress={() => {
+                      onChange(o);
+                      setOpen(false);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    style={[s.sheetRow, on && { backgroundColor: color.accentSoft }]}
+                  >
+                    <Txt
+                      style={{
+                        flex: 1,
+                        fontSize: 16,
+                        fontFamily: on ? font.bold : font.regular,
+                        color: on ? color.accentDeep : o ? color.foreground : color.muted,
+                      }}
+                    >
+                      {o || placeholder}
+                    </Txt>
+                    {on ? <Check size={18} color={color.accentDeep} /> : null}
+                  </Pressable>
+                );
+              })}
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+/** 입력칸 모양의 하나 고르기 (Lovable 성별 남/여: 고르면 빨간 테두리) */
+export function FieldChoice<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: readonly T[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {options.map((o) => {
+        const on = o === value;
+        return (
+          <Pressable
+            key={o}
+            onPress={() => onChange(o)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            style={[
+              s.field,
+              { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 0 },
+              on && { borderColor: color.accent, backgroundColor: color.accentSoft },
+            ]}
+          >
+            <Txt
+              style={{
+                fontFamily: font.bold,
+                fontSize: 16,
+                color: on ? color.accentDeep : color.foreground,
+              }}
+            >
+              {o}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 /** 이름 두 글자만 넣은 칸 (팀원 · 대원 목록) */
 export function Avatar({
   name,
@@ -602,6 +800,21 @@ function makeStyles() {
       fontFamily: font.regular,
       fontSize: 16,
       color: color.foreground,
+    },
+    sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+    sheet: {
+      backgroundColor: color.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      paddingBottom: 36,
+    },
+    sheetRow: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      borderRadius: radius.md,
     },
     checkRow: {
       flexDirection: 'row',

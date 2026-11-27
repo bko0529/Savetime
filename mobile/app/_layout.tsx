@@ -20,6 +20,7 @@ import { setRouteOpener, setTransportNotifier, startTransportSync } from '../src
 import { openRoute } from '../src/transport/links';
 import { notifyTeam } from '../src/transport/notify';
 import { startDraftSync } from '../src/transport/teamDraft';
+import { InvitePush } from '../src/duty/InvitePush';
 import { NetBanner } from '../src/offline/NetBanner';
 import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
@@ -129,6 +130,7 @@ function Gate() {
           <Stack.Screen name="password" />
         </Stack.Protected>
       </Stack>
+      {target === 'duty' || target === 'home' ? <InvitePush canOpen={target === 'duty'} /> : null}
       <NetBanner />
     </>
   );

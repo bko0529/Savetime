@@ -18,7 +18,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth/AuthProvider';
 import { checkLoginForm } from '../src/auth/loginForm';
-import { BigButton, EcgLine, IconTile, Label, LogoMark, Notice, Tile, Txt } from '../src/ui/kit';
+import {
+  BigButton,
+  EcgLine,
+  GlowBackdrop,
+  IconTile,
+  Label,
+  LOGIN_GLOWS,
+  LogoMark,
+  Notice,
+  Tile,
+  Txt,
+} from '../src/ui/kit';
 import { color, font, onSchemeChange, radius, shadow, text } from '../src/ui/theme';
 
 export default function LoginScreen() {
@@ -41,6 +52,8 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {/* Lovable 로그인처럼 화면 전체에 은은한 빛 바탕 */}
+      <GlowBackdrop glows={LOGIN_GLOWS} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

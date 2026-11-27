@@ -43,10 +43,12 @@ import {
   BigButton,
   Chips,
   Field,
+  FieldChoice,
   Label,
   Notice,
   PhoneScreen,
   Pill,
+  Select,
   SectionTitle,
   Txt,
 } from '../src/ui/kit';
@@ -395,21 +397,25 @@ export default function PatientScreen() {
               <SectionTitle>주 증상 (필수)</SectionTitle>
               {field('complaint', '직접 입력하세요', '예: 갑작스러운 극심한 두통, 의식 저하')}
 
-              <View style={{ marginTop: 16 }}>
-                <Label>성별</Label>
-                <Chips
-                  value={p.sex as '남'}
-                  options={['남', '여', UNKNOWN] as const}
-                  onChange={(v) => set('sex', v)}
-                />
-              </View>
-              <View style={{ marginTop: 16 }}>
-                <Label>나이대</Label>
-                <Chips
-                  value={p.age as (typeof AGES)[number]}
-                  options={[...AGES, UNKNOWN] as const}
-                  onChange={(v) => set('age', v)}
-                />
+              {/* 성별 · 나이대 한 줄 (Lovable 과 같게). 모르면 3단계의 '나머지 확인 불가로 보내기' */}
+              <View style={{ marginTop: 16, flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Label>성별</Label>
+                  <FieldChoice
+                    value={p.sex}
+                    options={['남', '여'] as const}
+                    onChange={(v) => set('sex', v)}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Label>나이대</Label>
+                  <Select
+                    label="나이대"
+                    value={p.age}
+                    options={p.age === UNKNOWN ? [...AGES, UNKNOWN] : AGES}
+                    onChange={(v) => set('age', v)}
+                  />
+                </View>
               </View>
             </>
           ) : null}
@@ -460,14 +466,16 @@ export default function PatientScreen() {
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {field('temp', '체온', '36.5', '℃')}
                 {field('glucose', '혈당', '120', 'mg/dL')}
-              </View>
-              <View style={{ marginTop: 12 }}>
-                <Label>KTAS</Label>
-                <Chips
-                  value={p.ktas as (typeof KTAS)[number]}
-                  options={KTAS}
-                  onChange={(v) => set('ktas', p.ktas === v ? '' : v)}
-                />
+                <View style={{ flex: 1 }}>
+                  <Label>KTAS</Label>
+                  <Select
+                    label="KTAS"
+                    placeholder="-"
+                    value={p.ktas}
+                    options={['-', ...KTAS]}
+                    onChange={(v) => set('ktas', v === '-' ? '' : v)}
+                  />
+                </View>
               </View>
               <BigButton
                 variant="outline"

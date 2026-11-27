@@ -30,6 +30,10 @@ const light = {
   surface: '#F1F5F9',
   surface2: '#E7EEF3',
   headerTint: '#E7F2FA',
+  /** 머리글·로그인 바탕 그라디언트 (Lovable --gradient-header: 흰색 → 옅은 파랑 → 옅은 분홍) */
+  glowStart: '#FFFFFF',
+  glowMid: '#F1F5FA',
+  glowEnd: '#F3E8EA',
   /** 진한 글자색을 아주 옅게 깐 바탕 (아이콘 칸 등) */
   inkTint: 'rgba(30,33,36,0.08)',
   /** 아래 고정 버튼 줄 바탕 (살짝 비침) */
@@ -71,6 +75,9 @@ const dark: Palette = {
   surface: '#1C2128',
   surface2: '#232932',
   headerTint: '#16283A',
+  glowStart: '#1A1F26',
+  glowMid: '#14181D',
+  glowEnd: '#21181A',
   inkTint: 'rgba(232,236,241,0.10)',
   footer: 'rgba(23,27,33,0.96)',
   logoNavy: '#DCE6F7',
@@ -126,5 +133,13 @@ export const shadow = {
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
+  },
+  /** 떠 있는 카드 (알림 카드 · Lovable elevate-lg) */
+  lift: {
+    shadowColor: '#1A2233',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
 };
