@@ -47,7 +47,9 @@
           "cameraPermission": "가입 신청 때 공무원증을 찍으려고 카메라를 써요.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-sqlite"
     ]
   }
 }

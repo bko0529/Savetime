@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { ApiError, api, currentAccessToken, errorText, serverNow } from '../api/client';
+import type { components } from '../api/schema';
 import { getDeviceId } from '../auth/storage';
 import { teamStore } from '../duty/team';
 import { onEvent, type AppEventName } from '../realtime/socket';
@@ -849,28 +850,7 @@ async function stepDrive() {
 
 // ---------------- 구급활동일지 초안 (SFR-164) ----------------
 // 이송이 끝난 뒤 10분 안에 팀원 누구나 받을 수 있다. 환자 이름·연락처는 서버에 없다 (SER-012)
-export type JournalDraft = {
-  departedAt: string | null;
-  arrivedAt: string | null;
-  distanceKm: number | null;
-  sex: 'M' | 'F' | null;
-  ageBand: string | null;
-  chiefComplaint: string | null;
-  onsetAt: string | null;
-  consciousness: 'A' | 'V' | 'P' | 'U' | null;
-  vitals: {
-    sbp: number | null;
-    dbp: number | null;
-    pulse: number | null;
-    resp: number | null;
-    temp: number | null;
-    spo2: number | null;
-    glucose: number | null;
-  };
-  history: string | null;
-  ktas: number | null;
-  hospitalName: string | null;
-};
+export type JournalDraft = components['schemas']['JournalDraft'];
 
 export async function loadJournalDraft(): Promise<JournalDraft | null> {
   if (!s.transportId || !s.status || isActive(s.status)) return null;

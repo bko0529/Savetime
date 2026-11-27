@@ -32,13 +32,14 @@ test('새 이송 시작은 모든 칸을 비운다', () => {
   expect(patientStore.get().patient).toEqual(emptyPatient);
 });
 
-test('이송 상태 → 화면: 아직 없는 화면(일지)은 홈에 머문다', () => {
+test('이송 상태 → 화면 (도착하면 일지)', () => {
   expect(routeForStatus('requesting', null)).toBe('/request');
   expect(routeForStatus('fallback', null)).toBe('/request');
   expect(routeForStatus('phone_check', '101')).toBe('/call/101');
   expect(routeForStatus('phone_check', null)).toBeNull();
   expect(routeForStatus('moving', null)).toBe('/transport');
-  expect(routeForStatus('arrived', null)).toBeNull();
+  expect(routeForStatus('arrived', null)).toBe('/log');
+  expect(routeForStatus('cancelled', null)).toBeNull();
   expect(routeForStatus(null, null)).toBeNull();
 });
 

@@ -2,10 +2,21 @@
  * 근무 중 홈 (Lovable index 그대로): 근무 상태 · 진행 중 이송 · 오늘의 팀 · 새 이송 시작.
  * 팀당 진행 중 이송은 1건이라, 진행 중이면 '진행 중 이송으로' 버튼만 보인다.
  */
-import { useRouter } from 'expo-router';
-import { Ambulance, ArrowRight, BellRing, LogOut, ShieldCheck, Users } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import {
+  Ambulance,
+  ArrowRight,
+  BellRing,
+  FileText,
+  LogOut,
+  ShieldCheck,
+  Users,
+} from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useAuth } from '../src/auth/AuthProvider';
+import { hhmm } from '../src/journal/form';
+import { listJournals, type SavedJournal } from '../src/journal/storage';
 import { fromServerRole, teamStore } from '../src/duty/team';
 import { useStore } from '../src/state/store';
 import { actions, hospital, useEngine } from '../src/transport/engine';
@@ -13,7 +24,16 @@ import { STATUS_LABEL } from '../src/transport/labels';
 import { resetPatient } from '../src/transport/patientStore';
 import { isActive } from '../src/transport/types';
 import { routeForStatus } from '../src/transport/routing';
-import { Avatar, BigButton, PhoneScreen, Pill, SectionTitle, Tile, Txt } from '../src/ui/kit';
+import {
+  Avatar,
+  BigButton,
+  IconTile,
+  PhoneScreen,
+  Pill,
+  SectionTitle,
+  Tile,
+  Txt,
+} from '../src/ui/kit';
 import { color, font, text } from '../src/ui/theme';
 
 export default function HomeScreen() {
@@ -21,6 +41,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const t = useStore(teamStore);
   const e = useEngine();
+  // 이 휴대폰에 저장한 일지 (7일 보관, DAR-015). 홈에 돌아올 때마다 다시 읽는다
+  const [journals, setJournals] = useState<SavedJournal[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      listJournals()
+        .then(setJournals)
+        .catch(() => setJournals([]));
+    }, []),
+  );
   if (state.status !== 'signedIn') return null;
   const me = state.me;
   const team = t.team === 'loading' ? null : t.team;
@@ -176,6 +205,54 @@ export default function HomeScreen() {
           </View>
         ))}
       </Tile>
+
+      <SectionTitle hint="이 휴대폰에만 7일 동안 보관해요. 서버로는 보내지 않아요">
+        구급활동일지
+      </SectionTitle>
+      {journals.length === 0 ? (
+        <Tile style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 }}>
+          <IconTile tone="accent">
+            <FileText size={20} color={color.accentDeep} />
+          </IconTile>
+          <Txt style={[text.caption, { flex: 1, color: color.muted }]}>
+            도착 처리하면 입력한 정보가 자동으로 채워져요
+          </Txt>
+        </Tile>
+      ) : (
+        <Tile divided>
+          {journals.map((j) => (
+            <Pressable
+              key={j.id}
+              onPress={() => router.push({ pathname: '/log', params: { id: j.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`${j.data.hospital || '이송'} 일지 보기`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <FileText size={18} color={color.accentDeep} />
+              <View style={{ flex: 1 }}>
+                <Txt style={{ fontFamily: font.bold, fontSize: 15 }} numberOfLines={1}>
+                  {j.data.hospital || '병원 미입력'}
+                </Txt>
+                <Txt style={[text.caption, { color: color.muted }]} numberOfLines={1}>
+                  {[
+                    j.data.complaint,
+                    `저장 ${new Date(j.savedAt).getMonth() + 1}/${new Date(j.savedAt).getDate()} ${hhmm(j.savedAt)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Txt>
+              </View>
+              <ArrowRight size={16} color={color.muted} />
+            </Pressable>
+          ))}
+        </Tile>
+      )}
 
       <View
         style={{

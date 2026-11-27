@@ -35,7 +35,10 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: mockBack, navigate: jest.fn(), dismissTo: jest.fn() }),
+  // 화면에 들어올 때 한 번 실행하는 것으로 흉내
+  useFocusEffect: (fn: () => void) => require('react').useEffect(fn, []),
 }));
+jest.mock('../journal/storage', () => ({ listJournals: jest.fn(async () => []) }));
 
 const base = (patch: Partial<ServerTransport> = {}): ServerTransport => ({
   id: 't-1',
