@@ -1,12 +1,15 @@
 /**
  * 이송 상태가 바뀌면 맞는 화면으로 보낸다 (Lovable app-gate 의 '이송 건 상태 → 화면' 그대로).
- * 팀원이 다른 폰에서 요청·확정해도 같은 화면으로 따라간다. 처음 그릴 때는 움직이지 않는다 (앱을 켜면 홈에서 시작).
- * 환자 정보 입력 화면에서 요청하면 그 화면을 요청 화면으로 '바꿔' 연다 (뒤로 가기로 입력 화면이 다시 나오지 않게).
+ * - 앱을 켜고 서버에서 진행 중 이송을 처음 읽었을 때:
+ *   진행 중이면 그 상태 화면으로 바로 (SFR-133), 없으면 환자 정보 입력이 첫 화면 (SFR-107)
+ * - 그 뒤에는 팀원이 다른 폰에서 요청·확정해도 같은 화면으로 따라간다
+ * - 환자 정보 입력 화면에서 요청하면 그 화면을 요청 화면으로 '바꿔' 연다 (뒤로 가기로 입력 화면이 다시 나오지 않게)
  */
 import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useEngine } from '../engine';
 import { routeForStatus } from '../routing';
+import { isActive } from '../types';
 
 export function TransportRouter() {
   const e = useEngine();
@@ -14,14 +17,22 @@ export function TransportRouter() {
   const path = usePathname();
   const pathRef = useRef(path);
   pathRef.current = path;
-  const prev = useRef<string>('');
+  const prev = useRef<string | null>(null);
 
   useEffect(() => {
+    // 서버에서 아직 안 읽었으면 기다린다 (홈이 잠깐 보였다가 바뀌지 않게)
+    if (!e.loaded) return;
     const key = `${e.status}:${e.phoneTarget}`;
+    if (prev.current === null) {
+      // 앱을 켠 뒤 처음: 진행 중 이송이면 그 화면, 아니면 환자 정보 입력
+      prev.current = key;
+      const to = isActive(e.status) ? routeForStatus(e.status, e.phoneTarget) : '/patient';
+      if (to && pathRef.current === '/') router.navigate(to);
+      return;
+    }
     if (key === prev.current) return;
-    const first = prev.current === '';
     prev.current = key;
-    if (first || !e.status) return;
+    if (!e.status) return;
     if (e.status === 'cancelled') {
       router.dismissTo('/');
       return;
@@ -30,7 +41,7 @@ export function TransportRouter() {
     if (!to) return;
     if (pathRef.current === '/patient') router.replace(to);
     else router.navigate(to);
-  }, [e.status, e.phoneTarget, router]);
+  }, [e.loaded, e.status, e.phoneTarget, router]);
 
   return null;
 }

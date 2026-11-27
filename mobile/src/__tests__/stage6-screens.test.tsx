@@ -93,7 +93,10 @@ test('전화 확인: 수용 확정 · 연결 실패 사유 · 거절', async () 
   await fireEvent.press(screen.getByRole('button', { name: '환자가 급함' }));
   expect(proceed).toHaveBeenCalledWith('urgent', 'skipped');
   await fireEvent.press(screen.getByRole('button', { name: '거절 → 다음 병원' }));
-  expect(rejected).toHaveBeenCalled();
+  // 거절 사유를 고른다 (SFR-044). 기타면 글도 같이
+  await fireEvent.changeText(screen.getByLabelText('기타 거절 사유'), '구급차 진입 불가');
+  await fireEvent.press(screen.getByRole('button', { name: '거절 사유 기타' }));
+  expect(rejected).toHaveBeenCalledWith('etc', '구급차 진입 불가');
 });
 
 test('전화 확인에서 돌아가면 결과 없이 닫는다 (dismissed)', async () => {
@@ -122,7 +125,7 @@ test('이동 중: 입구 근처가 아니면 도착 처리가 꺼져 있고, 누
   await render(<TransportScreen />);
   expect(screen.queryByRole('button', { name: '도착 처리' })).toBeNull();
   await fireEvent.press(
-    screen.getByRole('button', { name: '도착했어요 (입구 200m 안에서 켜져요)' }),
+    screen.getByRole('button', { name: '도착했어요 (입구 근처에서는 저절로 켜져요)' }),
   );
   await fireEvent.press(screen.getByRole('button', { name: '도착 처리' }));
   expect(arrive).toHaveBeenCalledWith('button');

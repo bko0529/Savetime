@@ -7,20 +7,34 @@
  * - 확정 전에 한 번 더 묻는다. 확정하면 다른 병원 요청은 닫힌다
  */
 import { useRouter } from 'expo-router';
-import { CheckCircle2, ChevronRight, Clock, MapPin, PhoneCall } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  MapPin,
+  PhoneCall,
+  RefreshCw,
+} from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Vibration, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import {
   actions,
   hospital,
   nearbyHospitals,
+  noBedHospitals,
   now,
-  phoneCandidates,
+  refreshAll,
   useEngine,
   type Hreq,
   type Result,
 } from '../src/transport/engine';
-import { capCount, RADIUS_STEPS, RESPONSE_LIMIT_SEC } from '../src/transport/hospitals';
+import {
+  bedsLabel,
+  capCount,
+  RADIUS_STEPS,
+  RESPONSE_LIMIT_SEC,
+  type Hospital,
+} from '../src/transport/hospitals';
 import { mmss } from '../src/transport/labels';
 import { CLOSE_LABEL, REASON_LABEL } from '../src/transport/types';
 import { HospitalDetail } from '../src/transport/ui/HospitalDetail';
@@ -58,13 +72,12 @@ export default function RequestScreen() {
   const remain = RESPONSE_LIMIT_SEC - Math.floor((t - e.roundSentAt) / 1000);
   const fallback = e.status === 'fallback';
 
-  // 새 승인 알림 (진동)
+  // 새 승인 안내 (진동·소리는 알림 모듈이 팀원 폰 모두에, SFR-130)
   const seen = useRef(0);
   useEffect(() => {
     if (live.length > seen.current) {
       const n = live[live.length - 1];
       if (n) setNotice(`새 승인 · ${hospital(n.hospitalId).name}`);
-      Vibration.vibrate(300);
     }
     seen.current = live.length;
   }, [live.length]);
@@ -100,11 +113,44 @@ export default function RequestScreen() {
       { text: '이송 취소', style: 'destructive', onPress: () => void run(actions.cancel()) },
     ]);
 
-  // 거리순 목록: 승인 칸에 없는 병원 + 각 병원의 최근 요청 상태
+  // 추천 카드 상위 5곳 (SFR-027, 서버가 고름): 승인 칸에 없는 병원 + 각 병원의 최근 요청 상태
+  const withReq = (h: Hospital) => ({
+    h,
+    req: [...e.hreqs].reverse().find((r) => r.hospitalId === h.id),
+  });
   const nearby = nearbyHospitals()
     .filter((h) => !live.some((a) => a.hospitalId === h.id))
-    .map((h) => ({ h, req: [...e.hreqs].reverse().find((r) => r.hospitalId === h.id) }))
+    .map(withReq)
     .filter(({ h, req }) => !(e.excluded.includes(h.id) && req?.status !== 'waiting'));
+  const noBed = noBedHospitals()
+    .filter((h) => !e.excluded.includes(h.id))
+    .map(withReq);
+  // 1초 넘게 걸릴 때만 로딩 표시 (SFR-095)
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!e.nearbyLoading) return setSlow(false);
+    const t = setTimeout(() => setSlow(true), 1000);
+    return () => clearTimeout(t);
+  }, [e.nearbyLoading]);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshNow = async () => {
+    setRefreshing(true);
+    await refreshAll();
+    setRefreshing(false);
+  };
+  /** 승인 카드: 누르면 바로 '확정할까요?' (승인 → 확정 2번, QUR-003). 자세히 보기는 그 창에서 */
+  const pickApproved = (id: string) => {
+    const h = hospital(id);
+    Alert.alert(
+      `${h.name}으로 확정할까요?`,
+      `약 ${h.min}분 · ${h.km}km\n확정하면 다른 병원 요청은 닫혀요`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '자세히', onPress: () => setDetail(id) },
+        { text: '확정', onPress: () => void run(actions.confirm(id)) },
+      ],
+    );
+  };
   const excludedNames = e.excluded.map((id) => hospital(id).name);
   const nextRadius = RADIUS_STEPS[RADIUS_STEPS.indexOf(e.radius) + 1];
   const subtitle = fallback
@@ -220,9 +266,9 @@ export default function RequestScreen() {
               return (
                 <Pressable
                   key={`${r.hospitalId}-${r.round}`}
-                  onPress={() => setDetail(r.hospitalId)}
+                  onPress={() => pickApproved(r.hospitalId)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${h.name} 승인 · 자세히`}
+                  accessibilityLabel={`${h.name} 승인 · 확정하기`}
                   style={{
                     flexDirection: 'row',
                     gap: 12,
@@ -348,86 +394,87 @@ export default function RequestScreen() {
             : '기다리는 중에도 전화로 확인할 수 있어요 (요청은 열어 둬요)'
         }
       >
-        가까운 병원 (거리순)
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>추천 병원 (상위 5곳)</Txt>
+          <Pressable
+            onPress={() => void refreshNow()}
+            disabled={refreshing}
+            accessibilityRole="button"
+            accessibilityLabel="새로고침"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: color.border,
+              backgroundColor: color.card,
+            }}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={color.muted} />
+            ) : (
+              <RefreshCw size={14} color={color.muted} />
+            )}
+            <Txt style={{ fontFamily: font.bold, fontSize: 12, color: color.muted }}>새로고침</Txt>
+          </Pressable>
+        </View>
       </SectionTitle>
+      {slow ? (
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}
+          accessibilityLabel="불러오는 중"
+        >
+          <ActivityIndicator size="small" color={color.accent} />
+          <Txt style={[text.caption, { color: color.muted }]}>병원 목록을 불러오는 중…</Txt>
+        </View>
+      ) : null}
       <View style={{ gap: 8 }}>
-        {nearby.map(({ h, req }) => {
-          const st = req?.status;
-          const label = !req
-            ? '요청 안 함'
-            : st === 'waiting'
-              ? '요청함'
-              : st === 'closed' && req.closeReason
-                ? CLOSE_LABEL[req.closeReason]
-                : st === 'expired'
-                  ? '응답 없음'
-                  : st === 'delivery_failed'
-                    ? '전달 실패'
-                    : '요청함';
-          const isWaiting = st === 'waiting' && !fallback;
-          const cc = capCount(h);
-          return (
-            <Pressable
-              key={h.id}
-              disabled={isWaiting}
-              onPress={() => setDetail(h.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`${h.name} ${label}`}
-              accessibilityState={{ disabled: isWaiting }}
-            >
-              <Tile
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 14,
-                  opacity: isWaiting ? 0.6 : 1,
-                }}
-              >
-                <IconTile tone={isWaiting ? 'warn' : 'accent'} size={36}>
-                  <MapPin size={16} color={isWaiting ? color.warning : color.accentDeep} />
-                </IconTile>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Txt
-                      style={{ fontFamily: font.bold, fontSize: 15, flexShrink: 1 }}
-                      numberOfLines={1}
-                    >
-                      {h.name}
-                    </Txt>
-                    <Txt style={{ fontSize: 11, fontFamily: font.bold, color: color.muted }}>
-                      {h.km}km
-                    </Txt>
-                  </View>
-                  <Txt
-                    style={[text.caption, { marginTop: 2, color: color.muted }]}
-                    numberOfLines={1}
-                  >
-                    약 {h.min}분 · {h.er ? `응급실 ${h.er}` : '병상 정보 없음'} · 진료가능{' '}
-                    {cc.available}/{cc.total} · {label}
-                  </Txt>
-                </View>
-                {isWaiting ? (
-                  <Pill tone="wait">대기</Pill>
-                ) : !h.er ? (
-                  <Pill tone="neutral">병상 없음 · 전화</Pill>
-                ) : (
-                  <Pill tone="call" icon={<PhoneCall size={12} color={color.accentDeep} />}>
-                    전화 확인
-                  </Pill>
-                )}
-              </Tile>
-            </Pressable>
-          );
-        })}
-        {nearby.length === 0 ? (
-          <View style={{ padding: 14, borderRadius: radius.sm, backgroundColor: color.surface }}>
-            <Txt style={[text.body, { color: color.muted }]}>
-              반경 안에 남은 병원이 없어요{phoneCandidates().length ? '' : ' · 반경을 넓혀 보세요'}
-            </Txt>
-          </View>
+        {nearby.map(({ h, req }) => (
+          <HospitalRow
+            key={h.id}
+            h={h}
+            req={req}
+            fallback={fallback}
+            onPress={() => setDetail(h.id)}
+          />
+        ))}
+        {nearby.length === 0 && !e.nearbyLoading ? (
+          <EmptyGuide
+            guide={e.emptyGuide}
+            nextRadius={nextRadius}
+            fallback={fallback}
+            onWiden={() => void run(actions.widenRecommend())}
+          />
         ) : null}
       </View>
+      {noBed.length > 0 ? (
+        <>
+          <SectionTitle hint="실시간 병상 정보가 없는 병원이에요. 전화로 확인하세요">
+            병상 정보 없음 · 전화로 확인
+          </SectionTitle>
+          <View style={{ gap: 8 }}>
+            {noBed.map(({ h, req }) => (
+              <HospitalRow
+                key={h.id}
+                h={h}
+                req={req}
+                fallback={fallback}
+                onPress={() => setDetail(h.id)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
       {excludedNames.length > 0 ? (
         <Txt style={[text.caption, { marginTop: 12, color: color.muted }]}>
           거절 · 승인 취소한 {excludedNames.join(', ')}은 목록에서 빠져요
@@ -445,5 +492,116 @@ export default function RequestScreen() {
         />
       ) : null}
     </PhoneScreen>
+  );
+}
+
+/** 추천 카드 한 줄 (SFR-002): 병원명 · 거리 · 예상 이동시간 · 잔여 병상 · 진료가능 항목 수 · 데이터 기준 시각 */
+function HospitalRow({
+  h,
+  req,
+  fallback,
+  onPress,
+}: {
+  h: Hospital;
+  req: Hreq | undefined;
+  fallback: boolean;
+  onPress: () => void;
+}) {
+  const st = req?.status;
+  const label = !req
+    ? '요청 안 함'
+    : st === 'waiting'
+      ? '요청함'
+      : st === 'closed' && req.closeReason
+        ? CLOSE_LABEL[req.closeReason]
+        : st === 'expired'
+          ? '응답 없음'
+          : st === 'delivery_failed'
+            ? '전달 실패'
+            : st === 'rejected'
+              ? `거절${req.reason ? ` · ${req.reason}` : ''}`
+              : '요청함';
+  const isWaiting = st === 'waiting' && !fallback;
+  const cc = capCount(h);
+  const data = bedsLabel(h);
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={isWaiting}
+      accessibilityRole="button"
+      accessibilityLabel={`${h.name} ${label}`}
+      accessibilityState={{ disabled: isWaiting }}
+    >
+      <Tile
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          padding: 14,
+          opacity: isWaiting ? 0.6 : 1,
+        }}
+      >
+        <IconTile tone={isWaiting ? 'warn' : 'accent'} size={36}>
+          <MapPin size={16} color={isWaiting ? color.warning : color.accentDeep} />
+        </IconTile>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Txt style={{ fontFamily: font.bold, fontSize: 16, flexShrink: 1 }} numberOfLines={1}>
+              {h.name}
+            </Txt>
+            <Txt style={{ fontSize: 12, fontFamily: font.bold, color: color.muted }}>{h.km}km</Txt>
+          </View>
+          <Txt style={[text.small, { marginTop: 2, color: color.muted }]} numberOfLines={1}>
+            약 {h.min}분 · {h.er ? `응급실 ${h.er}` : '병상 정보 없음'} · 진료가능 {cc.available}/
+            {cc.total} · {label}
+          </Txt>
+          {data ? (
+            <Txt
+              style={{ marginTop: 2, fontSize: 11, color: h.stale ? color.warning : color.muted }}
+            >
+              {data}
+            </Txt>
+          ) : null}
+        </View>
+        {isWaiting ? (
+          <Pill tone="wait">대기</Pill>
+        ) : !h.er ? (
+          <Pill tone="neutral">병상 없음 · 전화</Pill>
+        ) : (
+          <Pill tone="call" icon={<PhoneCall size={12} color={color.accentDeep} />}>
+            전화 확인
+          </Pill>
+        )}
+      </Tile>
+    </Pressable>
+  );
+}
+
+/** 추천 0건 안내 (SFR-029): 한 단계 넓혀 다시 찾기, 40km 면 전화로 확인 */
+function EmptyGuide({
+  guide,
+  nextRadius,
+  fallback,
+  onWiden,
+}: {
+  guide: 'expand_radius' | 'call_nearby' | null;
+  nextRadius: number | undefined;
+  fallback: boolean;
+  onWiden: () => void;
+}) {
+  const canWiden = fallback && guide !== 'call_nearby' && !!nextRadius;
+  return (
+    <View style={{ gap: 10, padding: 14, borderRadius: radius.sm, backgroundColor: color.surface }}>
+      <Txt style={[text.body, { color: color.muted }]}>
+        {canWiden
+          ? `반경을 ${nextRadius}km로 넓혀 다시 찾을까요?`
+          : '추천할 병원이 없어요 · 가까운 병원에 전화로 확인하세요'}
+      </Txt>
+      {canWiden ? (
+        <BigButton variant="outline" size="sm" onPress={onWiden}>
+          넓혀서 찾기
+        </BigButton>
+      ) : null}
+    </View>
   );
 }

@@ -6,12 +6,19 @@
  */
 import * as SecureStore from 'expo-secure-store';
 import { createStore, useStore } from '../state/store';
+import { setManualLocation } from './location';
 import { emptyPatient, type Patient } from './patient';
 
 const KEY = 'savetime.patient';
 const KEEP_MS = 7 * 24 * 60 * 60_000;
 
-export const patientStore = createStore<{ patient: Patient }>({ patient: emptyPatient });
+export const patientStore = createStore<{ patient: Patient; radiusKm: number }>({
+  patient: emptyPatient,
+  /** 요청 반경 (SFR-012, 기본 20km). 이송마다 다시 20km 로 */
+  radiusKm: 20,
+});
+export const useRadius = () => useStore(patientStore).radiusKm;
+export const setRadius = (km: number) => patientStore.set({ radiusKm: km });
 export const usePatient = () => useStore(patientStore).patient;
 
 export async function loadPatient(at = Date.now()) {
@@ -38,6 +45,7 @@ export function setPatient(p: Patient) {
 
 /** 새 이송 시작: 모든 칸을 비운다 */
 export function resetPatient() {
-  patientStore.set({ patient: emptyPatient });
+  patientStore.set({ patient: emptyPatient, radiusKm: 20 });
+  setManualLocation(null); // 주소로 정한 위치도 이송마다 새로
   void SecureStore.deleteItemAsync(KEY).catch(() => undefined);
 }

@@ -157,16 +157,16 @@ test('요청 화면: 승인 칸 · 남은 시간 · 대기 병원', async () => 
   expect(screen.getByText('대기 1 · 거절 0')).toBeTruthy();
 });
 
-test('요청 화면: 상세에서 확정 → 한 번 더 묻고 확정', async () => {
+test('요청 화면: 승인 카드를 누르면 바로 확정을 묻는다 (승인 → 확정 2번, QUR-003)', async () => {
   apply(base(), 'ios-me');
   const confirm = jest.spyOn(actions, 'confirm').mockResolvedValue({ ok: true, value: undefined });
   const alert = jest.spyOn(Alert, 'alert');
   await render(<RequestScreen />);
-  await fireEvent.press(screen.getByRole('button', { name: '순천향대 천안병원 승인 · 자세히' }));
-  await fireEvent.press(screen.getByRole('button', { name: '이 병원으로 확정' }));
+  await fireEvent.press(screen.getByRole('button', { name: '순천향대 천안병원 승인 · 확정하기' }));
   expect(alert.mock.calls[0]![0]).toBe('순천향대 천안병원으로 확정할까요?');
-  const ok = alert.mock.calls[0]![2]!.find((b) => b.text === '확정')!;
-  ok.onPress!();
+  const buttons = alert.mock.calls[0]![2]!;
+  expect(buttons.map((b) => b.text)).toEqual(['취소', '자세히', '확정']);
+  buttons.find((b) => b.text === '확정')!.onPress!();
   expect(confirm).toHaveBeenCalledWith('101');
 });
 

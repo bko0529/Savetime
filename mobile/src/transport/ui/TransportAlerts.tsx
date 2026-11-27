@@ -7,7 +7,7 @@
 import { useRouter } from 'expo-router';
 import { AlertTriangle, MessageSquareText, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, Vibration, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../api/client';
 import { mergePatient } from '../../journal/form';
@@ -17,6 +17,7 @@ import { actions, type JournalDraft } from '../engine';
 import { hospitalAlerts, unacceptableText, useHospitalAlerts } from '../hospitalAlerts';
 import { emptyPatient } from '../patient';
 import { setPatient } from '../patientStore';
+import { notifyTeam } from '../notify';
 
 export function TransportAlerts() {
   const { memo, unacceptable } = useHospitalAlerts();
@@ -25,13 +26,18 @@ export function TransportAlerts() {
 
   useEffect(() => {
     if (!memo) return;
-    Vibration.vibrate([0, 200, 80, 200]);
+    void notifyTeam('info', `${memo.hospitalName} 추가 메모`, memo.memo ?? undefined);
     const t = setTimeout(() => hospitalAlerts.clearMemo(), 10_000);
     return () => clearTimeout(t);
   }, [memo]);
 
   useEffect(() => {
-    if (unacceptable) Vibration.vibrate([0, 400, 120, 400, 120, 400]);
+    if (unacceptable)
+      void notifyTeam(
+        'danger',
+        `${unacceptable.hospitalName} 수용 불가`,
+        unacceptableText(unacceptable.reason),
+      );
   }, [unacceptable]);
 
   // 직전 이송의 환자 정보를 서버 일지 초안(도착 후 10분 동안 팀원이 볼 수 있음)으로 다시 채운다.

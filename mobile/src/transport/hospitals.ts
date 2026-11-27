@@ -25,7 +25,24 @@ export type Hospital = {
   capCount?: { available: number; total: number };
   lat?: number;
   lng?: number;
+  /** 서버가 병상을 수집한 시각 = 화면의 '기준 HH:MM' (SFR-081) */
+  collectedAt?: string | null;
+  /** 수집한 지 10분이 지남 → '참고용 정보 · 기준 HH:MM' (SFR-081 ②) */
+  stale?: boolean | null;
 };
+
+/** 데이터 상태 문구 (SFR-081): 최신이면 기준 시각만, 10분 지났거나 오프라인이면 '참고용 정보 · 기준 HH:MM' */
+export function bedsLabel(h: Pick<Hospital, 'collectedAt' | 'stale' | 'bedsAt'>, offline = false) {
+  const t = h.collectedAt ? hhmmOf(h.collectedAt) : h.bedsAt;
+  if (!t) return '';
+  return h.stale || offline ? `참고용 정보 · 기준 ${t}` : `기준 ${t}`;
+}
+function hhmmOf(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 /** "3/12" → 3 (가용 병상 수). 병상 정보가 없으면 null (SFR-089) */
 export function bedAvail(bed?: string): number | null {

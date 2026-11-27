@@ -16,12 +16,16 @@ import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
 import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
-import { startTransportSync } from '../src/transport/engine';
+import { setTransportNotifier, startTransportSync } from '../src/transport/engine';
+import { notifyTeam } from '../src/transport/notify';
 import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
 import { TransportRouter } from '../src/transport/ui/TransportRouter';
 import { useStore } from '../src/state/store';
 import { color } from '../src/ui/theme';
+
+// 이송 알림(SFR-130): 진동 + 소리 + 알림 배너
+setTransportNotifier((kind, title, body) => void notifyTeam(kind, title, body));
 
 function Splash() {
   return (

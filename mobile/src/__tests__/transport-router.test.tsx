@@ -4,7 +4,13 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import PatientScreen from '../../app/patient';
-import { __resetEngineForTest, actions, apply, type ServerTransport } from '../transport/engine';
+import {
+  __resetEngineForTest,
+  __setLoadedForTest,
+  actions,
+  apply,
+  type ServerTransport,
+} from '../transport/engine';
 import { emptyPatient, REQUIRED_FIELDS, UNKNOWN } from '../transport/patient';
 import { patientStore } from '../transport/patientStore';
 import { TransportRouter } from '../transport/ui/TransportRouter';
@@ -58,6 +64,7 @@ beforeEach(() => {
   const full = { ...emptyPatient };
   REQUIRED_FIELDS.forEach((k) => ((full[k] as string) = UNKNOWN));
   patientStore.set({ patient: full });
+  __setLoadedForTest(); // 앱을 켜고 서버를 이미 읽은 상태
 });
 
 test('입력 화면에서 요청하면 요청 화면으로 바꿔 열고, 되돌아가기는 하지 않는다', async () => {

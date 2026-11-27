@@ -15,6 +15,7 @@ import {
   now,
   openRemain,
   useEngine,
+  type RejectReason,
   type Result,
 } from '../../src/transport/engine';
 import { capCount, RESPONSE_LIMIT_SEC } from '../../src/transport/hospitals';
@@ -23,8 +24,28 @@ import { callNumber } from '../../src/transport/links';
 import type { PhoneProceedReason } from '../../src/transport/types';
 import { HospitalDetail } from '../../src/transport/ui/HospitalDetail';
 import { ProgressStrip } from '../../src/transport/ui/ProgressStrip';
-import { BigButton, Notice, PhoneScreen, Pill, SectionTitle, Tile, Txt } from '../../src/ui/kit';
+import {
+  BigButton,
+  Field,
+  Notice,
+  PhoneScreen,
+  Pill,
+  SectionTitle,
+  Tile,
+  Txt,
+} from '../../src/ui/kit';
 import { color, font, radius, text } from '../../src/ui/theme';
+
+/** 병원 웹 거절과 같은 사유 목록 (SFR-044 · 119) */
+const REJECT_REASONS: { k: RejectReason; l: string }[] = [
+  { k: 'er_bed', l: '응급실 병상 부족' },
+  { k: 'or_room', l: '수술실 부족' },
+  { k: 'ward', l: '입원실 부족' },
+  { k: 'icu', l: '중환자실 부족' },
+  { k: 'no_specialist', l: '해당 전문의 부재' },
+  { k: 'equipment', l: '의료장비 고장' },
+  { k: 'etc', l: '기타' },
+];
 
 const PROCEED: { k: PhoneProceedReason; l: string }[] = [
   { k: 'no_answer', l: '전화 안 받음' },
@@ -39,6 +60,9 @@ export default function CallScreen() {
   const e = useEngine();
   const h = hospital(hospitalId);
   const [proceed, setProceed] = useState<'fail' | 'skip' | null>(null);
+  // 거절 사유 (SFR-044): 고르지 않고 넘어가도 된다. 기타면 20자
+  const [rejecting, setRejecting] = useState(false);
+  const [etcText, setEtcText] = useState('');
   const [detail, setDetail] = useState<string | null>(null);
 
   // 병원 상세(병상 3종·대표 전화·진료가능 항목)를 서버에서 읽는다 (SFR-007·033)
@@ -220,11 +244,56 @@ export default function CallScreen() {
         variant="danger"
         size="lg"
         style={{ marginTop: 12 }}
-        onPress={() => void run(actions.phoneRejected())}
+        onPress={() => setRejecting(true)}
         icon={<XCircle size={20} color={color.accentText} />}
       >
         거절 → 다음 병원
       </BigButton>
+      {rejecting ? (
+        <Tile style={{ marginTop: 8, padding: 14, gap: 10 }}>
+          <Txt style={{ fontFamily: font.bold, fontSize: 14 }}>거절 사유 (고르지 않아도 돼요)</Txt>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {REJECT_REASONS.map((r) => (
+              <Pressable
+                key={r.k}
+                onPress={() => {
+                  setRejecting(false);
+                  void run(actions.phoneRejected(r.k, etcText));
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`거절 사유 ${r.l}`}
+                style={{
+                  width: '48.5%',
+                  alignItems: 'center',
+                  paddingVertical: 12,
+                  borderRadius: radius.sm,
+                  borderWidth: 1,
+                  borderColor: color.border,
+                  backgroundColor: color.card,
+                }}
+              >
+                <Txt style={{ fontFamily: font.bold, fontSize: 14 }}>{r.l}</Txt>
+              </Pressable>
+            ))}
+          </View>
+          <Field
+            value={etcText}
+            onChangeText={(t) => setEtcText(t.slice(0, 20))}
+            placeholder="기타 사유 (20자, '기타'를 누르면 같이 보내요)"
+            accessibilityLabel="기타 거절 사유"
+          />
+          <BigButton
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              setRejecting(false);
+              void run(actions.phoneRejected());
+            }}
+          >
+            사유 없이 다음 병원으로
+          </BigButton>
+        </Tile>
+      ) : null}
       <Txt style={[text.caption, { marginTop: 12, color: color.muted }]}>
         출발하면 열려 있던 요청은 닫히고 병원 웹에 &quot;요청 종료&quot;가 떠요. 통화 중 승인이 오면
         진동으로 알려요.

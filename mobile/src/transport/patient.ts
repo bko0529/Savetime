@@ -62,6 +62,32 @@ export const REQUIRED_FIELDS: (keyof Patient)[] = [
 
 export const UNKNOWN = '확인 불가';
 
+/** 필수 칸 이름 ('맥박을 입력하세요' 안내용, SFR-107) */
+export const FIELD_LABEL: Partial<Record<keyof Patient, string>> = {
+  complaint: '주 증상',
+  sex: '성별',
+  age: '나이대',
+  consciousness: '의식 수준',
+  bp: '혈압',
+  pulse: '맥박',
+  resp: '호흡수',
+  spo2: '산소포화도',
+  painSite: '통증 부위',
+  painScore: '통증 정도',
+  onset: '증상 시작',
+  trauma: '외상',
+};
+
+/** '맥박을 입력하세요' 처럼 처음 빈 필수 칸 안내 (받침에 따라 을/를). 다 찼으면 null */
+export function missingMessage(p: Patient): string | null {
+  const k = REQUIRED_FIELDS.find((f) => !String(p[f] ?? '').trim());
+  if (!k) return null;
+  const name = FIELD_LABEL[k] ?? String(k);
+  const last = name.charCodeAt(name.length - 1);
+  const hasBatchim = last >= 0xac00 && last <= 0xd7a3 && (last - 0xac00) % 28 !== 0;
+  return `${name}${hasBatchim ? '을' : '를'} 입력하세요`;
+}
+
 export function filledCount(p: Patient) {
   return REQUIRED_FIELDS.filter((k) => String(p[k] ?? '').trim() !== '').length;
 }

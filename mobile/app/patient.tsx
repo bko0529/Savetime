@@ -18,10 +18,18 @@ import {
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { actions, previewTargets, useEngine } from '../src/transport/engine';
-import { START_RADIUS, type Grade } from '../src/transport/hospitals';
+import { RADIUS_STEPS, type Grade } from '../src/transport/hospitals';
+import { currentLocation, manualLocation } from '../src/transport/location';
+import { AddressSheet } from '../src/transport/ui/AddressSheet';
 import { vitalWarnings } from '../src/transport/labels';
-import { filledCount, REQUIRED_FIELDS, UNKNOWN, type Patient } from '../src/transport/patient';
-import { setPatient, usePatient } from '../src/transport/patientStore';
+import {
+  filledCount,
+  missingMessage,
+  REQUIRED_FIELDS,
+  UNKNOWN,
+  type Patient,
+} from '../src/transport/patient';
+import { setPatient, setRadius, usePatient, useRadius } from '../src/transport/patientStore';
 import { isActive } from '../src/transport/types';
 import {
   BigButton,
@@ -73,6 +81,11 @@ export default function PatientScreen() {
   const [step, setStep] = useState(1);
   const [sending, setSending] = useState(false);
   const [targets, setTargets] = useState<number | null>(null);
+  const radiusKm = useRadius();
+  // 위치를 못 잡으면 '위치 확인 불가 · 주소 입력' (SFR-009)
+  const [locOk, setLocOk] = useState<boolean | null>(null);
+  const [addrOpen, setAddrOpen] = useState(false);
+  const [manualLabel, setManualLabel] = useState<string | null>(manualLocation()?.label ?? null);
 
   const set = <K extends keyof Patient>(k: K, v: Patient[K]) => setPatient({ ...p, [k]: v });
   const count = filledCount(p);
@@ -82,15 +95,25 @@ export default function PatientScreen() {
   // 'n곳에 요청합니다': 서버가 지금 위치·등급으로 센다 (SFR-163)
   useEffect(() => {
     let alive = true;
-    void previewTargets(p.grade).then((n) => alive && setTargets(n));
+    void previewTargets(p.grade, radiusKm).then((n) => alive && setTargets(n));
     return () => {
       alive = false;
     };
-  }, [p.grade]);
+  }, [p.grade, radiusKm, manualLabel]);
+
+  useEffect(() => {
+    let alive = true;
+    void currentLocation().then((at) => alive && setLocOk(!!at));
+    return () => {
+      alive = false;
+    };
+  }, [manualLabel]);
 
   const send = async () => {
     setSending(true);
-    const r = active ? await actions.updateAssessment(p) : await actions.create(p.grade, p);
+    const r = active
+      ? await actions.updateAssessment(p)
+      : await actions.create(p.grade, p, radiusKm);
     setSending(false);
     if (!r.ok) return Alert.alert('보내지 못했어요', r.error);
     if (active) Alert.alert('변경 사항을 병원에 보냈어요', '병원 화면에 강조 표시돼요');
@@ -170,11 +193,75 @@ export default function PatientScreen() {
                 </BigButton>
               ) : null}
             </View>
+            {!active ? (
+              <View style={{ gap: 6 }}>
+                {/* 요청 반경 (SFR-012): '병원에 요청' 옆에서 바꾼다. 요청한 뒤에는 넓히기만 */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Txt style={{ fontFamily: font.bold, fontSize: 13, color: color.muted }}>
+                    반경
+                  </Txt>
+                  {RADIUS_STEPS.map((km) => (
+                    <Pressable
+                      key={km}
+                      onPress={() => setRadius(km)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`반경 ${km}km`}
+                      accessibilityState={{ selected: radiusKm === km }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: radiusKm === km ? color.primary : color.border,
+                        backgroundColor: radiusKm === km ? color.primary : color.card,
+                      }}
+                    >
+                      <Txt
+                        style={{
+                          fontFamily: font.bold,
+                          fontSize: 13,
+                          color: radiusKm === km ? color.primaryText : color.foreground,
+                        }}
+                      >
+                        {km}km
+                      </Txt>
+                    </Pressable>
+                  ))}
+                  <Txt style={{ flex: 1, textAlign: 'right', fontFamily: font.bold, fontSize: 13 }}>
+                    {targets ?? '-'}곳
+                  </Txt>
+                </View>
+                {locOk === false || manualLabel ? (
+                  <Pressable
+                    onPress={() => setAddrOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="위치 확인 불가 · 주소 입력"
+                  >
+                    <Txt
+                      style={{
+                        fontFamily: font.bold,
+                        fontSize: 13,
+                        color: manualLabel ? color.foreground : color.accentDeep,
+                      }}
+                    >
+                      {manualLabel
+                        ? `기준 위치: ${manualLabel} · 바꾸기`
+                        : '위치 확인 불가 · 주소 입력'}
+                    </Txt>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             <BigButton size="lg" disabled={!allDone} busy={sending} onPress={() => void send()}>
               {active ? '변경 사항 보내기' : '병원에 요청'}
             </BigButton>
-            <Txt style={[text.caption, { textAlign: 'center', color: color.muted }]}>
-              {FOOT_HINT[step - 1]}
+            <Txt
+              style={[
+                text.caption,
+                { textAlign: 'center', color: allDone ? color.muted : color.warning },
+              ]}
+            >
+              {allDone ? FOOT_HINT[step - 1] : missingMessage(p)}
             </Txt>
           </>
         }
@@ -351,7 +438,7 @@ export default function PatientScreen() {
                 }}
               >
                 <Txt style={text.strong}>
-                  {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}반경 {START_RADIUS}km 안{' '}
+                  {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}반경 {radiusKm}km 안{' '}
                   {targets ?? '-'}곳에 요청합니다
                 </Txt>
                 <Txt style={[text.caption, { marginTop: 4, color: color.muted }]}>
@@ -370,6 +457,15 @@ export default function PatientScreen() {
               &apos;확인 불가&apos;로 보내세요
             </Txt>
           </View>
+        ) : null}
+        {addrOpen ? (
+          <AddressSheet
+            onClose={() => setAddrOpen(false)}
+            onPicked={(label) => {
+              setAddrOpen(false);
+              setManualLabel(label);
+            }}
+          />
         ) : null}
       </PhoneScreen>
     </KeyboardAvoidingView>

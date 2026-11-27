@@ -22,7 +22,17 @@ import {
   type Hospital,
 } from './hospitals';
 import { uuid } from './ids';
-import { currentLocation, distanceM, FIXED_LOCATION, moveToward, type LatLng } from './location';
+import {
+  currentFix,
+  currentLocation,
+  distanceM,
+  FIXED_LOCATION,
+  isOutlier,
+  moveToward,
+  nearEntrance,
+  type Fix,
+  type LatLng,
+} from './location';
 import { toAssessment, type Patient } from './patient';
 import {
   isActive,
@@ -37,6 +47,7 @@ import {
 } from './types';
 import { retryOnVersionConflict } from './versionRetry';
 import { hospitalAlerts } from './hospitalAlerts';
+import type { AlertKind } from './notify';
 
 export type Hreq = {
   id: number;
@@ -99,6 +110,17 @@ export type EngineState = {
   nearby: string[];
   /** 병원 정보 캐시가 바뀔 때마다 늘어남 (화면 다시 그리기용) */
   hospitalsRev: number;
+  /** 추천 카드 상위 5곳 (SFR-027), 병상 정보 없는 병원 최대 3곳 (전화로 확인), 반경 안 전체 (지도용) */
+  noBed: string[];
+  mapIds: string[];
+  /** 추천 후보 0건 안내 (SFR-029): 반경 넓히기 / 전화로 확인 */
+  emptyGuide: 'expand_radius' | 'call_nearby' | null;
+  /** 추천 목록을 불러오는 중 (SFR-095) */
+  nearbyLoading: boolean;
+  /** 경로 안내 담당 폰이 입구 근처(거리−오차 ≤ 30m, 시속 10km 이하)에 있음 (SFR-038) */
+  nearEntrance: boolean;
+  /** 앱을 켠 뒤 서버에서 진행 중 이송을 한 번 읽었음 (SFR-107·133 첫 화면 정하기) */
+  loaded: boolean;
 };
 
 const initial = (): EngineState => ({
@@ -126,6 +148,12 @@ const initial = (): EngineState => ({
   lastSentSeq: 0,
   nearby: [],
   hospitalsRev: 0,
+  noBed: [],
+  mapIds: [],
+  emptyGuide: null,
+  nearbyLoading: false,
+  nearEntrance: false,
+  loaded: false,
 });
 
 let s: EngineState = initial();
@@ -203,6 +231,8 @@ type Card = {
   capabilityCount: { available: number; total: number };
   erPhone: string | null;
   grade: number;
+  collectedAt?: string | null;
+  stale?: boolean | null;
 };
 
 function fromCard(c: Card) {
@@ -221,6 +251,8 @@ function fromCard(c: Card) {
     capCount: c.capabilityCount,
     lat: c.lat,
     lng: c.lng,
+    collectedAt: c.collectedAt ?? null,
+    stale: c.stale ?? null,
   });
 }
 
@@ -268,25 +300,46 @@ export async function loadHospitalDetail(id: string) {
   }
 }
 
-async function loadNearby() {
+/**
+ * 추천 목록 (SFR-027 · 098 · 029): 상위 5곳 카드 + 병상 정보 없는 병원(전화로 확인) + 반경 안 전체(지도).
+ * 1초 넘게 걸리면 화면이 로딩 표시를 한다 (SFR-095)
+ */
+export async function loadNearby() {
   if (!s.transportId) return;
+  s.nearbyLoading = true;
+  emit();
   try {
-    const r = await api<{ radiusKm: number; map: Card[] }>(
-      'GET',
-      `/transports/${s.transportId}/recommendations`,
-    );
-    r.map.forEach(fromCard);
-    s.nearby = [...r.map].sort((a, b) => a.distanceKm - b.distanceKm).map((c) => String(c.id));
+    const r = await api<{
+      radiusKm: number;
+      items: Card[];
+      map: Card[];
+      noBedInfo?: Card[];
+      emptyGuide?: 'expand_radius' | 'call_nearby' | null;
+    }>('GET', `/transports/${s.transportId}/recommendations`);
+    [...r.map, ...r.items, ...(r.noBedInfo ?? [])].forEach(fromCard);
+    s.nearby = r.items.map((c) => String(c.id));
+    s.noBed = (r.noBedInfo ?? []).map((c) => String(c.id));
+    s.mapIds = [...r.map].sort((a, b) => a.distanceKm - b.distanceKm).map((c) => String(c.id));
+    s.emptyGuide = r.emptyGuide ?? null;
     s.hospitalsRev += 1;
-    emit();
   } catch {
-    /* 위치 없는 건 등은 목록 없이 */
+    /* 통신 오류: 지난 목록 그대로 (SFR-008) */
+  } finally {
+    s.nearbyLoading = false;
+    emit();
   }
 }
 
-/** 거리순 병원 목록 (지금 반경 안) */
-export const nearbyHospitals = () =>
-  s.nearby.map((id) => hospital(id)).filter((h) => h.km <= s.radius);
+/** 추천 카드 상위 5곳 (서버가 등급·거리·빈 병상으로 고름) */
+export const nearbyHospitals = () => s.nearby.map((id) => hospital(id));
+/** 병상 정보가 전혀 없는 병원 (전화로 확인) */
+export const noBedHospitals = () => s.noBed.map((id) => hospital(id));
+
+/** 새로고침 (SFR-006): 이송 건과 추천 목록을 바로 다시 읽는다 */
+export async function refreshAll() {
+  await refresh();
+  await loadNearby();
+}
 
 // ---------------- 서버 이송 건 → 화면 상태 ----------------
 type ServerRequest = {
@@ -469,10 +522,17 @@ async function loadOnce() {
 
 /** 근무 시작 뒤 · 앱을 다시 켰을 때: 팀에 진행 중 이송이 있으면 이어서 보여 준다 (SFR-133) */
 export async function loadCurrent() {
-  if (s.transportId && isActive(s.status)) return refresh();
-  s = { ...initial(), hospitalsRev: s.hospitalsRev };
-  await refresh();
-  if (s.transportId) void loadNearby();
+  if (s.transportId && isActive(s.status)) {
+    await refresh();
+  } else {
+    s = { ...initial(), hospitalsRev: s.hospitalsRev };
+    await refresh();
+    if (s.transportId) void loadNearby();
+  }
+  if (!s.loaded) {
+    s.loaded = true;
+    emit();
+  }
 }
 
 // ---------------- 실시간: 팀 방 이벤트 → 다시 읽기 (이벤트에는 ID 만 온다, 규칙 5) ----------------
@@ -500,6 +560,16 @@ const RELOAD: AppEventName[] = [
 const DEBOUNCE_MS = 120;
 
 /**
+ * 알림 (SFR-130) 보내는 함수. 앱이 켜질 때 notify.ts 의 notifyTeam 을 넣는다 (테스트에서는 가짜로 바꿈).
+ * 팀원 폰 모두 같은 이벤트를 받으므로 각자 울린다.
+ */
+type Notifier = (kind: AlertKind, title: string, body?: string) => void;
+let notifier: Notifier = () => {};
+export function setTransportNotifier(fn: Notifier) {
+  notifier = fn;
+}
+
+/**
  * 이송 이벤트를 듣기 시작한다 (근무 중일 때). 돌려준 함수를 부르면 그만 듣는다.
  * 이벤트가 몰려 오면(승인 3곳이 거의 동시에 등) 0.12초 모았다가 한 번만 다시 읽는다.
  * 남은 시간 표시를 위해 0.5초마다 다시 그리고, 진행 중이면 15초마다 서버 상태도 다시 맞춘다 (이벤트를 놓쳐도)
@@ -520,6 +590,35 @@ export function startTransportSync() {
         });
       }, DEBOUNCE_MS);
     }),
+  );
+  // SFR-130: 첫 승인 · 연결 복구 승인 · 전부 거절/2분 만료(예비 추천) · 승인 해제 1분 전 · 해제 · 승인 취소
+  offs.push(
+    onEvent('request.approved', (ev) => {
+      if (!ev.data.firstApproval && !ev.data.afterReconnect) return;
+      const r = ev.data.request;
+      notifier(
+        'approval',
+        `${r?.hospitalName ?? '병원'} 승인`,
+        r?.etaMin ? `약 ${r.etaMin}분` : undefined,
+      );
+    }),
+    onEvent('transport.status', (ev) => {
+      if (ev.data.status !== 'fallback') return;
+      notifier('warning', '승인한 병원이 없어요', '가까운 병원에 전화로 확인하세요');
+    }),
+    onEvent('approval.expiring', () =>
+      notifier('warning', '1분 뒤 승인이 해제돼요', '병원을 골라 주세요'),
+    ),
+    onEvent('approval.expired', () =>
+      notifier('warning', '승인이 해제됐어요', '요청 후 5분이 지났어요'),
+    ),
+    onEvent('request.cancelled', (ev) =>
+      notifier(
+        ev.data.wasConfirmed ? 'danger' : 'warning',
+        `${ev.data.hospitalName ?? '병원'} 승인 취소`,
+        ev.data.reason ?? undefined,
+      ),
+    ),
   );
   offs.push(
     // SFR-140: 확정 병원 추가 메모. 이벤트에는 메모 글이 없어(규칙 5) 바로 다시 읽고 경보를 띄운다
@@ -565,17 +664,23 @@ export function startTransportSync() {
 }
 
 /** 요청 전 미리보기: 'n곳에 요청합니다' (SFR-163). 못 세면 null */
-export async function previewTargets(grade: Grade): Promise<number | null> {
+export async function previewTargets(
+  grade: Grade,
+  radiusKm = START_RADIUS,
+): Promise<number | null> {
   const at = await currentLocation();
   if (!at) return null;
   try {
-    const q = `lat=${at.lat}&lng=${at.lng}&radiusKm=${START_RADIUS}${grade ? `&grade=${GRADE_NO[grade]}` : ''}`;
+    const q = `lat=${at.lat}&lng=${at.lng}&radiusKm=${radiusKm}${grade ? `&grade=${GRADE_NO[grade]}` : ''}`;
     const r = await api<{ count: number }>('GET', `/request-targets/preview?${q}`);
     return r.count;
   } catch {
     return null;
   }
 }
+
+export type RejectReason =
+  'er_bed' | 'or_room' | 'ward' | 'icu' | 'no_specialist' | 'equipment' | 'etc';
 
 // SFR-157·158: 수용 불가 뒤 '다시 요청하기'로 만드는 새 이송은 직전 건 ID 를 같이 보낸다.
 // 그러면 서버가 직전 건에서 수용 불가였던 병원을 이번 요청에서 뺀다 (10분 안, 같은 팀만)
@@ -613,7 +718,12 @@ const tid = () => {
   return s.transportId;
 };
 
-async function phoneResult(body: { result: string; reason?: string }) {
+async function phoneResult(body: {
+  result: string;
+  reason?: string;
+  rejectReason?: RejectReason;
+  reasonText?: string;
+}) {
   return guard(async () => {
     const hospitalId = s.phoneTarget;
     if (!hospitalId) throw new ApiError(409, 'NO_PHONE_TARGET', '전화 확인 중인 병원이 없어요');
@@ -626,7 +736,7 @@ async function phoneResult(body: { result: string; reason?: string }) {
 
 export const actions = {
   /** 이송 요청 (SFR-004·163). 환자 정보는 평가 항목만 (이름·연락처 없음, SER-012) */
-  async create(grade: Grade, patient: Patient) {
+  async create(grade: Grade, patient: Patient, radiusKm = START_RADIUS) {
     return guard(async () => {
       const location = await currentLocation();
       if (!location)
@@ -636,7 +746,7 @@ export const actions = {
       const t = await api<ServerTransport>('POST', '/transports', {
         body: {
           id: uuid(),
-          radiusKm: START_RADIUS,
+          radiusKm,
           location,
           locationConsent: true,
           assessment: toAssessment(patient),
@@ -659,6 +769,16 @@ export const actions = {
         headers: { 'Idempotency-Key': uuid() },
       });
       await refresh();
+    });
+  },
+  /** 예비 추천 반경만 한 단계 넓혀 다시 찾기 (SFR-029, 요청은 안 보냄) */
+  async widenRecommend() {
+    return guard(async () => {
+      const next = RADIUS_STEPS[RADIUS_STEPS.indexOf(s.radius) + 1];
+      if (!next) throw new ApiError(409, 'MAX_RADIUS', '최대 반경(40km)이에요');
+      await api('PUT', `/transports/${tid()}/fallback-radius`, { body: { radiusKm: next } });
+      await refresh();
+      await loadNearby();
     });
   },
   async expand() {
@@ -687,9 +807,21 @@ export const actions = {
   phoneProceed(reason: PhoneProceedReason, kind: 'no_answer' | 'skipped' = 'no_answer') {
     return phoneResult({ result: kind, reason });
   },
-  /** 전화 거절: 서버가 다음 후보로 넘기거나, 없으면 요청 화면·예비 추천으로 */
-  async phoneRejected(): Promise<Result<string | null>> {
-    const r = await phoneResult({ result: 'rejected' });
+  /**
+   * 전화 거절 (SFR-044 · 074): 사유는 고르지 않아도 된다. 기타면 글 20자.
+   * 서버가 다음 후보로 넘기거나, 없으면 요청 화면·예비 추천으로
+   */
+  async phoneRejected(
+    rejectReason?: RejectReason,
+    reasonText?: string,
+  ): Promise<Result<string | null>> {
+    const r = await phoneResult({
+      result: 'rejected',
+      ...(rejectReason ? { rejectReason } : {}),
+      ...(rejectReason === 'etc' && reasonText?.trim()
+        ? { reasonText: reasonText.trim().slice(0, 20) }
+        : {}),
+    });
     return r.ok ? { ok: true, value: s.phoneTarget } : r;
   },
   phoneDismiss() {
@@ -787,6 +919,7 @@ export function latestReq(id: string) {
 // 시연(고정 위치)에서는 병원 입구 쪽으로 시속 약 40km 로 움직이는 것처럼 흉내 내고, 남은 분을 1분마다 같이 보낸다.
 const SPEED_MPS = 11;
 const STEP_SEC = 5;
+let lastFix: Fix | null = null;
 let drive: {
   timer: ReturnType<typeof setInterval>;
   at: LatLng;
@@ -798,7 +931,9 @@ let claiming = false;
 function stopDrive() {
   if (drive) clearInterval(drive.timer);
   drive = null;
+  lastFix = null;
   s.remainingM = null;
+  s.nearEntrance = false;
 }
 
 const iAmDriver = () => {
@@ -856,10 +991,23 @@ async function startDrive(target: LatLng) {
 async function stepDrive() {
   const d = drive;
   if (!d || !s.transportId) return;
-  if (FIXED_LOCATION) d.at = moveToward(d.at, d.target, SPEED_MPS * STEP_SEC);
-  else d.at = (await currentLocation(3000)) ?? d.at;
+  let fix: Fix | null;
+  if (FIXED_LOCATION) {
+    // 시연: 입구 쪽으로 시속 약 40km 로 움직이다가 도착하면 멈춘 것으로
+    const at = moveToward(d.at, d.target, SPEED_MPS * STEP_SEC);
+    const arrived = distanceM(at, d.target) < 1;
+    fix = { ...at, accuracyM: 5, speedKmh: arrived ? 0 : SPEED_MPS * 3.6, at: now() };
+  } else {
+    fix = await currentFix(3000);
+  }
+  if (fix) d.at = { lat: fix.lat, lng: fix.lng };
   const left = distanceM(d.at, d.target);
   s.remainingM = Math.round(left);
+  // 도착 버튼 (SFR-038): 이상치 좌표(SFR-040)는 판정에 쓰지 않는다
+  if (fix && !isOutlier(lastFix, fix)) {
+    s.nearEntrance = nearEntrance(left, fix.accuracyM, fix.speedKmh);
+    lastFix = fix;
+  }
   const etaMin = Math.ceil(left / SPEED_MPS / 60);
   emit();
   // 남은 분은 1분에 한 번만 실어 보낸다 (그 사이는 서버가 지난 시간을 뺀다)
@@ -873,7 +1021,7 @@ async function stepDrive() {
           {
             lat: d.at.lat,
             lng: d.at.lng,
-            speedKmh: left > 5 ? SPEED_MPS * 3.6 : 0,
+            speedKmh: fix?.speedKmh ?? 0,
             recordedAt: new Date(now()).toISOString(),
           },
         ],
@@ -897,6 +1045,12 @@ export async function loadJournalDraft(): Promise<JournalDraft | null> {
   } catch {
     return null;
   }
+}
+
+/** 테스트용: 앱을 켜고 서버를 한 번 읽은 것으로 */
+export function __setLoadedForTest() {
+  s.loaded = true;
+  emit();
 }
 
 /** 테스트용: 처음 상태로 */

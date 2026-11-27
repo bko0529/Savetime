@@ -23,7 +23,6 @@ const DEST: { k: DestChangeReason; l: string }[] = [
   { k: 'hospital', l: '병원 사정' },
   { k: 'etc', l: '기타' },
 ];
-const NEAR_M = 200;
 
 export default function TransportScreen() {
   const e = useEngine();
@@ -52,7 +51,8 @@ export default function TransportScreen() {
   }
   const req = latestReq(h.id);
   const left = e.etaMin ?? h.min;
-  const near = manualNear || e.arriveRequested || (e.remainingM !== null && e.remainingM <= NEAR_M);
+  // 도착 처리 (SFR-038 · 080): 담당 폰이 입구 30m 안에서 멈추면 저절로 켜지고, 병원 도착 확인이나 '도착했어요'로도 켠다
+  const near = manualNear || e.arriveRequested || e.nearEntrance;
   const go = near ? 1 : Math.min(1, Math.max(0, 1 - left / Math.max(h.min, 1)));
   const erPhone = e.confirmed?.erPhone ?? h.erPhone;
   const entrance = e.confirmed?.entrance ?? (h.lat && h.lng ? { lat: h.lat, lng: h.lng } : null);
@@ -92,7 +92,7 @@ export default function TransportScreen() {
             </BigButton>
           ) : (
             <BigButton variant="outline" onPress={() => setManualNear(true)}>
-              {`도착했어요 (입구 ${NEAR_M}m 안에서 켜져요)`}
+              도착했어요 (입구 근처에서는 저절로 켜져요)
             </BigButton>
           )}
           <BigButton variant="outline" onPress={cancel}>
