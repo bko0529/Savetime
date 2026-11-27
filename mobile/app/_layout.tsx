@@ -16,8 +16,10 @@ import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
 import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
-import { setTransportNotifier, startTransportSync } from '../src/transport/engine';
+import { setRouteOpener, setTransportNotifier, startTransportSync } from '../src/transport/engine';
+import { openRoute } from '../src/transport/links';
 import { notifyTeam } from '../src/transport/notify';
+import { startDraftSync } from '../src/transport/teamDraft';
 import { NetBanner } from '../src/offline/NetBanner';
 import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
@@ -27,6 +29,8 @@ import { color } from '../src/ui/theme';
 
 // 이송 알림(SFR-130): 진동 + 소리 + 알림 배너
 setTransportNotifier((kind, title, body) => void notifyTeam(kind, title, body));
+// 경로 안내 담당 폰은 병원이 정해지면 길 안내를 저절로 연다 (SFR-132, 앱 안 내비 SDK 는 9단계)
+setRouteOpener((to, name) => void openRoute(to, name));
 
 function Splash() {
   return (
@@ -65,7 +69,16 @@ function Gate() {
 
   // 근무 중이면 팀의 이송 건을 서버와 맞춘다 (이벤트 받기 · 진행 중 이송 이어서 보기, SFR-133)
   const onDuty = state.status === 'signedIn' && duty.team === 'joined' && duty.started;
-  useEffect(() => (onDuty ? startTransportSync() : undefined), [onDuty]);
+  useEffect(() => {
+    if (!onDuty) return;
+    const stopTransport = startTransportSync();
+    // 팀원 간 환자 정보 공동 입력 (SFR-114)
+    const stopDraft = startDraftSync();
+    return () => {
+      stopTransport();
+      stopDraft();
+    };
+  }, [onDuty]);
 
   const input = { appVersion: APP_VERSION, minAppVersion, consent, permissions, auth: state, duty };
   const target = gateTarget(input);

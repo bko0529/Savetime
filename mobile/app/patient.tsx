@@ -23,13 +23,21 @@ import { currentLocation, manualLocation } from '../src/transport/location';
 import { AddressSheet } from '../src/transport/ui/AddressSheet';
 import { vitalWarnings } from '../src/transport/labels';
 import {
+  emptyPatient,
   filledCount,
   missingMessage,
   REQUIRED_FIELDS,
   UNKNOWN,
   type Patient,
 } from '../src/transport/patient';
-import { setPatient, setRadius, usePatient, useRadius } from '../src/transport/patientStore';
+import { setRadius, usePatient, useRadius } from '../src/transport/patientStore';
+import {
+  clearPrefill,
+  draftStore,
+  editPatient,
+  useDraft,
+  watchDriverLock,
+} from '../src/transport/teamDraft';
 import { isActive } from '../src/transport/types';
 import {
   BigButton,
@@ -87,7 +95,17 @@ export default function PatientScreen() {
   const [addrOpen, setAddrOpen] = useState(false);
   const [manualLabel, setManualLabel] = useState<string | null>(manualLocation()?.label ?? null);
 
-  const set = <K extends keyof Patient>(k: K, v: Patient[K]) => setPatient({ ...p, [k]: v });
+  // 입력은 팀원과 함께 (SFR-114): 바뀐 칸만 서버로, 팀원이 고친 칸은 내 화면에 들어온다
+  const set = <K extends keyof Patient>(k: K, v: Patient[K]) => editPatient({ ...p, [k]: v });
+  const draft = useDraft();
+  // 운전 대원이면 주행 중 입력 잠금 (SFR-115)
+  useEffect(() => watchDriverLock(), []);
+  // 팀원 입력 안내는 5초 뒤 사라진다
+  useEffect(() => {
+    if (!draft.notice) return;
+    const t = setTimeout(() => draftStore.set({ notice: null }), 5000);
+    return () => clearTimeout(t);
+  }, [draft.notice]);
   const count = filledCount(p);
   const allDone = count === REQUIRED_FIELDS.length;
   const warnings = vitalWarnings(p);
@@ -132,7 +150,7 @@ export default function PatientScreen() {
     REQUIRED_FIELDS.forEach((k) => {
       if (!String(next[k]).trim()) (next[k] as string) = UNKNOWN;
     });
-    setPatient(next);
+    editPatient(next);
   };
 
   const field = (k: keyof Patient, label: string, ph: string, unit?: string) => (
@@ -300,160 +318,188 @@ export default function PatientScreen() {
         >
           {STEP_HINT[step - 1]}
         </Txt>
-
-        {step === 1 ? (
-          <>
-            <SectionTitle
-              first
-              hint="고른 등급 이상 병원에만 요청해요. 안 고르면 모든 병원에 요청해요."
-            >
-              병원 등급 (선택)
-            </SectionTitle>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {GRADES.map(({ g, sub, icon: Icon }) => {
-                const on = p.grade === g;
-                return (
-                  <Pressable
-                    key={g}
-                    onPress={() => set('grade', on ? null : g)}
-                    accessibilityRole="button"
-                    accessibilityLabel={g}
-                    accessibilityState={{ selected: on }}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      gap: 4,
-                      paddingVertical: 14,
-                      borderRadius: radius.md,
-                      borderWidth: 2,
-                      borderColor: on ? color.accent : color.border,
-                      backgroundColor: on ? color.accentSoft : color.card,
-                    }}
-                  >
-                    <Icon size={20} color={on ? color.accentDeep : color.muted} />
-                    <Txt
-                      style={{
-                        fontFamily: font.extrabold,
-                        fontSize: 13,
-                        color: on ? color.accentDeep : color.foreground,
-                      }}
-                    >
-                      {g}
-                    </Txt>
-                    <Txt style={{ fontSize: 11, color: color.muted }}>{sub}</Txt>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <SectionTitle>주 증상 (필수)</SectionTitle>
-            {field('complaint', '직접 입력하세요', '예: 갑작스러운 극심한 두통, 의식 저하')}
-
-            <View style={{ marginTop: 16 }}>
-              <Label>성별</Label>
-              <Chips
-                value={p.sex as '남'}
-                options={['남', '여', UNKNOWN] as const}
-                onChange={(v) => set('sex', v)}
-              />
-            </View>
-            <View style={{ marginTop: 16 }}>
-              <Label>나이대</Label>
-              <Chips
-                value={p.age as (typeof AGES)[number]}
-                options={[...AGES, UNKNOWN] as const}
-                onChange={(v) => set('age', v)}
-              />
-            </View>
-          </>
+        {draft.locked ? (
+          <View style={{ marginBottom: 16 }}>
+            <Notice tone="warn">
+              주행 중에는 팀원이 입력해요 · 차가 서면 다시 입력할 수 있어요
+            </Notice>
+          </View>
         ) : null}
-
-        {step === 2 ? (
-          <>
-            <SectionTitle first>의식 수준</SectionTitle>
-            <Chips
-              value={p.consciousness as (typeof CONSC)[number]}
-              options={[...CONSC, UNKNOWN] as const}
-              onChange={(v) => set('consciousness', v)}
-            />
-            <View style={{ marginTop: 20, gap: 16 }}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {field('bp', '혈압', '160/95', 'mmHg')}
-                {field('pulse', '맥박', '88', 'bpm')}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {field('resp', '호흡수', '20', '/min')}
-                {field('spo2', '산소포화도', '89', '%')}
-              </View>
-            </View>
-            {warnings.length > 0 ? (
-              <View style={{ marginTop: 20 }}>
-                <Notice tone="warn">
-                  {warnings.join(' · ')} · 정상 범위 밖이라 병원 웹에 빨간색으로 보여요
-                </Notice>
-              </View>
-            ) : null}
-          </>
-        ) : null}
-
-        {step === 3 ? (
-          <>
-            <View style={{ gap: 16 }}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {field('painSite', '통증 부위', '머리')}
-                {field('painScore', '통증 정도', '8', '/10')}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {field('onset', '증상 시작', '30분 전')}
-                {field('trauma', '외상', '없음')}
-              </View>
-              {field('history', '과거력 (선택)', '고혈압, 당뇨')}
-            </View>
-
-            <SectionTitle hint="몰라도 요청할 수 있어요">선택 항목</SectionTitle>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {field('temp', '체온', '36.5', '℃')}
-              {field('glucose', '혈당', '120', 'mg/dL')}
-            </View>
-            <View style={{ marginTop: 12 }}>
-              <Label>KTAS</Label>
-              <Chips
-                value={p.ktas as (typeof KTAS)[number]}
-                options={KTAS}
-                onChange={(v) => set('ktas', p.ktas === v ? '' : v)}
-              />
-            </View>
+        {draft.prefilled && !active ? (
+          <View style={{ marginBottom: 16, gap: 8 }}>
+            <Notice tone="info">직전 환자 정보로 채워 뒀어요 (10분)</Notice>
             <BigButton
               variant="outline"
-              style={{ marginTop: 16 }}
-              onPress={fillUnknown}
-              icon={<UserCheck size={16} color={color.foreground} />}
+              size="sm"
+              onPress={() => void clearPrefill().then(() => editPatient({ ...emptyPatient }))}
             >
-              나머지 확인 불가로 보내기
+              직전 환자 정보 지우기
             </BigButton>
-            {!active ? (
-              <View
-                style={{
-                  marginTop: 20,
-                  padding: 14,
-                  borderRadius: radius.md,
-                  borderWidth: 1,
-                  borderColor: color.border,
-                  backgroundColor: color.surface,
-                }}
-              >
-                <Txt style={text.strong}>
-                  {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}반경 {radiusKm}km 안{' '}
-                  {targets ?? '-'}곳에 요청합니다
-                </Txt>
-                <Txt style={[text.caption, { marginTop: 4, color: color.muted }]}>
-                  등급 바꾸기는 1단계에서
-                </Txt>
-              </View>
-            ) : null}
-          </>
+          </View>
         ) : null}
+        {draft.notice && !draft.locked ? (
+          <View style={{ marginBottom: 16 }}>
+            <Notice tone="ok">{draft.notice}</Notice>
+          </View>
+        ) : null}
+        {/* 주행 중 잠금이면 보기만 (SFR-115) */}
+        <View
+          pointerEvents={draft.locked ? 'none' : 'auto'}
+          style={{ opacity: draft.locked ? 0.5 : 1 }}
+        >
+          {step === 1 ? (
+            <>
+              <SectionTitle
+                first
+                hint="고른 등급 이상 병원에만 요청해요. 안 고르면 모든 병원에 요청해요."
+              >
+                병원 등급 (선택)
+              </SectionTitle>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {GRADES.map(({ g, sub, icon: Icon }) => {
+                  const on = p.grade === g;
+                  return (
+                    <Pressable
+                      key={g}
+                      onPress={() => set('grade', on ? null : g)}
+                      accessibilityRole="button"
+                      accessibilityLabel={g}
+                      accessibilityState={{ selected: on }}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 14,
+                        borderRadius: radius.md,
+                        borderWidth: 2,
+                        borderColor: on ? color.accent : color.border,
+                        backgroundColor: on ? color.accentSoft : color.card,
+                      }}
+                    >
+                      <Icon size={20} color={on ? color.accentDeep : color.muted} />
+                      <Txt
+                        style={{
+                          fontFamily: font.extrabold,
+                          fontSize: 13,
+                          color: on ? color.accentDeep : color.foreground,
+                        }}
+                      >
+                        {g}
+                      </Txt>
+                      <Txt style={{ fontSize: 11, color: color.muted }}>{sub}</Txt>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
+              <SectionTitle>주 증상 (필수)</SectionTitle>
+              {field('complaint', '직접 입력하세요', '예: 갑작스러운 극심한 두통, 의식 저하')}
+
+              <View style={{ marginTop: 16 }}>
+                <Label>성별</Label>
+                <Chips
+                  value={p.sex as '남'}
+                  options={['남', '여', UNKNOWN] as const}
+                  onChange={(v) => set('sex', v)}
+                />
+              </View>
+              <View style={{ marginTop: 16 }}>
+                <Label>나이대</Label>
+                <Chips
+                  value={p.age as (typeof AGES)[number]}
+                  options={[...AGES, UNKNOWN] as const}
+                  onChange={(v) => set('age', v)}
+                />
+              </View>
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <SectionTitle first>의식 수준</SectionTitle>
+              <Chips
+                value={p.consciousness as (typeof CONSC)[number]}
+                options={[...CONSC, UNKNOWN] as const}
+                onChange={(v) => set('consciousness', v)}
+              />
+              <View style={{ marginTop: 20, gap: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {field('bp', '혈압', '160/95', 'mmHg')}
+                  {field('pulse', '맥박', '88', 'bpm')}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {field('resp', '호흡수', '20', '/min')}
+                  {field('spo2', '산소포화도', '89', '%')}
+                </View>
+              </View>
+              {warnings.length > 0 ? (
+                <View style={{ marginTop: 20 }}>
+                  <Notice tone="warn">
+                    {warnings.join(' · ')} · 정상 범위 밖이라 병원 웹에 빨간색으로 보여요
+                  </Notice>
+                </View>
+              ) : null}
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <View style={{ gap: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {field('painSite', '통증 부위', '머리')}
+                  {field('painScore', '통증 정도', '8', '/10')}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {field('onset', '증상 시작', '30분 전')}
+                  {field('trauma', '외상', '없음')}
+                </View>
+                {field('history', '과거력 (선택)', '고혈압, 당뇨')}
+              </View>
+
+              <SectionTitle hint="몰라도 요청할 수 있어요">선택 항목</SectionTitle>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {field('temp', '체온', '36.5', '℃')}
+                {field('glucose', '혈당', '120', 'mg/dL')}
+              </View>
+              <View style={{ marginTop: 12 }}>
+                <Label>KTAS</Label>
+                <Chips
+                  value={p.ktas as (typeof KTAS)[number]}
+                  options={KTAS}
+                  onChange={(v) => set('ktas', p.ktas === v ? '' : v)}
+                />
+              </View>
+              <BigButton
+                variant="outline"
+                style={{ marginTop: 16 }}
+                onPress={fillUnknown}
+                icon={<UserCheck size={16} color={color.foreground} />}
+              >
+                나머지 확인 불가로 보내기
+              </BigButton>
+              {!active ? (
+                <View
+                  style={{
+                    marginTop: 20,
+                    padding: 14,
+                    borderRadius: radius.md,
+                    borderWidth: 1,
+                    borderColor: color.border,
+                    backgroundColor: color.surface,
+                  }}
+                >
+                  <Txt style={text.strong}>
+                    {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}반경 {radiusKm}km 안{' '}
+                    {targets ?? '-'}곳에 요청합니다
+                  </Txt>
+                  <Txt style={[text.caption, { marginTop: 4, color: color.muted }]}>
+                    등급 바꾸기는 1단계에서
+                  </Txt>
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </View>
         {!allDone && step === 3 ? (
           <View style={{ marginTop: 16, flexDirection: 'row', gap: 6 }}>
             <AlertTriangle size={14} color={color.warning} style={{ marginTop: 2 }} />

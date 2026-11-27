@@ -910,6 +910,7 @@ async function phoneResult(body: {
   return guard(async () => {
     const hospitalId = s.phoneTarget;
     if (!hospitalId) throw new ApiError(409, 'NO_PHONE_TARGET', '전화 확인 중인 병원이 없어요');
+    if (body.result !== 'rejected' && body.result !== 'dismissed') pickedByMe = tid();
     try {
       await api('POST', `/transports/${tid()}/phone-checks`, {
         body: { hospitalId: Number(hospitalId), version: s.version, ...body },
@@ -955,6 +956,7 @@ export const actions = {
     return guard(async () => {
       const r = s.hreqs.find((h) => h.hospitalId === hospitalId && h.status === 'approved');
       if (!r) throw new ApiError(409, 'REQUEST_NOT_APPROVED', '승인 상태가 아니에요');
+      pickedByMe = tid();
       await api('POST', `/transports/${tid()}/confirm`, {
         body: { hospitalRequestId: r.id, version: s.version },
         headers: { 'Idempotency-Key': uuid() },
@@ -1151,32 +1153,78 @@ const iAmDriver = () => {
   const t = teamStore.get().team;
   return t !== 'loading' && !!t?.members?.some((m) => m.isMe && m.role === 'driver');
 };
+const teamHasDriver = () => {
+  const t = teamStore.get().team;
+  return t !== 'loading' && !!t?.members?.some((m) => m.role === 'driver');
+};
+
+/**
+ * SFR-132: 병원을 고른 폰(확정·전화 수용)을 기억한다. 팀에 운전 대원이 없거나
+ * 운전 폰이 10초 안에 응답하지 않으면 이 폰이 경로 안내를 맡는다
+ */
+let pickedByMe: string | null = null;
+let movingSince: { id: string; at: number } | null = null;
+let claimRetry: ReturnType<typeof setTimeout> | null = null;
+const DRIVER_WAIT_MS = 10_000;
+/** 경로 안내를 연 이송 건 (한 건에 한 번만 저절로 연다) */
+const routeOpened = new Set<string>();
+type RouteOpener = (to: LatLng, name: string) => void;
+let routeOpener: RouteOpener = () => {};
+/** 앱이 켜질 때 links.ts 의 openRoute 를 넣는다 (테스트에서는 가짜로) */
+export function setRouteOpener(fn: RouteOpener) {
+  routeOpener = fn;
+}
+
+function claimNav() {
+  if (claiming) return;
+  claiming = true;
+  void (async () => {
+    try {
+      await api('POST', `/transports/${s.transportId}/nav-device`, {
+        body: { deviceId: await deviceId(), version: s.version },
+      });
+      await refresh();
+    } catch {
+      /* 다른 팀원이 먼저 맡았으면 그대로 */
+    } finally {
+      claiming = false;
+    }
+  })();
+}
 
 function afterApply() {
   if (s.status !== 'moving') {
     if (drive) stopDrive();
     return;
   }
-  // 운전 역할이면 경로 안내 담당을 맡는다
-  if (!s.navDeviceId && iAmDriver() && !claiming) {
-    claiming = true;
-    void (async () => {
-      try {
-        await api('POST', `/transports/${s.transportId}/nav-device`, {
-          body: { deviceId: await deviceId(), version: s.version },
-        });
-        await refresh();
-      } catch {
-        /* 다른 팀원이 먼저 맡았으면 그대로 */
-      } finally {
-        claiming = false;
+  const id = s.transportId!;
+  if (movingSince?.id !== id) movingSince = { id, at: Date.now() };
+  // 경로 안내 담당 정하기 (SFR-132): 운전 폰이 맡고, 운전이 없거나 10초 안에 안 맡으면 병원을 고른 폰이 맡는다
+  if (!s.navDeviceId) {
+    if (iAmDriver()) claimNav();
+    else if (pickedByMe === id) {
+      const waited = Date.now() - movingSince.at;
+      if (!teamHasDriver() || waited >= DRIVER_WAIT_MS) claimNav();
+      else if (!claimRetry) {
+        claimRetry = setTimeout(
+          () => {
+            claimRetry = null;
+            void refresh();
+          },
+          DRIVER_WAIT_MS - waited + 50,
+        );
       }
-    })();
+    }
   }
   const target = s.confirmed?.entrance;
   if (!s.navIsMe || !target) {
     if (drive) stopDrive();
     return;
+  }
+  // 담당 폰에서 경로 안내를 저절로 시작 (한 건에 한 번). 다른 팀원 폰에는 목적지·남은 시간만
+  if (!routeOpened.has(id)) {
+    routeOpened.add(id);
+    routeOpener(target, hospital(s.confirmedId).name);
   }
   // 목적지가 바뀌었으면 새 입구로
   if (drive && distanceM(drive.target, target) > 1) drive.target = target;
@@ -1275,4 +1323,9 @@ export function __resetEngineForTest() {
   myDeviceId = null;
   prevTransportId = null;
   lastT = null;
+  pickedByMe = null;
+  movingSince = null;
+  if (claimRetry) clearTimeout(claimRetry);
+  claimRetry = null;
+  routeOpened.clear();
 }
