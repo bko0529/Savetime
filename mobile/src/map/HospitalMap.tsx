@@ -1,9 +1,9 @@
 /**
- * 병원 응답 대기 · 예비 추천 화면의 지도 칸.
- * - 추천 지도: 서버가 고른 병원 최대 15곳 + 내 위치 (SFR-027 · 094)
- * - 승인 병원은 초록 마커로 따로 보인다 (SFR-149)
- * - 마커를 누르면 아래 띠에 그 병원이 나오고 목록 카드도 강조된다. '자세히'로 병원 상세
- * - 지도를 못 그리면 지도를 접고 "목록으로 보여 드려요" (SFR-062). 오프라인이면 처음부터 목록만
+ * 승인 병원 지도 (SFR-149): 병원 응답 대기 화면에서 승인이 왔을 때만, 승인 병원 위치와 내 위치를 보여 준다.
+ * - 승인 카드를 누르면 지도에서 그 병원이 강조된다 (빨간 이름표)
+ * - 마커를 누르면 지도 아래 띠에 그 병원이 나오고 '자세히'로 병원 상세
+ * - 지도를 못 그리면 지도를 접고 "승인 병원 목록으로 보여 드려요". 인터넷이 돌아오면 다시 불러온다 (SFR-062)
+ * 예비 추천·승인 전 요청 화면에는 지도를 두지 않는다 (D-136, 2026-11-28)
  */
 import { ChevronRight, MapPinned } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -15,34 +15,31 @@ import { color, font, radius } from '../ui/theme';
 import { KakaoMap, mapAvailable } from './KakaoMap';
 import type { MapMarker } from './mapHtml';
 
-/** 지도에 올리는 병원 수 상한 (SFR-027: 마커 15개) */
-export const MAP_MAX = 15;
-
-/** 지도에 올릴 마커: 승인 병원 먼저(초록), 그다음 추천 병원. 좌표 없는 병원은 뺀다 */
-export function buildMarkers(mapIds: string[], approvedIds: string[]): MapMarker[] {
-  const seen = new Set<string>();
+/** 지도에 올릴 승인 병원 마커 (승인 온 순서). 좌표 없는 병원은 뺀다 */
+export function buildMarkers(approvedIds: string[]): MapMarker[] {
   const out: MapMarker[] = [];
-  const add = (id: string, tone: MapMarker['tone']) => {
-    if (seen.has(id) || out.length >= MAP_MAX) return;
+  for (const id of new Set(approvedIds)) {
     const h = hospital(id);
-    if (typeof h.lat !== 'number' || typeof h.lng !== 'number') return;
-    seen.add(id);
-    out.push({ id, lat: h.lat, lng: h.lng, label: h.name || '병원', rank: out.length + 1, tone });
-  };
-  approvedIds.forEach((id) => add(id, 'approved'));
-  mapIds.forEach((id) => add(id, 'normal'));
+    if (typeof h.lat !== 'number' || typeof h.lng !== 'number') continue;
+    out.push({
+      id,
+      lat: h.lat,
+      lng: h.lng,
+      label: h.name || '병원',
+      rank: out.length + 1,
+      tone: 'approved',
+    });
+  }
   return out;
 }
 
 export function HospitalMap({
-  mapIds,
   approvedIds,
   selectedId,
   onSelect,
   onDetail,
   online,
 }: {
-  mapIds: string[];
   approvedIds: string[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -50,6 +47,15 @@ export function HospitalMap({
   online: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  // 실패한 뒤 인터넷이 다시 붙으면 지도를 다시 불러온다 (SFR-062 ②)
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (online && failed) {
+      setFailed(false);
+      setAttempt((a) => a + 1);
+    }
+    // online 이 바뀔 때만 본다 (failed 를 넣으면 실패하자마자 다시 시도해 버린다)
+  }, [online]);
   const [me, setMe] = useState<LatLng | null>(null);
   useEffect(() => {
     let alive = true;
@@ -59,15 +65,15 @@ export function HospitalMap({
     };
   }, []);
 
-  const markers = buildMarkers(mapIds, approvedIds);
+  const markers = buildMarkers(approvedIds);
   if (markers.length === 0) return null;
   if (failed || !online || !mapAvailable()) {
     return (
-      <View style={{ marginTop: 16 }}>
+      <View style={{ marginTop: 12 }}>
         <Notice tone="info">
           {online
-            ? '지도를 불러오지 못했어요 · 아래 목록으로 보여 드려요'
-            : '오프라인이라 지도를 보여 줄 수 없어요 · 아래 목록으로 보여 드려요'}
+            ? '지도를 불러오지 못했어요 · 승인 병원 목록으로 보여 드려요'
+            : '오프라인이라 지도를 보여 줄 수 없어요 · 승인 병원 목록으로 보여 드려요'}
         </Notice>
       </View>
     );
@@ -75,20 +81,21 @@ export function HospitalMap({
 
   const sel = selectedId && markers.some((m) => m.id === selectedId) ? selectedId : null;
   const h = sel ? hospital(sel) : null;
-  const approved = sel ? approvedIds.includes(sel) : false;
   return (
-    <View style={{ marginTop: 16 }}>
+    <View style={{ marginTop: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <MapPinned size={16} color={color.accent} />
-        <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>지도</Txt>
-        <Txt style={{ fontSize: 12, color: color.muted }}>
-          {`병원 ${markers.length}곳${approvedIds.length ? ` · 초록은 승인 ${approvedIds.length}곳` : ''}`}
-        </Txt>
+        <MapPinned size={16} color={color.success} />
+        <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>승인 병원 지도</Txt>
+        <Txt
+          style={{ fontSize: 12, color: color.muted }}
+        >{`${markers.length}곳 · 파란 점은 내 위치`}</Txt>
       </View>
       <KakaoMap
+        key={attempt}
         data={{ markers, me, selectedId: sel }}
         onSelect={(id) => onSelect(id)}
         onFail={() => setFailed(true)}
+        height={200}
       />
       {h && sel ? (
         <Pressable
@@ -117,13 +124,13 @@ export function HospitalMap({
               {`${h.km}km · 약 ${h.min}분 · ${h.er ? `응급실 ${h.er}` : '병상 정보 없음'}`}
             </Txt>
           </View>
-          {approved ? <Pill tone="ok">승인</Pill> : null}
+          <Pill tone="ok">승인</Pill>
           <Txt style={{ fontFamily: font.bold, fontSize: 13, color: color.accentDeep }}>자세히</Txt>
           <ChevronRight size={16} color={color.accentDeep} />
         </Pressable>
       ) : (
         <Txt style={{ marginTop: 6, fontSize: 12, color: color.muted }}>
-          마커를 누르면 병원을 볼 수 있어요
+          마커나 승인 카드를 누르면 지도에서 그 병원을 강조해요
         </Txt>
       )}
     </View>

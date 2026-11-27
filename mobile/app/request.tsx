@@ -60,7 +60,7 @@ export default function RequestScreen() {
   const [frozen, setFrozen] = useState<Hreq[] | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  /** 지도와 목록이 같이 강조하는 병원 (마커-카드 연동, SFR-094) */
+  /** 승인 병원 지도와 승인 카드가 같이 강조하는 병원 (SFR-149) */
   const [selected, setSelected] = useState<string | null>(null);
 
   const t = now();
@@ -395,14 +395,16 @@ export default function RequestScreen() {
         </Tile>
       ) : null}
 
-      <HospitalMap
-        mapIds={e.mapIds}
-        approvedIds={live.map((r) => r.hospitalId)}
-        selectedId={selected}
-        onSelect={setSelected}
-        onDetail={(id) => setDetail(id)}
-        online={online && e.cachedAt === null}
-      />
+      {/* 승인 병원 지도 (SFR-149): 승인이 왔을 때만 승인 병원 + 내 위치. 예비 추천·승인 전에는 지도 없음 (D-136) */}
+      {live.length > 0 ? (
+        <HospitalMap
+          approvedIds={live.map((r) => r.hospitalId)}
+          selectedId={selected}
+          onSelect={setSelected}
+          onDetail={(id) => setDetail(id)}
+          online={online}
+        />
+      ) : null}
 
       <SectionTitle
         hint={
@@ -463,11 +465,7 @@ export default function RequestScreen() {
             req={req}
             fallback={fallback}
             offline={!online || e.cachedAt !== null}
-            selected={selected === h.id}
-            onPress={() => {
-              setSelected(h.id);
-              setDetail(h.id);
-            }}
+            onPress={() => setDetail(h.id)}
           />
         ))}
         {nearby.length === 0 && !e.nearbyLoading ? (
@@ -496,11 +494,7 @@ export default function RequestScreen() {
                 req={req}
                 fallback={fallback}
                 offline={!online || e.cachedAt !== null}
-                selected={selected === h.id}
-                onPress={() => {
-                  setSelected(h.id);
-                  setDetail(h.id);
-                }}
+                onPress={() => setDetail(h.id)}
               />
             ))}
           </View>
@@ -532,14 +526,11 @@ function HospitalRow({
   req,
   fallback,
   offline,
-  selected = false,
   onPress,
 }: {
   h: Hospital;
   req: Hreq | undefined;
   fallback: boolean;
-  /** 지도에서 고른 병원 (빨간 테두리) */
-  selected?: boolean;
   /** 오프라인·저장본이면 '참고용 정보 · 기준 HH:MM' (SFR-081 ③) */
   offline: boolean;
   onPress: () => void;
@@ -567,7 +558,7 @@ function HospitalRow({
       disabled={isWaiting}
       accessibilityRole="button"
       accessibilityLabel={`${h.name} ${label}`}
-      accessibilityState={{ disabled: isWaiting, selected }}
+      accessibilityState={{ disabled: isWaiting }}
     >
       <Tile
         style={{
@@ -576,7 +567,6 @@ function HospitalRow({
           gap: 12,
           padding: 14,
           opacity: isWaiting ? 0.6 : 1,
-          ...(selected ? { borderWidth: 2, borderColor: color.accent } : null),
         }}
       >
         <IconTile tone={isWaiting ? 'warn' : 'accent'} size={36}>
