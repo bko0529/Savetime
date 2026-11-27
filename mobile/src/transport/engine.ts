@@ -165,6 +165,17 @@ const initial = (): EngineState => ({
   offlineCreated: false,
 });
 
+/**
+ * 이송 화면 상태만 비운다. '서버를 한 번 읽었는지(loaded)'는 그대로 둔다.
+ * loaded 까지 지우면 TransportRouter 가 '아직 안 읽음'으로 보고 화면 이동을 멈춰서,
+ * 새 이송 시작 → 병원에 요청 뒤 요청 화면으로 안 넘어가던 버그가 있었다
+ */
+const cleared = (): EngineState => ({
+  ...initial(),
+  hospitalsRev: s.hospitalsRev,
+  loaded: s.loaded,
+});
+
 let s: EngineState = initial();
 const subs = new Set<() => void>();
 const emit = () => {
@@ -577,7 +588,7 @@ async function loadOnce() {
   } catch (e) {
     if (e instanceof ApiError && e.code === 'NO_ACTIVE_TRANSPORT') {
       if (isActive(s.status)) {
-        s = { ...initial(), hospitalsRev: s.hospitalsRev };
+        s = cleared();
         emit();
       }
       return;
@@ -591,7 +602,7 @@ export async function loadCurrent() {
   if (s.transportId && isActive(s.status)) {
     await refresh();
   } else {
-    s = { ...initial(), hospitalsRev: s.hospitalsRev };
+    s = cleared();
     await refresh();
     if (s.transportId) void loadNearby();
   }
@@ -932,7 +943,7 @@ export const actions = {
       if (!location)
         throw new ApiError(0, 'NO_LOCATION', '위치를 가져오지 못했어요. 위치 권한을 확인해 주세요');
       stopDrive();
-      s = { ...initial(), hospitalsRev: s.hospitalsRev };
+      s = cleared();
       const t = await api<ServerTransport>('POST', '/transports', {
         body: {
           id: uuid(),
@@ -1100,7 +1111,7 @@ export const actions = {
   /** 이 기기 화면만 비운다 (서버의 이송 건은 그대로). 일지를 마치고 새 이송을 시작할 때 */
   reset() {
     stopDrive();
-    s = { ...initial(), hospitalsRev: s.hospitalsRev };
+    s = cleared();
     emit();
   },
 };

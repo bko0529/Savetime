@@ -98,3 +98,22 @@ test('변경 사항 보내기(진행 중 이송)는 보낸 뒤 이전 화면으�
   await fireEvent.press(screen.getByRole('button', { name: '변경 사항 보내기' }));
   await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
 });
+
+/**
+ * 실제로 있었던 버그 (2026-11-28): 요청 → 취소 → 홈의 '새 이송 시작' → 다시 요청하면
+ * 요청 화면으로 안 넘어가고 입력 화면이 '변경 사항 보내기'로 바뀌어 남았다.
+ * 화면을 비우는 reset() 이 '서버를 읽었음(loaded)'까지 지워 화면 이동이 멈췄기 때문
+ */
+test('취소 뒤 새 이송을 시작해 다시 요청해도 요청 화면으로 넘어간다', async () => {
+  await render(<TransportRouter />);
+  await act(async () => apply(T({ id: 't-old' }), 'ios-me'));
+  await act(async () => apply(T({ id: 't-old', status: 'cancelled', version: 2 }), 'ios-me'));
+  expect(mockRouter.dismissTo).toHaveBeenCalledWith('/');
+  jest.clearAllMocks();
+
+  // 홈의 '새 이송 시작' = 화면 비우기
+  await act(async () => actions.reset());
+  mockPath = '/patient';
+  await act(async () => apply(T({ id: 't-new' }), 'ios-me'));
+  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/request'));
+});
