@@ -302,7 +302,7 @@ export default function PatientScreen() {
                 height: 6,
                 borderRadius: 3,
                 backgroundColor:
-                  s === step ? color.accent : s < step ? 'rgba(30,33,36,0.7)' : color.borderStrong,
+                  s === step ? color.accent : s < step ? color.muted : color.borderStrong,
               }}
             />
           ))}

@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth/AuthProvider';
 import { checkLoginForm } from '../src/auth/loginForm';
 import { BigButton, EcgLine, IconTile, Label, LogoMark, Notice, Tile, Txt } from '../src/ui/kit';
-import { color, font, radius, shadow, text } from '../src/ui/theme';
+import { color, font, onSchemeChange, radius, shadow, text } from '../src/ui/theme';
 
 export default function LoginScreen() {
   const { state, login } = useAuth();
@@ -134,44 +134,51 @@ export default function LoginScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.background },
-  wrap: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 },
-  ecg: { position: 'absolute', right: 0, top: 72 },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.lg,
-    backgroundColor: color.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: {
-    marginTop: 24,
-    fontFamily: font.bold,
-    fontSize: 11,
-    letterSpacing: 2,
-    color: color.accentDeep,
-  },
-  title: {
-    marginTop: 4,
-    fontFamily: font.extrabold,
-    fontSize: 30,
-    lineHeight: 38,
-    letterSpacing: -0.5,
-  },
-  card: { marginTop: 36, padding: 20, gap: 14 },
-  input: {
-    height: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.background,
-    fontFamily: font.regular,
-    fontSize: 16,
-    color: color.foreground,
-  },
-  signup: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
-  footer: { marginTop: 'auto', paddingTop: 32, textAlign: 'center', color: color.muted },
+// 테마가 바뀌면 다시 만든다 (QUR-005)
+let s = makeStyles();
+onSchemeChange(() => {
+  s = makeStyles();
 });
+function makeStyles() {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: color.background },
+    wrap: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 },
+    ecg: { position: 'absolute', right: 0, top: 72 },
+    logo: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.lg,
+      backgroundColor: color.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    eyebrow: {
+      marginTop: 24,
+      fontFamily: font.bold,
+      fontSize: 11,
+      letterSpacing: 2,
+      color: color.accentDeep,
+    },
+    title: {
+      marginTop: 4,
+      fontFamily: font.extrabold,
+      fontSize: 30,
+      lineHeight: 38,
+      letterSpacing: -0.5,
+    },
+    card: { marginTop: 36, padding: 20, gap: 14 },
+    input: {
+      height: 52,
+      paddingHorizontal: 14,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: color.border,
+      backgroundColor: color.background,
+      fontFamily: font.regular,
+      fontSize: 16,
+      color: color.foreground,
+    },
+    signup: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+    footer: { marginTop: 'auto', paddingTop: 32, textAlign: 'center', color: color.muted },
+  });
+}

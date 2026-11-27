@@ -60,7 +60,7 @@ export function ProgressStrip() {
                       height: 3,
                       marginHorizontal: 4,
                       borderRadius: 2,
-                      backgroundColor: i < idx ? 'rgba(30,33,36,0.6)' : color.border,
+                      backgroundColor: i < idx ? color.muted : color.border,
                     }}
                   />
                 ) : null}

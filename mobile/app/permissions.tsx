@@ -116,7 +116,11 @@ export default function PermissionsScreen() {
               key={k}
               style={[
                 { flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: 16 },
-                on && { borderWidth: 2, borderColor: color.accent, backgroundColor: '#FFF6F4' },
+                on && {
+                  borderWidth: 2,
+                  borderColor: color.accent,
+                  backgroundColor: color.accentSoft,
+                },
               ]}
             >
               <IconTile tone={tone}>

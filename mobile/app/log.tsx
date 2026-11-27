@@ -521,7 +521,7 @@ function Section({
           paddingVertical: 10,
           borderBottomWidth: 1,
           borderBottomColor: color.border,
-          backgroundColor: 'rgba(241,245,249,0.7)',
+          backgroundColor: color.surface,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -584,7 +584,7 @@ function Section({
               paddingVertical: 10,
               borderTopWidth: 1,
               borderTopColor: color.border,
-              backgroundColor: 'rgba(241,245,249,0.6)',
+              backgroundColor: color.surface,
               color: color.muted,
             },
           ]}

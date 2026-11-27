@@ -172,7 +172,7 @@ export default function RequestScreen() {
               paddingHorizontal: 10,
               paddingVertical: 6,
               borderRadius: radius.sm,
-              backgroundColor: urgent ? color.destructive : 'rgba(30,33,36,0.08)',
+              backgroundColor: urgent ? color.destructive : color.inkTint,
             }}
           >
             <Txt
@@ -233,7 +233,7 @@ export default function RequestScreen() {
           borderWidth: 1,
           borderStyle: approved.length ? 'solid' : 'dashed',
           borderColor: approved.length ? 'rgba(0,125,101,0.4)' : color.borderStrong,
-          backgroundColor: approved.length ? 'rgba(215,247,237,0.6)' : color.card,
+          backgroundColor: approved.length ? color.successSoft : color.card,
         }}
       >
         <View
@@ -289,7 +289,7 @@ export default function RequestScreen() {
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Txt
-                        style={{ fontFamily: font.extrabold, fontSize: 15, flexShrink: 1 }}
+                        style={{ fontFamily: font.extrabold, fontSize: 17, flexShrink: 1 }}
                         numberOfLines={1}
                       >
                         {h.name}
@@ -305,7 +305,7 @@ export default function RequestScreen() {
                         </Txt>
                       ) : null}
                     </View>
-                    <Txt style={[text.caption, { marginTop: 4, color: color.muted }]}>
+                    <Txt style={{ marginTop: 4, fontSize: 16, lineHeight: 22, color: color.muted }}>
                       약 {h.min}분 · 응급실 {h.er ?? '정보 없음'} · 진료가능 {cc.available}/
                       {cc.total}
                     </Txt>
@@ -314,7 +314,7 @@ export default function RequestScreen() {
                         marginTop: 4,
                         fontFamily: font.semibold,
                         fontSize: 12,
-                        color: 'rgba(14,22,36,0.7)',
+                        color: color.foreground,
                       }}
                     >
                       {r.note ? `"${r.note}"` : '메모 없음'}
@@ -562,7 +562,10 @@ function HospitalRow({
             </Txt>
             <Txt style={{ fontSize: 12, fontFamily: font.bold, color: color.muted }}>{h.km}km</Txt>
           </View>
-          <Txt style={[text.small, { marginTop: 2, color: color.muted }]} numberOfLines={1}>
+          <Txt
+            style={{ marginTop: 2, fontSize: 16, lineHeight: 22, color: color.muted }}
+            numberOfLines={2}
+          >
             약 {h.min}분 · {h.er ? `응급실 ${h.er}` : '병상 정보 없음'} · 진료가능 {cc.available}/
             {cc.total} · {label}
           </Txt>

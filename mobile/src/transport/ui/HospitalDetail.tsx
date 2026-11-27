@@ -180,7 +180,7 @@ export function HospitalDetail({
                       paddingHorizontal: 4,
                       paddingVertical: 6,
                       borderRadius: 6,
-                      backgroundColor: i % 2 === 0 ? 'rgba(241,245,249,0.7)' : 'transparent',
+                      backgroundColor: i % 2 === 0 ? color.surface : 'transparent',
                     }}
                   >
                     <Txt

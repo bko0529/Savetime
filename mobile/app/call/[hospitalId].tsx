@@ -112,7 +112,7 @@ export default function CallScreen() {
             borderRadius: radius.md,
             borderWidth: 1,
             borderColor: 'rgba(0,125,101,0.4)',
-            backgroundColor: 'rgba(215,247,237,0.6)',
+            backgroundColor: color.successSoft,
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -165,8 +165,8 @@ export default function CallScreen() {
             ['수술실', h.or ?? '정보 없음'],
             ['진료가능', `${cc.available}/${cc.total}`],
           ].map(([k, v]) => (
-            <Txt key={k} style={{ width: '50%', fontSize: 12, color: color.muted }}>
-              {k} <Txt style={{ fontFamily: font.bold, fontSize: 12 }}>{v}</Txt>
+            <Txt key={k} style={{ width: '50%', fontSize: 16, lineHeight: 24, color: color.muted }}>
+              {k} <Txt style={{ fontFamily: font.bold, fontSize: 16 }}>{v}</Txt>
             </Txt>
           ))}
         </View>

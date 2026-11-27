@@ -9,7 +9,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, useColorScheme, View } from 'react-native';
 import { AuthProvider, useAuth } from '../src/auth/AuthProvider';
 import { canSignup, gateTarget } from '../src/gate';
 import { APP_VERSION, configStore, loadConfig } from '../src/state/config';
@@ -25,7 +25,8 @@ import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
 import { TransportRouter } from '../src/transport/ui/TransportRouter';
 import { useStore } from '../src/state/store';
-import { color } from '../src/ui/theme';
+import { applyScheme, color } from '../src/ui/theme';
+import { effectiveScheme, loadThemePref, useThemePref } from '../src/ui/themePref';
 
 // 이송 알림(SFR-130): 진동 + 소리 + 알림 배너
 setTransportNotifier((kind, title, body) => void notifyTeam(kind, title, body));
@@ -141,12 +142,21 @@ export default function RootLayout() {
     'Pretendard-Bold': require('../assets/fonts/Pretendard-Bold.otf'),
     'Pretendard-ExtraBold': require('../assets/fonts/Pretendard-ExtraBold.otf'),
   });
+  // 화면 테마 (QUR-005): 휴대폰 설정을 따르거나 설정에서 고른 값. 바뀌면 색을 바꾸고 화면을 다시 그린다
+  const system = useColorScheme();
+  const pref = useThemePref();
+  const scheme = effectiveScheme(pref, system);
+  applyScheme(scheme); // 그리기 전에 색을 맞춘다 (같은 값이면 아무 일 안 함)
+  useEffect(() => {
+    void loadThemePref();
+  }, []);
   if (!fontsLoaded) return <Splash />;
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <StatusBar style="dark" />
-        <Gate />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        {/* key 가 바뀌면 화면을 새 색으로 다시 그린다 (로그인 상태는 그대로) */}
+        <Gate key={scheme} />
       </AuthProvider>
     </QueryClientProvider>
   );

@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { color, font, radius, shadow, text } from './theme';
+import { color, font, onSchemeChange, radius, shadow, text } from './theme';
 
 /** 글자: 기본 글꼴을 Pretendard 로 */
 export function Txt({ style, ...props }: TextProps) {
@@ -135,22 +135,22 @@ export function PhoneScreen({
 }
 
 type ButtonVariant = 'primary' | 'outline' | 'success' | 'danger' | 'accent' | 'ghost';
-const btnBg: Record<ButtonVariant, string> = {
+const btnBg = (): Record<ButtonVariant, string> => ({
   primary: color.primary,
   outline: color.card,
   success: color.successButton,
   danger: color.destructive,
   accent: color.accentButton,
   ghost: 'transparent',
-};
-const btnFg: Record<ButtonVariant, string> = {
+});
+const btnFg = (): Record<ButtonVariant, string> => ({
   primary: color.primaryText,
   outline: color.foreground,
   success: color.accentText,
   danger: color.accentText,
   accent: color.accentText,
   ghost: color.muted,
-};
+});
 
 export function BigButton({
   children,
@@ -174,7 +174,8 @@ export function BigButton({
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 }) {
-  const h = { sm: 40, md: 48, lg: 56 }[size];
+  // 핵심 버튼은 장갑 낀 손으로도 누르게 48 이상 (QUR-006)
+  const h = { sm: 48, md: 52, lg: 56 }[size];
   const fs = { sm: 14, md: 15, lg: 16 }[size];
   const off = disabled || busy;
   return (
@@ -188,7 +189,7 @@ export function BigButton({
       accessibilityState={{ disabled: !!off, busy: !!busy }}
       style={({ pressed }) => [
         s.button,
-        { height: h, backgroundColor: btnBg[variant] },
+        { height: h, backgroundColor: btnBg()[variant] },
         variant === 'outline' && s.buttonOutline,
         variant !== 'outline' && variant !== 'ghost' && shadow.card,
         disabled && (variant === 'primary' ? s.buttonDisabledPrimary : s.buttonDisabled),
@@ -197,7 +198,7 @@ export function BigButton({
       ]}
     >
       {busy ? (
-        <ActivityIndicator color={btnFg[variant]} />
+        <ActivityIndicator color={btnFg()[variant]} />
       ) : (
         <View style={s.buttonInner}>
           {icon}
@@ -205,7 +206,7 @@ export function BigButton({
             style={{
               fontFamily: font.bold,
               fontSize: fs,
-              color: disabled && variant === 'primary' ? color.muted : btnFg[variant],
+              color: disabled && variant === 'primary' ? color.muted : btnFg()[variant],
             }}
           >
             {children}
@@ -217,13 +218,13 @@ export function BigButton({
 }
 
 export type Tone = 'wait' | 'call' | 'ok' | 'neutral' | 'danger';
-const toneStyle: Record<Tone, { bg: string; fg: string; border: string }> = {
+const toneStyle = (): Record<Tone, { bg: string; fg: string; border: string }> => ({
   wait: { bg: color.warningSoft, fg: color.warning, border: 'rgba(157,99,0,0.25)' },
   call: { bg: color.accentSoft, fg: color.accentDeep, border: 'rgba(216,31,35,0.25)' },
   ok: { bg: color.successSoft, fg: color.success, border: 'rgba(0,125,101,0.25)' },
   neutral: { bg: color.surface2, fg: color.muted, border: color.border },
   danger: { bg: 'rgba(185,28,30,0.1)', fg: color.destructive, border: 'rgba(185,28,30,0.25)' },
-};
+});
 
 /** 상태 표시: 점이 같이 가서 색만 봐도 읽힘 */
 export function Pill({
@@ -237,7 +238,7 @@ export function Pill({
   dot?: boolean;
   icon?: ReactNode;
 }) {
-  const t = toneStyle[tone];
+  const t = toneStyle()[tone];
   return (
     <View style={[s.pill, { backgroundColor: t.bg, borderColor: t.border }]}>
       {dot && !icon ? <View style={[s.dot, { backgroundColor: t.fg }]} /> : null}
@@ -247,22 +248,23 @@ export function Pill({
   );
 }
 
-const noticeStyle = {
-  warn: { bg: color.warningSoft, fg: color.warning, border: 'rgba(157,99,0,0.3)' },
-  ok: { bg: color.successSoft, fg: color.success, border: 'rgba(0,125,101,0.3)' },
-  info: { bg: color.infoSoft, fg: color.infoText, border: 'rgba(202,208,214,0.6)' },
-  error: { bg: color.accentSoft, fg: color.accentDeep, border: 'rgba(216,31,35,0.3)' },
-} as const;
+const noticeStyle = () =>
+  ({
+    warn: { bg: color.warningSoft, fg: color.warning, border: 'rgba(157,99,0,0.3)' },
+    ok: { bg: color.successSoft, fg: color.success, border: 'rgba(0,125,101,0.3)' },
+    info: { bg: color.infoSoft, fg: color.infoText, border: 'rgba(202,208,214,0.6)' },
+    error: { bg: color.accentSoft, fg: color.accentDeep, border: 'rgba(216,31,35,0.3)' },
+  }) as const;
 
 /** 안내 상자: 왼쪽에 신호 점 */
 export function Notice({
   tone,
   children,
 }: {
-  tone: keyof typeof noticeStyle;
+  tone: keyof ReturnType<typeof noticeStyle>;
   children: ReactNode;
 }) {
-  const t = noticeStyle[tone];
+  const t = noticeStyle()[tone];
   return (
     <View
       style={[s.notice, { backgroundColor: t.bg, borderColor: t.border }]}
@@ -278,14 +280,15 @@ export function Notice({
   );
 }
 
-const iconTone = {
-  accent: { bg: color.accentSoft, fg: color.accentDeep },
-  ink: { bg: 'rgba(30,33,36,0.08)', fg: color.primary },
-  warn: { bg: color.warningSoft, fg: color.warning },
-  ok: { bg: color.successSoft, fg: color.success },
-} as const;
-export type IconTone = keyof typeof iconTone;
-export const iconColor = (tone: IconTone) => iconTone[tone].fg;
+const iconTone = () =>
+  ({
+    accent: { bg: color.accentSoft, fg: color.accentDeep },
+    ink: { bg: color.inkTint, fg: color.primary },
+    warn: { bg: color.warningSoft, fg: color.warning },
+    ok: { bg: color.successSoft, fg: color.success },
+  }) as const;
+export type IconTone = keyof ReturnType<typeof iconTone>;
+export const iconColor = (tone: IconTone) => iconTone()[tone].fg;
 
 /** 카드 안 머리 아이콘. round = 큰 원 (빈 화면 가운데) */
 export function IconTile({
@@ -305,7 +308,7 @@ export function IconTile({
         width: size,
         height: size,
         borderRadius: round ? size / 2 : Math.min(16, size / 2.75),
-        backgroundColor: iconTone[tone].bg,
+        backgroundColor: iconTone()[tone].bg,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -558,146 +561,153 @@ export function Segmented<T extends string>({
   );
 }
 
-const s = StyleSheet.create({
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segment: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.surface2,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radius.sm,
-  },
-  segmentOn: { backgroundColor: color.card, ...shadow.card },
-  field: {
-    height: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.card,
-    fontFamily: font.regular,
-    fontSize: 16,
-    color: color.foreground,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderRadius: radius.md,
-    backgroundColor: color.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  checkBox: {
-    width: 20,
-    height: 20,
-    marginTop: 1,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: color.borderStrong,
-    backgroundColor: color.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkBoxOn: { backgroundColor: color.accent, borderColor: color.accent },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.card,
-  },
-  chipOn: { backgroundColor: color.primary, borderColor: color.primary },
-  screen: { flex: 1, backgroundColor: color.background },
-  header: {
-    overflow: 'hidden',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 28,
-    backgroundColor: color.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.border,
-  },
-  headerAccent: { backgroundColor: color.accentButton, borderBottomColor: color.accentDeep },
-  headerEcg: { position: 'absolute', right: -16, bottom: 4 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48 },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 6,
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: color.border,
-  },
-  button: {
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  buttonInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  buttonOutline: { borderWidth: 1, borderColor: color.borderStrong },
-  buttonDisabled: { opacity: 0.45 },
-  buttonDisabledPrimary: { backgroundColor: color.secondary, shadowOpacity: 0, elevation: 0 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  dot: { width: 6, height: 6, borderRadius: 4 },
-  notice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  tile: {
-    backgroundColor: color.card,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: color.border,
-    ...shadow.card,
-  },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
-  keyval: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  label: {
-    marginBottom: 6,
-    fontFamily: font.bold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: color.muted,
-  },
+// 테마(밝게/어둡게)가 바뀌면 색이 들어간 스타일을 다시 만든다 (QUR-005)
+let s = makeStyles();
+onSchemeChange(() => {
+  s = makeStyles();
 });
+function makeStyles() {
+  return StyleSheet.create({
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segment: {
+      flexDirection: 'row',
+      gap: 4,
+      padding: 4,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: color.border,
+      backgroundColor: color.surface2,
+    },
+    segmentItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: radius.sm,
+    },
+    segmentOn: { backgroundColor: color.card, ...shadow.card },
+    field: {
+      height: 52,
+      paddingHorizontal: 14,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: color.border,
+      backgroundColor: color.card,
+      fontFamily: font.regular,
+      fontSize: 16,
+      color: color.foreground,
+    },
+    checkRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      borderRadius: radius.md,
+      backgroundColor: color.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    checkBox: {
+      width: 20,
+      height: 20,
+      marginTop: 1,
+      borderRadius: 5,
+      borderWidth: 1.5,
+      borderColor: color.borderStrong,
+      backgroundColor: color.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkBoxOn: { backgroundColor: color.accent, borderColor: color.accent },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: color.border,
+      backgroundColor: color.card,
+    },
+    chipOn: { backgroundColor: color.primary, borderColor: color.primary },
+    screen: { flex: 1, backgroundColor: color.background },
+    header: {
+      overflow: 'hidden',
+      paddingHorizontal: 20,
+      paddingTop: 24,
+      paddingBottom: 28,
+      backgroundColor: color.card,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: color.border,
+    },
+    headerAccent: { backgroundColor: color.accentButton, borderBottomColor: color.accentDeep },
+    headerEcg: { position: 'absolute', right: -16, bottom: 4 },
+    headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48 },
+    footer: {
+      paddingHorizontal: 20,
+      paddingTop: 14,
+      paddingBottom: 6,
+      gap: 8,
+      backgroundColor: color.footer,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: color.border,
+    },
+    button: {
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '100%',
+    },
+    buttonInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    buttonOutline: { borderWidth: 1, borderColor: color.borderStrong },
+    buttonDisabled: { opacity: 0.45 },
+    buttonDisabledPrimary: { backgroundColor: color.secondary, shadowOpacity: 0, elevation: 0 },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+    },
+    dot: { width: 6, height: 6, borderRadius: 4 },
+    notice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      borderWidth: 1,
+      borderRadius: radius.sm,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    tile: {
+      backgroundColor: color.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: color.border,
+      ...shadow.card,
+    },
+    divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
+    keyval: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    label: {
+      marginBottom: 6,
+      fontFamily: font.bold,
+      fontSize: 11,
+      letterSpacing: 0.5,
+      color: color.muted,
+    },
+  });
+}

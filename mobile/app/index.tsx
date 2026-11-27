@@ -82,7 +82,7 @@ export default function HomeScreen() {
             borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(30,33,36,0.08)',
+            backgroundColor: color.inkTint,
           }}
         >
           <Settings size={18} color={color.primary} />

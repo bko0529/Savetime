@@ -12,6 +12,7 @@ import { fromServerRole, teamStore } from '../src/duty/team';
 import { setConsent } from '../src/state/consent';
 import { openSettings, usePermissions } from '../src/state/permissions';
 import { useStore } from '../src/state/store';
+import { setThemePref, useThemePref } from '../src/ui/themePref';
 import { hhmm } from '../src/journal/form';
 import { useEngine } from '../src/transport/engine';
 import { isActive } from '../src/transport/types';
@@ -22,6 +23,7 @@ import {
   PhoneScreen,
   Pill,
   SectionTitle,
+  Segmented,
   Tile,
   Txt,
 } from '../src/ui/kit';
@@ -40,6 +42,7 @@ export default function SettingsScreen() {
   const t = useStore(teamStore);
   const e = useEngine();
   const perm = usePermissions();
+  const themePref = useThemePref();
   const [ask, setAsk] = useState<LeaveKind | null>(null);
   const [busy, setBusy] = useState(false);
   if (state.status !== 'signedIn') return null;
@@ -148,6 +151,19 @@ export default function SettingsScreen() {
           />
         ) : null}
         {row('근무 종료', () => setAsk('duty_end'), true)}
+      </Tile>
+
+      <SectionTitle hint="야간 구급차 안에서 눈부시지 않게 어둡게 할 수 있어요">화면</SectionTitle>
+      <Tile style={{ padding: 12 }}>
+        <Segmented
+          value={themePref}
+          onChange={setThemePref}
+          options={[
+            { value: 'system', label: '휴대폰 설정' },
+            { value: 'light', label: '밝게' },
+            { value: 'dark', label: '어둡게' },
+          ]}
+        />
       </Tile>
 
       <SectionTitle>권한</SectionTitle>

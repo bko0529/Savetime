@@ -89,7 +89,7 @@ export function TransportAlerts() {
                 borderRadius: radius.lg,
                 borderWidth: 1,
                 borderColor: 'rgba(157,99,0,0.4)',
-                backgroundColor: 'rgba(255,255,255,0.97)',
+                backgroundColor: color.footer,
               },
               shadow.card,
             ]}

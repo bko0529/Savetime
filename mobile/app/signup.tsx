@@ -205,8 +205,8 @@ export default function SignupScreen() {
         {f.photo ? (
           <View
             style={[
-              photoBox,
-              { borderColor: 'rgba(0,125,101,0.5)', backgroundColor: 'rgba(215,247,237,0.4)' },
+              photoBox(),
+              { borderColor: 'rgba(0,125,101,0.5)', backgroundColor: color.successSoft },
             ]}
           >
             <Check size={16} color={color.success} />
@@ -220,7 +220,7 @@ export default function SignupScreen() {
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: f.photo ? 8 : 0 }}>
           <Pressable
-            style={[photoBox, { flex: 1 }]}
+            style={[photoBox(), { flex: 1 }]}
             onPress={() => void choose('camera')}
             accessibilityRole="button"
           >
@@ -230,7 +230,7 @@ export default function SignupScreen() {
             </Txt>
           </Pressable>
           <Pressable
-            style={[photoBox, { flex: 1 }]}
+            style={[photoBox(), { flex: 1 }]}
             onPress={() => void choose('library')}
             accessibilityRole="button"
           >
@@ -260,7 +260,7 @@ export default function SignupScreen() {
   );
 }
 
-const photoBox = {
+const photoBox = () => ({
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
@@ -271,7 +271,7 @@ const photoBox = {
   borderStyle: 'dashed' as const,
   borderColor: color.borderStrong,
   backgroundColor: color.card,
-};
+});
 
 function Step({ n, children }: { n: number; children: string }) {
   return (
