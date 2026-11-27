@@ -36,6 +36,7 @@ import {
   type TransportStatus,
 } from './types';
 import { retryOnVersionConflict } from './versionRetry';
+import { hospitalAlerts } from './hospitalAlerts';
 
 export type Hreq = {
   id: number;
@@ -86,7 +87,13 @@ export type EngineState = {
   /** 병원이 '도착 확인'을 눌렀다 (SFR-144) */
   arriveRequested: boolean;
   /** 확정 병원 입구 좌표·메모 */
-  confirmed: { entrance: LatLng | null; memo: string | null; erPhone: string | null } | null;
+  confirmed: {
+    entrance: LatLng | null;
+    memo: string | null;
+    /** 이동 중 병원이 한 번 보내는 추가 메모 (SFR-140) */
+    extraMemo: string | null;
+    erPhone: string | null;
+  } | null;
   lastSentSeq: number;
   /** 병원 목록 (거리순, 추천 API) */
   nearby: string[];
@@ -381,7 +388,9 @@ export function apply(t: ServerTransport, myDevice = myDeviceId) {
   }));
   const c = t.confirmedHospital;
   s.confirmedId = c ? String(c.id) : null;
-  s.confirmed = c ? { entrance: c.entrance, memo: c.memo, erPhone: c.erPhone } : null;
+  s.confirmed = c
+    ? { entrance: c.entrance, memo: c.memo, extraMemo: c.extraMemo, erPhone: c.erPhone }
+    : null;
   if (c)
     upsertHospital(String(c.id), {
       name: c.name,
@@ -486,7 +495,6 @@ const RELOAD: AppEventName[] = [
   'approval.expiring',
   'approval.expired',
   'assessment.sent',
-  'hospital.extra_memo',
   'snapshot_required',
 ];
 const DEBOUNCE_MS = 120;
@@ -511,6 +519,26 @@ export function startTransportSync() {
           if ((!hadTransport && s.transportId) || newRound) void loadNearby();
         });
       }, DEBOUNCE_MS);
+    }),
+  );
+  offs.push(
+    // SFR-140: 확정 병원 추가 메모. 이벤트에는 메모 글이 없어(규칙 5) 바로 다시 읽고 경보를 띄운다
+    onEvent('hospital.extra_memo', (ev) => {
+      void refresh().then(() =>
+        hospitalAlerts.showMemo({
+          hospitalName: ev.data.hospitalName ?? '병원',
+          memo: s.confirmed?.extraMemo ?? null,
+        }),
+      );
+    }),
+    // SFR-158: 도착 후 수용 불가. 일지·홈 어디에 있든 경보 → '다시 요청하기'
+    onEvent('transport.unacceptable', (ev) => {
+      if (!ev.data.transportId) return;
+      hospitalAlerts.showUnacceptable({
+        transportId: ev.data.transportId,
+        hospitalName: ev.data.hospitalName ?? '병원',
+        reason: ev.data.reason ?? '',
+      });
     }),
   );
   offs.push(
@@ -548,6 +576,10 @@ export async function previewTargets(grade: Grade): Promise<number | null> {
     return null;
   }
 }
+
+// SFR-157·158: 수용 불가 뒤 '다시 요청하기'로 만드는 새 이송은 직전 건 ID 를 같이 보낸다.
+// 그러면 서버가 직전 건에서 수용 불가였던 병원을 이번 요청에서 뺀다 (10분 안, 같은 팀만)
+let prevTransportId: string | null = null;
 
 // ---------------- 대원 행동 (화면에서 부름). 결과는 { ok, error } ----------------
 export type Result<T = unknown> = { ok: true; value: T } | { ok: false; error: string };
@@ -609,8 +641,10 @@ export const actions = {
           locationConsent: true,
           assessment: toAssessment(patient),
           requestedGrade: grade ? GRADE_NO[grade] : null,
+          ...(prevTransportId ? { prevTransportId } : {}),
         },
       });
+      prevTransportId = null;
       apply(t);
       void loadNearby();
     });
@@ -713,6 +747,10 @@ export const actions = {
       stopDrive();
       await refresh();
     });
+  },
+  /** 다음 '병원에 요청'이 이 이송 건을 이어받게 한다 (수용 불가 뒤 다시 요청하기) */
+  continueFrom(transportId: string) {
+    prevTransportId = transportId;
   },
   /** 이 기기 화면만 비운다 (서버의 이송 건은 그대로). 일지를 마치고 새 이송을 시작할 때 */
   reset() {
@@ -870,4 +908,5 @@ export function __resetEngineForTest() {
   again = false;
   claiming = false;
   myDeviceId = null;
+  prevTransportId = null;
 }

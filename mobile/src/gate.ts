@@ -19,7 +19,15 @@ export type GateInput = {
 };
 
 export type Screen =
-  'loading' | 'update' | 'welcome' | 'permissions' | 'login' | 'pending' | 'duty' | 'home';
+  | 'loading'
+  | 'update'
+  | 'welcome'
+  | 'permissions'
+  | 'login'
+  | 'pending'
+  | 'password'
+  | 'duty'
+  | 'home';
 
 export function gateTarget(g: GateInput): Screen {
   if (versionBelow(g.appVersion, g.minAppVersion)) return 'update';
@@ -31,6 +39,8 @@ export function gateTarget(g: GateInput): Screen {
   if (g.auth.status === 'signedOut') return 'login';
   // SFR-022: 승인 전에는 '승인 대기' 화면만 (반려·정지도 이 화면이 문구를 고름)
   if (g.auth.me.status !== 'approved') return 'pending';
+  // SFR-021: 관리자가 초기화한 임시 비밀번호면 바꾸기 전에는 다른 화면으로 못 간다 (서버도 403 으로 막음)
+  if (g.auth.me.mustChangePassword) return 'password';
   // SFR-113: 근무(팀)를 시작해야 이송 화면을 쓴다
   if (!g.duty || g.duty.team === 'loading') return 'loading';
   if (g.duty.team === 'none' || !g.duty.started) return 'duty';

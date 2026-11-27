@@ -40,6 +40,8 @@ type TeamState = {
   team: Team | null | 'loading';
   /** 이 팀으로 '근무 시작'을 눌렀는지 */
   started: boolean;
+  /** '근무 시작'을 누른 시각 (설정 화면 표시용, 다른 폰에서 시작했으면 null) */
+  startedAt: number | null;
   /** 내가 팀을 만들었는지 (만들기/참여 탭을 고정할 때) */
   isCreator: boolean;
   incoming: Incoming[];
@@ -50,13 +52,14 @@ type TeamState = {
 export const teamStore = createStore<TeamState>({
   team: 'loading',
   started: false,
+  startedAt: null,
   isCreator: false,
   incoming: [],
   notice: null,
 });
 
 const KEY = 'savetime.duty';
-type Saved = { teamId: number; started: boolean; isCreator: boolean };
+type Saved = { teamId: number; started: boolean; isCreator: boolean; startedAt?: number };
 
 async function save(s: Saved | null) {
   if (s) await SecureStore.setItemAsync(KEY, JSON.stringify(s));
@@ -72,13 +75,17 @@ async function loadSaved(): Promise<Saved | null> {
 }
 
 /** 서버가 준 팀을 넣고, 이 휴대폰에 기억한 '근무 시작' 여부를 이어 붙인다 */
-async function putTeam(team: Team, opt: { started?: boolean; isCreator?: boolean } = {}) {
+async function putTeam(
+  team: Team,
+  opt: { started?: boolean; isCreator?: boolean; startedAt?: number | null } = {},
+) {
   const prev = teamStore.get();
   const sameTeam = prev.team !== 'loading' && prev.team?.id === team.id;
   const started = opt.started ?? (sameTeam ? prev.started : false);
   const isCreator = opt.isCreator ?? (sameTeam ? prev.isCreator : false);
-  teamStore.set({ team, started, isCreator });
-  await save({ teamId: team.id!, started, isCreator });
+  const startedAt = opt.startedAt !== undefined ? opt.startedAt : sameTeam ? prev.startedAt : null;
+  teamStore.set({ team, started, isCreator, startedAt });
+  await save({ teamId: team.id!, started, isCreator, ...(startedAt ? { startedAt } : {}) });
 }
 
 /**
@@ -95,13 +102,14 @@ export async function refreshTeam() {
       await putTeam(team, {
         started: same ? saved!.started : true,
         isCreator: same ? saved!.isCreator : false,
+        startedAt: same ? (saved!.startedAt ?? null) : null,
       });
     } else {
       await putTeam(team);
     }
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_IN_TEAM')) {
-      teamStore.set({ team: null, started: false, isCreator: false });
+      teamStore.set({ team: null, started: false, isCreator: false, startedAt: null });
       await save(null);
       return;
     }
@@ -168,8 +176,9 @@ export async function setMyRole(role: Role): Promise<string | null> {
 export async function startDuty() {
   const s = teamStore.get();
   if (s.team === 'loading' || !s.team) return;
-  teamStore.set({ started: true });
-  await save({ teamId: s.team.id!, started: true, isCreator: s.isCreator });
+  const startedAt = Date.now();
+  teamStore.set({ started: true, startedAt });
+  await save({ teamId: s.team.id!, started: true, isCreator: s.isCreator, startedAt });
 }
 
 /** 같은 소방서 대원 목록 (근무 중 먼저). q 를 주면 이름으로 소방서 전체 검색 */
@@ -236,6 +245,13 @@ export function addIncoming(inv: Incoming) {
 
 /** 로그아웃 · 근무 종료: 이 휴대폰의 팀 기억을 지운다 */
 export async function clearTeam() {
-  teamStore.set({ team: 'loading', started: false, isCreator: false, incoming: [], notice: null });
+  teamStore.set({
+    team: 'loading',
+    started: false,
+    startedAt: null,
+    isCreator: false,
+    incoming: [],
+    notice: null,
+  });
   await save(null);
 }

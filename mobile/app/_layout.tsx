@@ -18,6 +18,7 @@ import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
 import { startTransportSync } from '../src/transport/engine';
 import { loadPatient } from '../src/transport/patientStore';
+import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
 import { TransportRouter } from '../src/transport/ui/TransportRouter';
 import { useStore } from '../src/state/store';
 import { color } from '../src/ui/theme';
@@ -68,6 +69,7 @@ function Gate() {
   return (
     <>
       {target === 'home' ? <TransportRouter /> : null}
+      {target === 'home' ? <TransportAlerts /> : null}
       <Stack
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }}
       >
@@ -98,6 +100,14 @@ function Gate() {
           <Stack.Screen name="index" />
           <Stack.Screen name="patient" />
           <Stack.Screen name="request" />
+          <Stack.Screen name="call/[hospitalId]" />
+          <Stack.Screen name="transport" />
+          <Stack.Screen name="log" />
+          <Stack.Screen name="settings" />
+        </Stack.Protected>
+        {/* 비밀번호 바꾸기: 임시 비밀번호면 이 화면만, 근무 중에는 설정에서 (SFR-021) */}
+        <Stack.Protected guard={target === 'password' || target === 'home'}>
+          <Stack.Screen name="password" />
         </Stack.Protected>
       </Stack>
     </>

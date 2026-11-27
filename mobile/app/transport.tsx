@@ -56,7 +56,8 @@ export default function TransportScreen() {
   const go = near ? 1 : Math.min(1, Math.max(0, 1 - left / Math.max(h.min, 1)));
   const erPhone = e.confirmed?.erPhone ?? h.erPhone;
   const entrance = e.confirmed?.entrance ?? (h.lat && h.lng ? { lat: h.lat, lng: h.lng } : null);
-  const note = req?.note ?? e.confirmed?.memo;
+  const note = e.confirmed?.memo ?? req?.note;
+  const extraMemo = e.confirmed?.extraMemo;
 
   const cancel = () =>
     Alert.alert('이송을 취소할까요?', '확정 병원에도 취소가 전달돼요.', [
@@ -216,6 +217,11 @@ export default function TransportScreen() {
       {note ? (
         <View style={{ marginTop: 12 }}>
           <Notice tone="info">{`병원 안내 · "${note}"`}</Notice>
+        </View>
+      ) : null}
+      {extraMemo ? (
+        <View style={{ marginTop: 8 }}>
+          <Notice tone="warn">{`추가 메모 · "${extraMemo}"`}</Notice>
         </View>
       ) : null}
       {e.remainingM !== null ? (

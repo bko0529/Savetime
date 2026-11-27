@@ -8,7 +8,7 @@ import {
   ArrowRight,
   BellRing,
   FileText,
-  LogOut,
+  Settings,
   ShieldCheck,
   Users,
 } from 'lucide-react-native';
@@ -37,7 +37,7 @@ import {
 import { color, font, text } from '../src/ui/theme';
 
 export default function HomeScreen() {
-  const { state, logout } = useAuth();
+  const { state } = useAuth();
   const router = useRouter();
   const t = useStore(teamStore);
   const e = useEngine();
@@ -71,6 +71,23 @@ export default function HomeScreen() {
     <PhoneScreen
       title="골든타임즈"
       subtitle={`${me.name ?? ''} ${me.rank ?? ''} · ${me.safetyCenter ?? ''}`}
+      badge={
+        <Pressable
+          onPress={() => router.push('/settings')}
+          accessibilityRole="button"
+          accessibilityLabel="설정"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(30,33,36,0.08)',
+          }}
+        >
+          <Settings size={18} color={color.primary} />
+        </Pressable>
+      }
       footer={
         <>
           {active ? (
@@ -90,17 +107,6 @@ export default function HomeScreen() {
               새 이송 시작
             </BigButton>
           )}
-          {/* 근무 종료(진행 중 이송 확인 포함)는 8단계 설정 화면에서. 지금은 이송이 없을 때만 로그아웃 */}
-          {!active ? (
-            <BigButton
-              variant="ghost"
-              size="sm"
-              onPress={() => void logout()}
-              icon={<LogOut size={16} color={color.muted} />}
-            >
-              로그아웃
-            </BigButton>
-          ) : null}
         </>
       }
     >

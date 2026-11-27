@@ -18,6 +18,8 @@ import {
 import { ApiError, api, refreshTokens, setTokenHooks, type Me, type Tokens } from '../api/client';
 import { toSignupFormData, type SignupForm } from './signupForm';
 import { clearTeam, refreshTeam } from '../duty/team';
+import { actions as transportActions } from '../transport/engine';
+import { resetPatient } from '../transport/patientStore';
 import { connectRealtime, disconnectRealtime } from '../realtime/socket';
 import { wireAccountAndTeam } from '../realtime/wire';
 import { clearRefreshToken, getDeviceId, loadRefreshToken, saveRefreshToken } from './storage';
@@ -33,9 +35,20 @@ type AuthValue = {
   signup: (f: SignupForm) => Promise<string | null>;
   /** 서버에서 내 정보를 다시 받는다 (승인 결과 확인) */
   refreshMe: () => Promise<void>;
-  /** 서버 로그아웃 + 이 기기 토큰 지우기 */
+  /** 서버 로그아웃 + 이 기기 토큰 지우기 (승인 전·근무 전: 진행 중 이송이 없을 때) */
   logout: () => Promise<void>;
+  /**
+   * 근무 종료 · 로그아웃 · 회원 탈퇴 (SFR-070 · 071 · 113). 화면이 먼저 확인을 받았으므로 confirmCancelActive=true.
+   * 팀의 마지막 대원이면 서버가 진행 중 이송을 '취소'로 끝낸다. 성공하면 null
+   */
+  leave: (kind: LeaveKind) => Promise<string | null>;
+  /** 비밀번호 바꾸기 (SFR-021). 성공하면 내 정보를 다시 읽어 '변경 필요'를 푼다 */
+  changePassword: (current: string, next: string) => Promise<string | null>;
 };
+
+export type LeaveKind = 'duty_end' | 'logout' | 'withdrawal';
+
+const resetTransport = () => transportActions.reset();
 
 const AuthContext = createContext<AuthValue | null>(null);
 
@@ -127,10 +140,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    // 승인 전 계정은 팀이 없어 확인 없이 끝난다. 근무 중 로그아웃(진행 중 이송 확인)은 8단계 설정 화면에서
+    // 승인 전·근무 전 계정은 팀·이송이 없어 확인 없이 끝난다. 근무 중에는 설정 화면의 leave() 를 쓴다
     await api('POST', '/auth/logout').catch(() => undefined);
     await signOutLocal();
   }, [signOutLocal]);
+
+  const leave = useCallback(
+    async (kind: LeaveKind) => {
+      try {
+        if (kind === 'withdrawal') await api('DELETE', '/me?confirmCancelActive=true');
+        else await api('POST', '/auth/logout?confirmCancelActive=true');
+      } catch (e) {
+        // 탈퇴는 실패하면 계정이 남아 있으니 알려 준다. 로그아웃은 서버가 안 받아도 이 기기는 끝낸다
+        if (kind === 'withdrawal') return e instanceof ApiError ? e.message : '탈퇴하지 못했어요';
+      }
+      // 이 기기의 이송 화면·환자 입력도 비운다 (서버 이송 건은 서버가 처리)
+      resetTransport();
+      resetPatient();
+      await signOutLocal();
+      return null;
+    },
+    [signOutLocal],
+  );
+
+  const changePassword = useCallback(
+    async (current: string, next: string) => {
+      try {
+        await api('PUT', '/me/password', { body: { currentPassword: current, newPassword: next } });
+        await refreshMe();
+        return null;
+      } catch (e) {
+        // 지금 비밀번호가 틀렸는지·5번 틀려 잠겼는지는 서버 문구 그대로
+        return e instanceof ApiError ? e.message : '비밀번호를 바꾸지 못했어요';
+      }
+    },
+    [refreshMe],
+  );
 
   // 로그인돼 있는 동안 실시간 연결 (승인 결과 · 강제 로그아웃 · 팀 초대 · 팀원 변화)
   const signedIn = state.status === 'signedIn';
@@ -153,8 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [approved]);
 
   const value = useMemo(
-    () => ({ state, login, signup, refreshMe, logout }),
-    [state, login, signup, refreshMe, logout],
+    () => ({ state, login, signup, refreshMe, logout, leave, changePassword }),
+    [state, login, signup, refreshMe, logout, leave, changePassword],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
