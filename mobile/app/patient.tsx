@@ -94,8 +94,9 @@ export default function PatientScreen() {
     setSending(false);
     if (!r.ok) return Alert.alert('보내지 못했어요', r.error);
     if (active) Alert.alert('변경 사항을 병원에 보냈어요', '병원 화면에 강조 표시돼요');
-    // 요청하면 이송 상태가 바뀌어 요청 화면으로 간다 (TransportRouter)
-    router.back();
+    // 새 요청이면 이송 상태가 바뀌어 TransportRouter 가 이 화면을 요청 화면으로 바꿔 연다.
+    // 여기서 되돌아가기를 하면 방금 연 요청 화면이 닫혀 버리므로(실제로 있었던 버그) 변경 사항 보내기일 때만 돌아간다
+    if (active) router.back();
   };
 
   const fillUnknown = () => {
