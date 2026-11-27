@@ -92,7 +92,18 @@ type Options = {
   auth?: boolean;
   /** 추가 헤더 (확정할 때 Idempotency-Key 등) */
   headers?: Record<string, string>;
+  /** 이 시간(ms) 안에 답이 없으면 통신 실패로 본다 (목록 조회 5초, SFR-008) */
+  timeoutMs?: number;
 };
+
+/**
+ * 통신 상태 알림 (오프라인 표시 SFR-064 · 복구 SFR-068). 요청이 통신 실패면 offline, 답이 오면 online.
+ * net.ts 가 넣는다 (이 파일이 net.ts 를 부르면 서로 부르게 돼서)
+ */
+let netHooks: { online: () => void; offline: () => void } = { online: () => {}, offline: () => {} };
+export function setNetHooks(h: typeof netHooks) {
+  netHooks = h;
+}
 
 export async function api<T = unknown>(
   method: string,
@@ -107,15 +118,22 @@ export async function api<T = unknown>(
   if (auth && token) headers['Authorization'] = `Bearer ${token}`;
 
   let res: Response;
+  const ctrl = opt.timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), opt.timeoutMs) : null;
   try {
     res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
       method,
       headers,
       body: opt.form ?? (opt.body !== undefined ? JSON.stringify(opt.body) : undefined),
+      ...(ctrl ? { signal: ctrl.signal } : {}),
     });
   } catch {
+    netHooks.offline();
     throw new ApiError(0, 'NETWORK', '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+  netHooks.online();
   noteServerTime(res.headers.get('X-Server-Now'));
 
   // 401 = 토큰 만료. 로그인 요청(auth: false)은 갱신하지 않는다 (비밀번호가 틀린 것일 뿐)

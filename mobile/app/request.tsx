@@ -35,6 +35,7 @@ import {
   RESPONSE_LIMIT_SEC,
   type Hospital,
 } from '../src/transport/hospitals';
+import { useNet } from '../src/offline/net';
 import { mmss } from '../src/transport/labels';
 import { CLOSE_LABEL, REASON_LABEL } from '../src/transport/types';
 import { HospitalDetail } from '../src/transport/ui/HospitalDetail';
@@ -53,6 +54,7 @@ import { color, font, radius, text } from '../src/ui/theme';
 
 export default function RequestScreen() {
   const e = useEngine();
+  const { online } = useNet();
   const router = useRouter();
   const [frozen, setFrozen] = useState<Hreq[] | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
@@ -445,11 +447,16 @@ export default function RequestScreen() {
             h={h}
             req={req}
             fallback={fallback}
+            offline={!online || e.cachedAt !== null}
             onPress={() => setDetail(h.id)}
           />
         ))}
         {nearby.length === 0 && !e.nearbyLoading ? (
           <EmptyGuide
+            noData={
+              !online || e.cachedAt !== null || (e.emptyGuide === null && e.mapIds.length === 0)
+            }
+            onRefresh={() => void refreshNow()}
             guide={e.emptyGuide}
             nextRadius={nextRadius}
             fallback={fallback}
@@ -469,6 +476,7 @@ export default function RequestScreen() {
                 h={h}
                 req={req}
                 fallback={fallback}
+                offline={!online || e.cachedAt !== null}
                 onPress={() => setDetail(h.id)}
               />
             ))}
@@ -500,11 +508,14 @@ function HospitalRow({
   h,
   req,
   fallback,
+  offline,
   onPress,
 }: {
   h: Hospital;
   req: Hreq | undefined;
   fallback: boolean;
+  /** 오프라인·저장본이면 '참고용 정보 · 기준 HH:MM' (SFR-081 ③) */
+  offline: boolean;
   onPress: () => void;
 }) {
   const st = req?.status;
@@ -523,7 +534,7 @@ function HospitalRow({
               : '요청함';
   const isWaiting = st === 'waiting' && !fallback;
   const cc = capCount(h);
-  const data = bedsLabel(h);
+  const data = bedsLabel(h, offline);
   return (
     <Pressable
       onPress={onPress}
@@ -557,7 +568,11 @@ function HospitalRow({
           </Txt>
           {data ? (
             <Txt
-              style={{ marginTop: 2, fontSize: 11, color: h.stale ? color.warning : color.muted }}
+              style={{
+                marginTop: 2,
+                fontSize: 11,
+                color: h.stale || offline ? color.warning : color.muted,
+              }}
             >
               {data}
             </Txt>
@@ -579,17 +594,34 @@ function HospitalRow({
 
 /** 추천 0건 안내 (SFR-029): 한 단계 넓혀 다시 찾기, 40km 면 전화로 확인 */
 function EmptyGuide({
+  noData,
+  onRefresh,
   guide,
   nextRadius,
   fallback,
   onWiden,
 }: {
+  /** 서버에도 휴대폰에도 병원 정보가 없음 (SFR-008) */
+  noData: boolean;
+  onRefresh: () => void;
   guide: 'expand_radius' | 'call_nearby' | null;
   nextRadius: number | undefined;
   fallback: boolean;
   onWiden: () => void;
 }) {
   const canWiden = fallback && guide !== 'call_nearby' && !!nextRadius;
+  if (noData && !guide) {
+    return (
+      <View
+        style={{ gap: 10, padding: 14, borderRadius: radius.sm, backgroundColor: color.surface }}
+      >
+        <Txt style={[text.body, { color: color.muted }]}>불러올 수 있는 병원 정보가 없습니다</Txt>
+        <BigButton variant="outline" size="sm" onPress={onRefresh}>
+          새로고침
+        </BigButton>
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 10, padding: 14, borderRadius: radius.sm, backgroundColor: color.surface }}>
       <Txt style={[text.body, { color: color.muted }]}>

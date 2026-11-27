@@ -211,7 +211,9 @@ describe('추천 목록 (SFR-027 · 029 · 006 · 081)', () => {
     mockApi.mockClear();
     await fireEvent.press(screen.getByRole('button', { name: '새로고침' }));
     await waitFor(() =>
-      expect(mockApi).toHaveBeenCalledWith('GET', '/transports/t-1/recommendations'),
+      expect(mockApi).toHaveBeenCalledWith('GET', '/transports/t-1/recommendations', {
+        timeoutMs: 5000,
+      }),
     );
   });
 

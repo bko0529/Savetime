@@ -17,7 +17,7 @@ import {
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
-import { actions, previewTargets, useEngine } from '../src/transport/engine';
+import { actions, preloadNearby, previewTargets, useEngine } from '../src/transport/engine';
 import { RADIUS_STEPS, type Grade } from '../src/transport/hospitals';
 import { currentLocation, manualLocation } from '../src/transport/location';
 import { AddressSheet } from '../src/transport/ui/AddressSheet';
@@ -100,6 +100,11 @@ export default function PatientScreen() {
       alive = false;
     };
   }, [p.grade, radiusKm, manualLabel]);
+
+  // 입력하는 동안 반경 안 병원을 미리 불러와 휴대폰에 저장 (SFR-001 · 059, 통신이 끊기면 이 저장본으로)
+  useEffect(() => {
+    if (!active) void preloadNearby(radiusKm);
+  }, [radiusKm, manualLabel, active]);
 
   useEffect(() => {
     let alive = true;

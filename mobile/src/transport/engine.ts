@@ -47,6 +47,9 @@ import {
 } from './types';
 import { retryOnVersionConflict } from './versionRetry';
 import { hospitalAlerts } from './hospitalAlerts';
+import { latestCards, saveCards, type CachedCard } from '../offline/cache';
+import { whenOnline } from '../offline/net';
+import { enqueue, flush } from '../offline/queue';
 import type { AlertKind } from './notify';
 
 export type Hreq = {
@@ -121,6 +124,10 @@ export type EngineState = {
   nearEntrance: boolean;
   /** 앱을 켠 뒤 서버에서 진행 중 이송을 한 번 읽었음 (SFR-107·133 첫 화면 정하기) */
   loaded: boolean;
+  /** 추천 목록이 서버가 아니라 이 휴대폰 저장본에서 왔음 (오프라인, SFR-061). 저장한 시각 */
+  cachedAt: number | null;
+  /** 통신이 끊긴 채 만든 이송 건 (SFR-099). 복구되면 서버로 올라간다 */
+  offlineCreated: boolean;
 };
 
 const initial = (): EngineState => ({
@@ -154,6 +161,8 @@ const initial = (): EngineState => ({
   nearbyLoading: false,
   nearEntrance: false,
   loaded: false,
+  cachedAt: null,
+  offlineCreated: false,
 });
 
 let s: EngineState = initial();
@@ -309,24 +318,78 @@ export async function loadNearby() {
   s.nearbyLoading = true;
   emit();
   try {
+    // 5초 안에 답이 없으면 통신 실패로 보고 지난 목록을 그대로 둔다 (SFR-008)
     const r = await api<{
       radiusKm: number;
       items: Card[];
       map: Card[];
       noBedInfo?: Card[];
       emptyGuide?: 'expand_radius' | 'call_nearby' | null;
-    }>('GET', `/transports/${s.transportId}/recommendations`);
+    }>('GET', `/transports/${s.transportId}/recommendations`, { timeoutMs: 5000 });
     [...r.map, ...r.items, ...(r.noBedInfo ?? [])].forEach(fromCard);
     s.nearby = r.items.map((c) => String(c.id));
     s.noBed = (r.noBedInfo ?? []).map((c) => String(c.id));
     s.mapIds = [...r.map].sort((a, b) => a.distanceKm - b.distanceKm).map((c) => String(c.id));
     s.emptyGuide = r.emptyGuide ?? null;
+    s.cachedAt = null;
     s.hospitalsRev += 1;
+    // 조회에 성공할 때마다 휴대폰에 저장 (SFR-059)
+    void currentLocation()
+      .then((at) => (at ? saveCards(at, r.map as CachedCard[]) : undefined))
+      .catch(() => undefined);
   } catch {
-    /* 통신 오류: 지난 목록 그대로 (SFR-008) */
+    // 통신 오류: 지난 목록 그대로 (SFR-008). 목록이 아예 없으면 휴대폰 저장본으로 (SFR-061)
+    if (s.nearby.length === 0) await useCachedList();
   } finally {
     s.nearbyLoading = false;
     emit();
+  }
+}
+
+/**
+ * 휴대폰 저장본으로 추천 목록 채우기 (SFR-061): 서버가 다시 계산하지 않은 마지막 결과 그대로,
+ * 제외 병원만 앱에서 뺀다. 빈 병상 있는 가까운 5곳 + 병상 정보 없는 곳
+ */
+async function useCachedList() {
+  try {
+    const c = await latestCards(await currentLocation());
+    if (!c) return;
+    c.cards.forEach((x) => fromCard(x as Card));
+    const sorted = [...c.cards]
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .filter((x) => !s.excluded.includes(String(x.id)));
+    s.nearby = sorted
+      .filter((x) => x.beds.er)
+      .slice(0, 5)
+      .map((x) => String(x.id));
+    s.noBed = sorted
+      .filter((x) => !x.beds.er)
+      .slice(0, 3)
+      .map((x) => String(x.id));
+    s.mapIds = sorted.map((x) => String(x.id));
+    s.cachedAt = c.savedAt;
+    s.hospitalsRev += 1;
+  } catch {
+    /* 저장본도 없으면 '불러올 수 있는 병원 정보가 없습니다' */
+  }
+}
+
+/**
+ * 환자 정보를 입력하는 동안 반경 안 병원을 미리 불러와 저장 (SFR-001 · 059).
+ * 오프라인이 되면 이 저장본으로 예비 추천을 보여 준다
+ */
+export async function preloadNearby(radiusKm = START_RADIUS) {
+  const at = await currentLocation();
+  if (!at) return;
+  try {
+    const cards = await api<CachedCard[]>(
+      'GET',
+      `/hospitals/nearby?lat=${at.lat}&lng=${at.lng}&radiusKm=${radiusKm}`,
+      { timeoutMs: 5000 },
+    );
+    await saveCards(at, cards);
+  } catch {
+    /* 못 받으면 지난 저장본 그대로 */
   }
 }
 
@@ -391,7 +454,10 @@ export type ServerTransport = {
 };
 
 /** 테스트에서도 쓰려고 꺼내 둠: 서버 이송 건 1개를 화면 상태로 */
+let lastT: ServerTransport | null = null;
+
 export function apply(t: ServerTransport, myDevice = myDeviceId) {
+  lastT = t;
   const from = s.status;
   s.transportId = t.id;
   s.version = t.version;
@@ -653,6 +719,22 @@ export function startTransportSync() {
   const poll = setInterval(() => {
     if (isActive(s.status)) void refresh();
   }, 15_000);
+  // 통신이 복구되면: 밀린 기록을 발생 순서대로 올리고 → 최신으로 다시 읽기 (SFR-099 · 068)
+  offs.push(
+    whenOnline(async () => {
+      const r = await flush<ServerTransport>().catch(() => null);
+      if (r?.transport) apply(r.transport);
+      s.offlineCreated = false;
+      if (r?.alert)
+        notifier(
+          'warning',
+          '서버에 이미 승인·확정이 있어요',
+          '끊긴 동안의 기록은 이력으로만 남겼어요',
+        );
+      await refresh();
+      await loadNearby();
+    }),
+  );
   void loadCurrent();
   return () => {
     offs.forEach((off) => off());
@@ -697,6 +779,8 @@ async function guard<T>(fn: () => Promise<T>): Promise<Result<T>> {
     // 다른 팀원이 먼저 바꿨으면(버전 충돌) 최신 상태로 맞춘다 (SFR-160)
     if (e instanceof ApiError && (e.code === 'VERSION_CONFLICT' || e.status === 409))
       void refresh();
+    // 확정·취소·목적지 변경 등은 통신이 끊기면 쌓아 두지 않는다 (SFR-099 · 111 · 160)
+    if (isNetErr(e)) return { ok: false, error: OFFLINE_NOT_ALLOWED };
     return { ok: false, error: errorText(e) };
   }
 }
@@ -713,6 +797,105 @@ function sendLatest(path: string, body: Record<string, unknown>) {
   );
 }
 
+const isNetErr = (e: unknown) => e instanceof ApiError && e.code === 'NETWORK';
+const OFFLINE_NOT_ALLOWED = '통신이 끊겨 지금은 할 수 없어요. 연결되면 다시 해 주세요';
+
+/**
+ * 통신 두절 중 화면만 먼저 바꾸기 (SFR-099). 서버에는 기록으로 쌓았다가 복구 때 올리고,
+ * 최종 판정은 서버가 상태 전이표로 한다 (규칙 4). 그래서 이 값은 잠깐 보여 주는 용도
+ */
+function localApply(patch: Partial<ServerTransport>) {
+  if (!lastT) return;
+  apply({ ...lastT, ...patch, version: lastT.version });
+}
+
+function offlineConfirmed(hospitalId: string): ServerTransport['confirmedHospital'] {
+  const h = hospital(hospitalId);
+  return {
+    id: Number(hospitalId),
+    name: h.name,
+    erPhone: h.erPhone || null,
+    memo: null,
+    extraMemo: null,
+    entrance: { lat: h.lat ?? 0, lng: h.lng ?? 0 },
+    requestStatus: 'confirmed',
+    closeReason: null,
+  };
+}
+
+/** 통신 두절 중 전화 결과: 기록으로 쌓고 화면만 먼저 (SFR-099) */
+async function offlinePhoneResult(
+  hospitalId: string,
+  body: { result: string; reason?: string; rejectReason?: RejectReason; reasonText?: string },
+) {
+  await enqueue({
+    kind: 'phone_check',
+    transportId: tid(),
+    hospitalId: Number(hospitalId),
+    result: body.result as 'accepted',
+    ...(body.reason ? { reason: body.reason } : {}),
+    ...(body.reasonText ? { reasonText: body.reasonText } : {}),
+    ...(body.rejectReason ? { rejectReason: body.rejectReason } : {}),
+  });
+  if (body.result === 'accepted' || body.result === 'no_answer' || body.result === 'skipped') {
+    localApply({
+      status: 'moving',
+      phoneTarget: null,
+      confirmedHospital: offlineConfirmed(hospitalId),
+    });
+    return;
+  }
+  const prev = lastT?.excludedHospitalIds ?? [];
+  localApply({
+    status: 'fallback',
+    phoneTarget: null,
+    excludedHospitalIds: body.result === 'rejected' ? [...prev, Number(hospitalId)] : prev,
+  });
+}
+
+/**
+ * 통신이 끊긴 채 '병원에 요청' (SFR-099): 병원에는 보내지 않고(지연 전송 안 함) 예비 추천 건을 만들어
+ * 휴대폰 저장본 목록으로 전화 확인을 이어 간다. 복구되면 create_fallback 기록으로 서버에 등록된다
+ */
+async function offlineCreate(grade: Grade, patient: Patient, radiusKm: number): Promise<Result> {
+  const location = await currentLocation();
+  if (!location) return { ok: false, error: '위치를 가져오지 못했어요. 위치 권한을 확인해 주세요' };
+  const id = uuid();
+  await enqueue({
+    kind: 'create_fallback',
+    transportId: id,
+    assessment: toAssessment(patient),
+    radiusKm,
+    location,
+  });
+  s = { ...initial(), hospitalsRev: s.hospitalsRev, loaded: true };
+  apply({
+    id,
+    status: 'fallback',
+    version: 1,
+    serverNow: new Date().toISOString(),
+    requestRadiusKm: radiusKm,
+    fallbackRadiusKm: radiusKm,
+    fallbackReason: 'offline',
+    currentRound: null,
+    requests: [],
+    phoneTarget: null,
+    confirmedHospital: null,
+    canReRequest: false,
+    destinationChangeUsed: false,
+    navDeviceId: null,
+    etaMin: null,
+    lastSentAssessmentSeq: 0,
+    excludedHospitalIds: [],
+    requestedGrade: grade ? GRADE_NO[grade] : null,
+  });
+  s.offlineCreated = true;
+  prevTransportId = null;
+  await useCachedList();
+  emit();
+  return { ok: true, value: undefined };
+}
+
 const tid = () => {
   if (!s.transportId) throw new ApiError(0, 'NO_TRANSPORT', '진행 중 이송이 없어요');
   return s.transportId;
@@ -727,9 +910,15 @@ async function phoneResult(body: {
   return guard(async () => {
     const hospitalId = s.phoneTarget;
     if (!hospitalId) throw new ApiError(409, 'NO_PHONE_TARGET', '전화 확인 중인 병원이 없어요');
-    await api('POST', `/transports/${tid()}/phone-checks`, {
-      body: { hospitalId: Number(hospitalId), version: s.version, ...body },
-    });
+    try {
+      await api('POST', `/transports/${tid()}/phone-checks`, {
+        body: { hospitalId: Number(hospitalId), version: s.version, ...body },
+      });
+    } catch (e) {
+      if (!isNetErr(e)) throw e;
+      await offlinePhoneResult(hospitalId, body);
+      return;
+    }
     await refresh();
   });
 }
@@ -757,7 +946,9 @@ export const actions = {
       prevTransportId = null;
       apply(t);
       void loadNearby();
-    });
+    }).then((r) =>
+      r.ok || r.error !== OFFLINE_NOT_ALLOWED ? r : offlineCreate(grade, patient, radiusKm),
+    );
   },
   /** 승인 병원 1곳 확정 (SFR-110). 같은 확정을 두 번 보내도 서버가 한 번만 처리하게 Idempotency-Key */
   async confirm(hospitalId: string) {
@@ -794,9 +985,20 @@ export const actions = {
   },
   async startPhone(hospitalId: string) {
     return guard(async () => {
-      await api('POST', `/transports/${tid()}/phone-check/start`, {
-        body: { hospitalId: Number(hospitalId), version: s.version },
-      });
+      try {
+        await api('POST', `/transports/${tid()}/phone-check/start`, {
+          body: { hospitalId: Number(hospitalId), version: s.version },
+        });
+      } catch (e) {
+        if (!isNetErr(e)) throw e;
+        // 통신 두절: 전화 확인 화면만 먼저 (결과를 고르면 그때 기록으로 쌓는다)
+        const h = hospital(hospitalId);
+        localApply({
+          status: 'phone_check',
+          phoneTarget: { hospitalId: Number(hospitalId), name: h.name, erPhone: h.erPhone || null },
+        });
+        return;
+      }
       await refresh();
     });
   },
@@ -846,7 +1048,16 @@ export const actions = {
   },
   async arrive(method: 'button' | 'hospital' = 'button') {
     return guard(async () => {
-      await sendLatest(`/transports/${tid()}/arrive`, { method });
+      try {
+        await sendLatest(`/transports/${tid()}/arrive`, { method });
+      } catch (e) {
+        if (!isNetErr(e)) throw e;
+        // 통신 두절: 도착 기록을 쌓고 화면만 먼저 (SFR-099)
+        await enqueue({ kind: 'arrive', transportId: tid(), method: 'button' });
+        stopDrive();
+        localApply({ status: 'arrived' });
+        return;
+      }
       stopDrive();
       await refresh();
     });
@@ -1063,4 +1274,5 @@ export function __resetEngineForTest() {
   claiming = false;
   myDeviceId = null;
   prevTransportId = null;
+  lastT = null;
 }

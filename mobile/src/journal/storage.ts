@@ -4,23 +4,11 @@
  * - 환자 성명 칸은 저장하지 않는다 (LogData 에 없음, SER-012)
  * - 열 때마다 7일 지난 것을 지운다
  */
-import * as SQLite from 'expo-sqlite';
+import { db } from '../offline/db';
 import type { LogData } from './form';
 
 export const KEEP_MS = 7 * 24 * 60 * 60_000;
 export type SavedJournal = { id: string; savedAt: number; data: LogData };
-
-let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
-function db() {
-  dbPromise ??= (async () => {
-    const d = await SQLite.openDatabaseAsync('savetime.db');
-    await d.execAsync(
-      'CREATE TABLE IF NOT EXISTS journal (id TEXT PRIMARY KEY NOT NULL, saved_at INTEGER NOT NULL, data TEXT NOT NULL)',
-    );
-    return d;
-  })();
-  return dbPromise;
-}
 
 export async function purgeOld(now = Date.now()) {
   await (await db()).runAsync('DELETE FROM journal WHERE saved_at < ?', now - KEEP_MS);

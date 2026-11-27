@@ -18,6 +18,7 @@ import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
 import { setTransportNotifier, startTransportSync } from '../src/transport/engine';
 import { notifyTeam } from '../src/transport/notify';
+import { NetBanner } from '../src/offline/NetBanner';
 import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
 import { TransportRouter } from '../src/transport/ui/TransportRouter';
@@ -114,6 +115,7 @@ function Gate() {
           <Stack.Screen name="password" />
         </Stack.Protected>
       </Stack>
+      <NetBanner />
     </>
   );
 }
