@@ -1,39 +1,87 @@
-// 카카오모빌리티 공식 가이드(iOS 길찾기 UI SDK · 주행)의 순서를 그대로 따른다.
-//  1) KNSDK 초기화 (네이티브 앱 키)
+// 카카오모빌리티 공식 가이드(iOS 길찾기 UI SDK · 주행) 순서를 그대로 따른다. 함수 이름은 SDK 1.12.14 헤더 기준.
+//  1) KNSDK 초기화 (네이티브 앱 키) — 앱에서 한 번
 //  2) 위경도(WGS84) → 카텍(KATEC) 좌표로 바꿔 출발·목적지 POI 를 만든다
-//  3) makeTrip 으로 경로를 만들고, KNNaviView 를 화면에 붙인다
+//  3) makeTrip 으로 경로를 만들고, KNNaviView 를 이 화면 칸에 붙인다
 //  4) KNGuidance 의 알림(델리게이트)을 모두 naviView 로 넘긴다 — 안 넘기면 주행 화면이 제대로 안 나온다(가이드 경고)
-#import "SVKakaoNaviViewController.h"
+#import "SVKakaoNaviHostView.h"
 #import <AVFoundation/AVFoundation.h>
 #import <KNSDK/KNSDK.h>
 #import <KNSDK/KNNaviView.h>
 
 static BOOL svSdkReady = NO;
 
-@interface SVKakaoNaviViewController () <KNGuidance_GuideStateDelegate,
-                                         KNGuidance_RouteGuideDelegate,
-                                         KNGuidance_VoiceGuideDelegate,
-                                         KNGuidance_SafetyGuideDelegate,
-                                         KNGuidance_LocationGuideDelegate,
-                                         KNGuidance_CitsGuideDelegate,
-                                         KNNaviView_GuideStateDelegate,
-                                         KNNaviView_StateDelegate>
+@interface SVKakaoNaviHostView () <KNGuidance_GuideStateDelegate,
+                                   KNGuidance_RouteGuideDelegate,
+                                   KNGuidance_VoiceGuideDelegate,
+                                   KNGuidance_SafetyGuideDelegate,
+                                   KNGuidance_LocationGuideDelegate,
+                                   KNGuidance_CitsGuideDelegate,
+                                   KNNaviView_GuideStateDelegate,
+                                   KNNaviView_StateDelegate>
 @property (nonatomic, strong, nullable) KNNaviView *naviView;
-@property (nonatomic, copy) NSString *goalName;
-@property (nonatomic) double goalLat, goalLng, startLat, startLng;
-/// 길안내 엔진이 '안내 종료(목적지 도착)'를 알렸는지
+@property (nonatomic) BOOL started;
+@property (nonatomic) BOOL ended;
 @property (nonatomic) BOOL arrived;
-@property (nonatomic) BOOL finished;
 @end
 
-@implementation SVKakaoNaviViewController
+@implementation SVKakaoNaviHostView
 
-+ (void)initializeSdkWithAppKey:(NSString *)appKey
-                  clientVersion:(NSString *)clientVersion
-                        userKey:(NSString *)userKey
-                     completion:(void (^)(NSString *_Nullable))completion {
+- (instancetype)initWithFrame:(CGRect)frame {
+  if ((self = [super initWithFrame:frame])) {
+    self.backgroundColor = UIColor.blackColor;
+    self.clipsToBounds = YES;
+  }
+  return self;
+}
+
+- (void)layoutSubviews {
+  [super layoutSubviews];
+  self.naviView.frame = self.bounds;
+}
+
+- (void)emitError:(NSString *)stage error:(KNError *_Nullable)error fallback:(NSString *)fallback {
+  if (self.onError) self.onError(stage, error ? error.code : fallback, (error && error.msg) ? error.msg : @"");
+}
+
+- (void)startWithAppKey:(NSString *)appKey
+          clientVersion:(NSString *)clientVersion
+                userKey:(NSString *)userKey
+               goalName:(NSString *)goalName
+                goalLat:(double)goalLat
+                goalLng:(double)goalLng
+               startLat:(double)startLat
+               startLng:(double)startLng {
+  if (self.started) return;
+  self.started = YES;
+
+  // 음성 안내가 끊기지 않게 (가이드 필수 설정): 다른 소리와 섞어서 재생
+  AVAudioSession *audio = [AVAudioSession sharedInstance];
+  [audio setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
+  [audio setActive:YES error:nil];
+
+  __weak typeof(self) weakSelf = self;
+  void (^route)(void) = ^{
+    KNSDK *sdk = [KNSDK sharedInstance];
+    IntPoint s = [sdk convertWGS84ToKATECWithLongitude:startLng latitude:startLat];
+    IntPoint g = [sdk convertWGS84ToKATECWithLongitude:goalLng latitude:goalLat];
+    KNPOI *start = [[KNPOI alloc] initWithName:@"현재 위치" x:s.x y:s.y];
+    KNPOI *goal = [[KNPOI alloc] initWithName:goalName x:g.x y:g.y];
+    [sdk makeTripWithStart:start
+                      goal:goal
+                      vias:nil
+                completion:^(KNError *_Nullable aError, KNTrip *_Nullable aTrip) {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    if (aError || !aTrip) {
+                      [weakSelf emitError:@"route" error:aError fallback:@"NO_TRIP"];
+                      return;
+                    }
+                    [weakSelf attachWithTrip:aTrip];
+                  });
+                }];
+  };
+
   if (svSdkReady) {
-    completion(nil);
+    route();
     return;
   }
   // 1.12.14 헤더 기준: 사용자 구분 값은 appUserId, csId 는 쓰지 않음
@@ -44,62 +92,17 @@ static BOOL svSdkReady = NO;
                                     completion:^(KNError *_Nullable aError) {
                                       dispatch_async(dispatch_get_main_queue(), ^{
                                         if (aError) {
-                                          completion([NSString stringWithFormat:@"%@ %@", aError.code ?: @"", aError.msg ?: @""]);
-                                        } else {
-                                          svSdkReady = YES;
-                                          completion(nil);
+                                          [weakSelf emitError:@"init" error:aError fallback:@"INIT"];
+                                          return;
                                         }
+                                        svSdkReady = YES;
+                                        route();
                                       });
                                     }];
 }
 
-- (instancetype)initWithGoalName:(NSString *)goalName
-                         goalLat:(double)goalLat
-                         goalLng:(double)goalLng
-                        startLat:(double)startLat
-                        startLng:(double)startLng {
-  if ((self = [super initWithNibName:nil bundle:nil])) {
-    _goalName = [goalName copy];
-    _goalLat = goalLat;
-    _goalLng = goalLng;
-    _startLat = startLat;
-    _startLng = startLng;
-    self.modalPresentationStyle = UIModalPresentationFullScreen;
-  }
-  return self;
-}
-
-- (void)viewDidLoad {
-  [super viewDidLoad];
-  self.view.backgroundColor = UIColor.blackColor;
-
-  // 음성 안내가 끊기지 않게 (가이드 필수 설정): 다른 소리와 섞어서 재생
-  AVAudioSession *audio = [AVAudioSession sharedInstance];
-  [audio setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
-  [audio setActive:YES error:nil];
-
-  KNSDK *sdk = [KNSDK sharedInstance];
-  IntPoint s = [sdk convertWGS84ToKATECWithLongitude:self.startLng latitude:self.startLat];
-  IntPoint g = [sdk convertWGS84ToKATECWithLongitude:self.goalLng latitude:self.goalLat];
-  KNPOI *start = [[KNPOI alloc] initWithName:@"현재 위치" x:s.x y:s.y];
-  KNPOI *goal = [[KNPOI alloc] initWithName:self.goalName x:g.x y:g.y];
-
-  __weak typeof(self) weakSelf = self;
-  [sdk makeTripWithStart:start
-                    goal:goal
-                    vias:nil
-              completion:^(KNError *aError, KNTrip *aTrip) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                  if (aError || !aTrip) {
-                    [weakSelf finishWith:[NSString stringWithFormat:@"error:%@", aError ? aError.code : @"no_trip"]];
-                    return;
-                  }
-                  [weakSelf startGuideWithTrip:aTrip];
-                });
-              }];
-}
-
-- (void)startGuideWithTrip:(KNTrip *)trip {
+- (void)attachWithTrip:(KNTrip *)trip {
+  if (self.ended) return;
   KNGuidance *guidance = [[KNSDK sharedInstance] sharedGuidance];
   guidance.guideStateDelegate = self;
   guidance.routeGuideDelegate = self;
@@ -111,22 +114,19 @@ static BOOL svSdkReady = NO;
   // 구급차: 추천 경로, 도로 통제·스쿨존 피하기 (가이드 예시 값)
   KNRoutePriority priority = KNRoutePriority_Recommand;
   SInt32 avoid = KNRouteAvoidOption_RoadEvent | KNRouteAvoidOption_SZone;
-  KNNaviView *naviView = [[KNNaviView alloc] initWithGuidance:guidance
-                                                         trip:trip
-                                                  routeOption:priority
-                                                  avoidOption:avoid];
-  naviView.frame = self.view.bounds;
-  naviView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  KNNaviView *naviView = [[KNNaviView alloc] initWithGuidance:guidance trip:trip routeOption:priority avoidOption:avoid];
+  naviView.frame = self.bounds;
   naviView.guideStateDelegate = self;
   naviView.stateDelegate = self;
   [naviView sndVolume:1.0];
-  [self.view addSubview:naviView];
+  [self addSubview:naviView];
   self.naviView = naviView;
+  if (self.onReady) self.onReady();
 }
 
-- (void)finishWith:(NSString *)reason {
-  if (self.finished) return;
-  self.finished = YES;
+- (void)stop {
+  if (self.ended) return;
+  self.ended = YES;
   KNGuidance *guidance = [[KNSDK sharedInstance] sharedGuidance];
   guidance.guideStateDelegate = nil;
   guidance.routeGuideDelegate = nil;
@@ -140,11 +140,17 @@ static BOOL svSdkReady = NO;
   [[AVAudioSession sharedInstance] setActive:NO
                                  withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
                                        error:nil];
-  void (^done)(NSString *) = self.onEnded;
-  [self.presentingViewController dismissViewControllerAnimated:YES
-                                                    completion:^{
-                                                      if (done) done(reason);
-                                                    }];
+}
+
+- (void)finishWith:(NSString *)reason {
+  if (self.ended) return;
+  [self stop];
+  if (self.onEnded) self.onEnded(reason);
+}
+
+- (void)removeFromSuperview {
+  [self stop];
+  [super removeFromSuperview];
 }
 
 #pragma mark - KNGuidance_GuideStateDelegate → naviView
@@ -164,11 +170,8 @@ static BOOL svSdkReady = NO;
                       reason:(KNGuideRouteChangeReason)aChangeReason {
   [self.naviView guidanceRouteChanged:aGuidance];
 }
-- (void)guidance:(KNGuidance *)aGuidance didUpdateIndoorRoute:(KNRoute *_Nullable)aRoute {
-  [self.naviView guidance:aGuidance didUpdateIndoorRoute:aRoute];
-}
 - (void)guidanceGuideEnded:(KNGuidance *)aGuidance {
-  // 목적지 도착 · 안내 종료. 주행 결과 창은 띄우지 않고 바로 앱으로 돌아간다 (도착 처리는 앱 화면에서)
+  // 목적지 도착 · 안내 종료. 주행 결과 창은 띄우지 않고, 도착 처리는 우리 페이지 버튼으로
   self.arrived = YES;
   [self.naviView guidanceGuideEnded:aGuidance isShowDriveResultDialog:NO];
   [self finishWith:@"arrived"];
@@ -177,6 +180,9 @@ static BOOL svSdkReady = NO;
     didUpdateRoutes:(NSArray<KNRoute *> *)aRoutes
      multiRouteInfo:(KNMultiRouteInfo *_Nullable)aMultiRouteInfo {
   [self.naviView guidance:aGuidance didUpdateRoutes:aRoutes multiRouteInfo:aMultiRouteInfo];
+}
+- (void)guidance:(KNGuidance *)aGuidance didUpdateIndoorRoute:(KNRoute *_Nullable)aRoute {
+  [self.naviView guidance:aGuidance didUpdateIndoorRoute:aRoute];
 }
 
 #pragma mark - 위치 · 경로 · 안전 · 음성 · C-ITS → naviView

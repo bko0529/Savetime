@@ -3,7 +3,6 @@ import { Alert, Linking } from 'react-native';
 import CallScreen from '../../app/call/[hospitalId]';
 import TransportScreen from '../../app/transport';
 import { __resetEngineForTest, actions, apply, type ServerTransport } from '../transport/engine';
-import { routeUrls } from '../transport/links';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
@@ -115,8 +114,10 @@ test('이동 중: 남은 시간 · 병원 안내 · 길 안내 열기', async ()
   expect(screen.getByText('순천향대 천안병원 · 7분 남음')).toBeTruthy();
   expect(screen.getByText('약 7분')).toBeTruthy();
   expect(screen.getByText('병원 안내 · "정문 오른쪽"')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: '길 안내 열기 (카카오맵)' }));
-  expect(Linking.openURL).toHaveBeenCalledWith('kakaomap://route?ep=36.8,127.13&by=CAR');
+  await fireEvent.press(screen.getByRole('button', { name: '길 안내 열기 (카카오내비)' }));
+  // 다른 앱(카카오맵)이 아니라 앱 안 길 안내 페이지로 (D-137)
+  expect(mockPush).toHaveBeenCalledWith('/navi');
+  expect(Linking.openURL).not.toHaveBeenCalled();
 });
 
 test('이동 중: 입구 근처가 아니면 도착 처리가 꺼져 있고, 누르면 켜진다', async () => {
@@ -164,8 +165,9 @@ test('이동 중: 이송 취소는 한 번 더 묻는다', async () => {
   expect(alert.mock.calls[0]![0]).toBe('이송을 취소할까요?');
 });
 
-test('길찾기 주소: 앱이 없으면 웹 주소', () => {
-  expect(routeUrls({ lat: 1, lng: 2 }, '병원 A').web).toBe(
-    'https://map.kakao.com/link/to/%EB%B3%91%EC%9B%90%20A,1,2',
-  );
+test('길 안내 열기는 다른 앱이 아니라 앱 안 길 안내 페이지로 (D-137)', async () => {
+  apply(moving(), 'ios-me');
+  await render(<TransportScreen />);
+  await fireEvent.press(screen.getByRole('button', { name: '길 안내 열기 (카카오내비)' }));
+  expect(mockPush).toHaveBeenCalledWith('/navi');
 });

@@ -6,7 +6,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
@@ -17,7 +17,6 @@ import { consentStore, loadConsent } from '../src/state/consent';
 import { usePermissions } from '../src/state/permissions';
 import { teamStore } from '../src/duty/team';
 import { setRouteOpener, setTransportNotifier, startTransportSync } from '../src/transport/engine';
-import { openRoute } from '../src/transport/links';
 import { notifyTeam } from '../src/transport/notify';
 import { startDraftSync } from '../src/transport/teamDraft';
 import { InvitePush } from '../src/duty/InvitePush';
@@ -32,7 +31,8 @@ import { effectiveScheme, loadThemePref, useThemePref } from '../src/ui/themePre
 // 이송 알림(SFR-130): 진동 + 소리 + 알림 배너
 setTransportNotifier((kind, title, body) => void notifyTeam(kind, title, body));
 // 경로 안내 담당 폰은 병원이 정해지면 길 안내를 저절로 연다 (SFR-132, 앱 안 내비 SDK 는 9단계)
-setRouteOpener((to, name) => void openRoute(to, name));
+// 운전 폰(경로 안내 담당)은 확정되면 앱 안 길 안내 페이지를 연다 (SFR-157). 이미 열려 있으면 그대로
+setRouteOpener(() => router.navigate('/navi'));
 
 function Splash() {
   return (
@@ -122,6 +122,7 @@ function Gate() {
           <Stack.Screen name="request" />
           <Stack.Screen name="call/[hospitalId]" />
           <Stack.Screen name="transport" />
+          <Stack.Screen name="navi" options={{ gestureEnabled: false }} />
           <Stack.Screen name="log" />
           <Stack.Screen name="settings" />
         </Stack.Protected>

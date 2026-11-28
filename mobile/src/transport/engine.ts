@@ -1181,7 +1181,7 @@ const DRIVER_WAIT_MS = 10_000;
 const routeOpened = new Set<string>();
 type RouteOpener = (to: LatLng, name: string) => void;
 let routeOpener: RouteOpener = () => {};
-/** 앱이 켜질 때 links.ts 의 openRoute 를 넣는다 (테스트에서는 가짜로) */
+/** 앱이 켜질 때 '길 안내 페이지 열기'를 넣는다 (테스트에서는 가짜로) */
 export function setRouteOpener(fn: RouteOpener) {
   routeOpener = fn;
 }

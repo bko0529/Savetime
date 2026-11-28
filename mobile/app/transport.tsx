@@ -11,7 +11,7 @@ import { AlertTriangle, MapPin, Navigation, Phone, Send, Timer } from 'lucide-re
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Vibration, View } from 'react-native';
 import { actions, hospital, latestReq, useEngine, type Result } from '../src/transport/engine';
-import { callNumber, openRoute } from '../src/transport/links';
+import { callNumber } from '../src/transport/links';
 import type { DestChangeReason } from '../src/transport/types';
 import { ProgressStrip } from '../src/transport/ui/ProgressStrip';
 import { BigButton, Notice, PhoneScreen, Pill, Tile, Txt } from '../src/ui/kit';
@@ -145,7 +145,7 @@ export default function TransportScreen() {
         </View>
       ) : null}
 
-      {/* 경로 안내: 진행 막대 + 카카오맵 길찾기 열기 (앱 안 내비 SDK 는 9단계) */}
+      {/* 경로 안내: 진행 막대 + 앱 안 길 안내 페이지 열기 (카카오내비 내장) */}
       <View
         style={{
           height: 180,
@@ -182,17 +182,17 @@ export default function TransportScreen() {
             color: color.muted,
           }}
         >
-          경로 안내 (운전 대원 폰 · 카카오맵 길찾기)
+          경로 안내 (운전 대원 폰 · 앱 안 카카오내비)
         </Txt>
       </View>
       {entrance ? (
         <BigButton
           variant="primary"
           style={{ marginTop: 10 }}
-          onPress={() => void openRoute(entrance, h.name)}
+          onPress={() => router.push('/navi')}
           icon={<Navigation size={18} color={color.primaryText} />}
         >
-          길 안내 열기 (카카오맵)
+          길 안내 열기 (카카오내비)
         </BigButton>
       ) : null}
 
