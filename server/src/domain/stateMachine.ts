@@ -35,6 +35,7 @@ export type TransportEvent =
   | 'APPROVAL_CANCELLED_OPEN_REMAIN' // A10 승인 취소됐지만 대기·유효 승인이 남음 (상태 유지)
   | 'ASSESSMENT_UPDATED'           // A11 변경 사항 보내기 (상태 유지)
   | 'EXPAND_ROUND'                 // A12 '반경 넓혀 다시 요청'
+  | 'AUTO_EXPAND_ROUND'            // A12b 승인 0곳으로 요청이 모두 닫히면 서버가 저절로 넓혀 다시 요청 (D-142)
   | 'START_PHONE_CHECK'            // A13 추천 병원 '경로 안내' (요청 중·예비 추천 모두, v1.5)
   | 'PHONE_ACCEPTED'               // A14 수용 확정
   | 'PHONE_PROCEED'                // A15 연결 실패·확인 생략 + 사유
@@ -73,6 +74,7 @@ export const TRANSPORT_TABLE: Row<TransportStatus, TransportEvent>[] = [
   T('requesting',  'START_PHONE_CHECK',   'phone_check',true,  'A13', '요청 화면 추천 목록에서 전화 확인. 병원 요청은 닫지 않음 (D-127)'),
   T('requesting',  'CANCEL',              'cancelled',  true,  'A24·A28·A29', '열린 요청 → 취소됨'),
   T('fallback',    'EXPAND_ROUND',        'requesting', true,  'A12', '반경 한 단계, 아직 요청 안 한 병원에만 새 회차'),
+  T('fallback',    'AUTO_EXPAND_ROUND',   'requesting', false, 'A12b', '승인 0곳(전부 거절·2분 승인 0·전달 0곳)이면 서버가 다음 반경의 새 병원에만 (D-142)'),
   T('fallback',    'START_PHONE_CHECK',   'phone_check',true,  'A13', '대상 병원 기록'),
   T('fallback',    'CANCEL',              'cancelled',  true,  'A24', ''),
   // 전화 확인 중에도 열린 요청은 계속 처리된다 (v1.5). 상태는 phone_check 유지, 대원 화면에 승인 칸 갱신·진동
@@ -276,6 +278,15 @@ export function transitionTransport(from: TransportStatus | null, event: Transpo
       if (i < 0 || i === RADIUS_STEPS.length - 1 || RADIUS_STEPS[i] >= max) throw new TransitionError('MAX_RADIUS', `더 넓힐 반경이 없어요 (최대 ${max}km)`);
       if (ctx.nextRadiusKm !== RADIUS_STEPS[i + 1]) throw new TransitionError('MAX_RADIUS', '반경은 한 단계씩만 넓혀요');
       if (ctx.newTargetCount === 0) throw new TransitionError('NO_REQUEST_TARGET', '넓힌 반경에 새 병원이 없어요');
+      break;
+    }
+    case 'AUTO_EXPAND_ROUND': {
+      // 자동은 새 병원이 없는 반경을 건너뛸 수 있어 한 단계가 아니어도 되지만, 더 넓고 등급별 최대 안이어야 한다
+      const max = ctx.maxRadiusKm ?? 40;
+      if (ctx.currentRadiusKm === undefined || ctx.nextRadiusKm === undefined) throw new TransitionError('MAX_RADIUS', '반경을 알 수 없어요');
+      if (ctx.nextRadiusKm <= ctx.currentRadiusKm || ctx.nextRadiusKm > max || !RADIUS_STEPS.includes(ctx.nextRadiusKm)) throw new TransitionError('MAX_RADIUS', `더 넓힐 반경이 없어요 (최대 ${max}km)`);
+      if (ctx.newTargetCount === 0) throw new TransitionError('NO_REQUEST_TARGET', '넓힌 반경에 새 병원이 없어요');
+      reason = 'auto_expand';
       break;
     }
     case 'PHONE_PROCEED':

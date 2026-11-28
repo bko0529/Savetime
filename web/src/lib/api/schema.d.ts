@@ -2108,7 +2108,7 @@ export interface components {
             /** @enum {string} */
             kind?: "first" | "expand" | "re_request" | "dest_change";
             /** @enum {integer} */
-            radiusKm?: 10 | 20 | 30 | 40;
+            radiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
             /** Format: date-time */
             sentAt?: string;
             /**
@@ -2184,9 +2184,9 @@ export interface components {
              */
             serverNow?: string;
             /** @enum {integer} */
-            requestRadiusKm?: 10 | 20 | 30 | 40;
+            requestRadiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
             /** @enum {integer} */
-            fallbackRadiusKm?: 10 | 20 | 30 | 40;
+            fallbackRadiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
             /** @enum {string|null} */
             fallbackReason?: "no_target" | "offline" | "all_rejected" | "expired_no_approval" | "none_delivered" | "approvals_cancelled" | "approval_window" | "phone_rejected_last" | "phone_dismissed" | null;
             currentRound?: components["schemas"]["Round"] | null;
@@ -2244,6 +2244,8 @@ export interface components {
              * @enum {integer|null}
              */
             requestedGrade?: 1 | 2 | 3 | null;
+            /** @description 승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청하는지 (D-142). 넓힐 데가 없으면 서버가 false 로 */
+            autoExpand?: boolean;
             /** @description 이동 거리 (종료 후, 구급활동일지용, SFR-041) */
             distanceKm?: number | null;
         };
@@ -3476,7 +3478,7 @@ export interface operations {
             query: {
                 lat: number;
                 lng: number;
-                radiusKm?: 10 | 20 | 30 | 40;
+                radiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
             };
             header?: never;
             path?: never;
@@ -3560,7 +3562,7 @@ export interface operations {
                     /** @description finishPrevious일 때 이전 건의 version */
                     previousVersion?: number | null;
                     /** @enum {integer} */
-                    radiusKm: 10 | 20 | 30 | 40;
+                    radiusKm: 10 | 20 | 30 | 40 | 60 | 80;
                     location?: components["schemas"]["LatLng"] | null;
                     /** @description 위치 미동의·실패 시 주소 (geocode 결과) */
                     address?: string | null;
@@ -3571,6 +3573,13 @@ export interface operations {
                      * @enum {integer|null}
                      */
                     requestedGrade?: 1 | 2 | 3 | null;
+                    /** @description 시작 반경 자동 — 요청할 병원이 3곳 이상인 가장 작은 반경(10·20·30·40km, 대학병원급 40·60·80km). 켜면 radiusKm 은 무시 (D-142) */
+                    autoRadius?: boolean;
+                    /**
+                     * @description 승인 0곳으로 요청이 모두 닫히면 서버가 다음 반경의 새 병원에만 다시 요청 (D-142)
+                     * @default true
+                     */
+                    autoExpand?: boolean;
                 };
             };
         };
@@ -3716,8 +3725,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {integer} */
-                        radiusKm?: 10 | 20 | 30 | 40;
-                        /** @description 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 고른 등급 이상 먼저, 그 안에서 직선거리순 (SFR-098, D-128) */
+                        radiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
+                        /** @description 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 등급을 골랐으면 그 등급 이상만(다른 등급은 빠짐), 직선거리순 (SFR-098, D-128, D-140) */
                         items?: components["schemas"]["HospitalCard"][];
                         /** @description 반경 안 전체 (지도) */
                         map?: components["schemas"]["HospitalCard"][];
@@ -3758,7 +3767,7 @@ export interface operations {
                      * @description 지금보다 한 단계 큰 값
                      * @enum {integer}
                      */
-                    radiusKm: 10 | 20 | 30 | 40;
+                    radiusKm: 10 | 20 | 30 | 40 | 60 | 80;
                 };
             };
         };
@@ -3801,7 +3810,7 @@ export interface operations {
                      * @description expand일 때 다음 단계 1칸
                      * @enum {integer}
                      */
-                    radiusKm?: 10 | 20 | 30 | 40;
+                    radiusKm?: 10 | 20 | 30 | 40 | 60 | 80;
                     /** @description 마지막으로 받은 version (SFR-160). 빠지면 400 VERSION_REQUIRED */
                     version: number;
                     location?: components["schemas"]["LatLng"] | null;
@@ -5675,7 +5684,7 @@ export interface operations {
             query: {
                 lat: number;
                 lng: number;
-                radiusKm: 10 | 20 | 30 | 40;
+                radiusKm: 10 | 20 | 30 | 40 | 60 | 80;
                 grade?: 1 | 2 | 3;
                 /** @description 제외 병원 이어받기 (같은 팀·끝난 지 10분 안인 직전 건의 수용 불가 병원을 빼고 센다, SFR-157) */
                 prevTransportId?: string;

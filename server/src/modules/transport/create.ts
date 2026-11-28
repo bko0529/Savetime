@@ -5,7 +5,13 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
-import { isInKorea, maxRadiusFor, RADIUS_KM } from '../../domain/geo.js';
+import {
+  AUTO_RADIUS_MIN_TARGETS,
+  autoRadiusSteps,
+  isInKorea,
+  maxRadiusFor,
+  RADIUS_KM,
+} from '../../domain/geo.js';
 import {
   ACTIVE,
   CASCADE,
@@ -50,6 +56,10 @@ const createSchema = z
       .union([z.literal(1), z.literal(2), z.literal(3)])
       .nullable()
       .optional(),
+    // 시작 반경 자동: 요청할 병원이 최소 3곳이 되는 가장 작은 반경 (D-142). 켜면 radiusKm 은 무시한다
+    autoRadius: z.boolean().optional(),
+    // 승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청 (D-142, 기본 켬)
+    autoExpand: z.boolean().optional(),
   })
   // 60·80km 는 대학병원급을 골랐을 때만 (D-141)
   .refine((v) => v.radiusKm <= maxRadiusFor(v.requestedGrade), {
@@ -192,13 +202,26 @@ export async function createTransport(
   // 10분 안에 끝난 같은 팀 직전 건의 수용 불가 병원은 이번에도 요청하지 않는다 (SFR-086·157).
   // 다른 팀 건·10분 지난 건이면 이어받지 않는다 (오류 아님)
   const inherited = await inheritedExclusions(client, teamId, input.prevTransportId);
-  const targets = await findRequestTargets(client, {
-    lat,
-    lng,
-    radiusKm: input.radiusKm,
-    grade: input.requestedGrade ?? null,
-    excludeHospitalIds: inherited?.hospitalIds,
-  });
+  const grade = input.requestedGrade ?? null;
+  const target = (radiusKm: number) =>
+    findRequestTargets(client, {
+      lat,
+      lng,
+      radiusKm,
+      grade,
+      excludeHospitalIds: inherited?.hospitalIds,
+    });
+  // 시작 반경 자동 (D-142): 가까운 반경부터 늘려 가며 요청할 병원이 3곳 이상인 가장 작은 반경을 고른다.
+  // 끝까지 3곳이 안 되면 등급별 최대 반경 (대학병원급 80km · 나머지 40km). 도시는 좁게, 지방은 넓게 저절로 맞춰진다
+  let radiusKm: number = input.radiusKm;
+  let targets = await target(radiusKm);
+  if (input.autoRadius) {
+    for (const r of autoRadiusSteps(grade)) {
+      radiusKm = r;
+      targets = await target(r);
+      if (targets.length >= AUTO_RADIUS_MIN_TARGETS) break;
+    }
+  }
   const event = targets.length > 0 ? 'CREATE_WITH_TARGETS' : 'CREATE_NO_TARGET';
   // 위에서 진행 중 건을 끝냈으니 다른 진행 중 건은 없다. 그래도 전이 함수가 한 번 더 확인한다
   const { to, history } = transitionTransport(null, event, {
@@ -210,19 +233,20 @@ export async function createTransport(
   // 요청 반경과 예비 추천 반경은 따로 저장한다. 처음에는 같은 값으로 시작 (SFR-012)
   await client.query(
     `INSERT INTO transport (id, team_id, status, request_radius_km, fallback_radius_km, requested_grade,
-                            origin_lat, origin_lng, location_consent, address, fallback_reason)
-     VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10)`,
+                            origin_lat, origin_lng, location_consent, address, fallback_reason, auto_expand)
+     VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       input.id,
       teamId,
       to,
-      input.radiusKm,
+      radiusKm,
       input.requestedGrade ?? null,
       lat,
       lng,
       input.locationConsent,
       input.address ?? null,
       to === 'fallback' ? history.reason : null,
+      input.autoExpand ?? true,
     ],
   );
   // 이어받은 직전 건과 제외 병원을 이번 건에도 남긴다: 반경 넓히기·다시 요청·추천도 같은 제외 병원 규칙을 쓴다
@@ -309,7 +333,7 @@ export async function createTransport(
     const round = await insertRound(client, {
       transportId: input.id,
       kind: 'first',
-      radiusKm: input.radiusKm,
+      radiusKm,
       targets,
       now,
       entityVersion: 1,

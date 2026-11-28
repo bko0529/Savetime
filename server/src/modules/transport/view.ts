@@ -16,6 +16,7 @@ interface TransportRow {
   fallback_radius_km: number;
   fallback_reason: string | null;
   requested_grade: number | null;
+  auto_expand: boolean;
   location_consent: boolean;
   address: string | null;
   offline_created: boolean;
@@ -79,7 +80,7 @@ interface RequestRow {
 export async function loadTransport(db: Db, transportId: string, paramedicId: string) {
   const { rows } = await db.query<TransportRow>(
     `SELECT t.id, t.status, t.version, now() AS server_now, t.request_radius_km, t.fallback_radius_km,
-            t.fallback_reason, t.requested_grade, t.location_consent, t.address, t.offline_created,
+            t.fallback_reason, t.requested_grade, t.auto_expand, t.location_consent, t.address, t.offline_created,
             t.nav_device_id, t.departed_at, t.dest_changed_at, t.distance_m, t.created_at,
             t.phone_target_hospital_id, ph.name AS phone_target_name, ph.er_phone AS phone_target_er_phone,
             t.confirmed_hospital_id, ch.name AS ch_name, ch.er_phone AS ch_er_phone,
@@ -264,6 +265,8 @@ export async function loadTransport(db: Db, transportId: string, paramedicId: st
     offlineCreated: t.offline_created,
     createdAt: t.created_at,
     requestedGrade: t.requested_grade,
+    // 승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청하는지 (D-142)
+    autoExpand: t.auto_expand,
     distanceKm: t.distance_m === null ? null : Math.round(t.distance_m / 100) / 10,
   };
 }

@@ -1214,6 +1214,13 @@ paths:
                   nullable: true
                   description: '병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반
                     병원(지역응급의료기관). null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)'
+                autoRadius:
+                  type: boolean
+                  description: '시작 반경 자동 — 요청할 병원이 3곳 이상인 가장 작은 반경(10·20·30·40km, 대학병원급 40·60·80km). 켜면 radiusKm 은 무시 (D-142)'
+                autoExpand:
+                  type: boolean
+                  default: true
+                  description: '승인 0곳으로 요청이 모두 닫히면 서버가 다음 반경의 새 병원에만 다시 요청 (D-142)'
               required:
               - id
               - radiusKm
@@ -4678,6 +4685,9 @@ components:
           nullable: true
           description: '병원 등급: 1 대학병원급(권역응급의료센터) · 2 종합병원급(지역응급의료센터) · 3 일반 병원(지역응급의료기관).
             null = 고르지 않음(전체). 고른 등급 이상에만 요청 (SFR-162, 부록 F)'
+        autoExpand:
+          type: boolean
+          description: '승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청하는지 (D-142). 넓힐 데가 없으면 서버가 false 로'
         distanceKm:
           type: number
           nullable: true

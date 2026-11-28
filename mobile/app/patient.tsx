@@ -16,9 +16,14 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, Switch, View } from 'react-native';
 import { actions, preloadNearby, previewTargets, useEngine } from '../src/transport/engine';
-import { radiusChoices, startRadiusFor, type Grade } from '../src/transport/hospitals';
+import {
+  maxRadiusFor,
+  radiusChoices,
+  startRadiusFor,
+  type Grade,
+} from '../src/transport/hospitals';
 import { currentLocation, manualLocation } from '../src/transport/location';
 import { AddressSheet } from '../src/transport/ui/AddressSheet';
 import { vitalWarnings } from '../src/transport/labels';
@@ -30,7 +35,14 @@ import {
   UNKNOWN,
   type Patient,
 } from '../src/transport/patient';
-import { setRadius, usePatient, useRadius } from '../src/transport/patientStore';
+import {
+  setAutoExpand,
+  setAutoRadius,
+  setRadius,
+  usePatient,
+  useRadius,
+  useRadiusMode,
+} from '../src/transport/patientStore';
 import {
   clearPrefill,
   draftStore,
@@ -91,11 +103,15 @@ export default function PatientScreen() {
   const [step, setStep] = useState(1);
   const [sending, setSending] = useState(false);
   const [targets, setTargets] = useState<number | null>(null);
-  const radiusKm = useRadius();
-  // 대학병원급을 고르면 반경 버튼이 40·60·80km 로 바뀌고 40km 부터. 다른 등급으로 돌아가면 20km (D-141)
+  const pickedRadius = useRadius();
+  const { autoRadius, autoExpand } = useRadiusMode();
+  // 대학병원급을 고르면 반경 버튼이 40·60·80km 로 바뀐다. 직접 고른 반경이 목록에 없으면 그 등급의 시작 반경으로 (D-141)
   useEffect(() => {
-    if (!radiusChoices(p.grade).includes(radiusKm)) setRadius(startRadiusFor(p.grade));
-  }, [p.grade, radiusKm]);
+    if (!autoRadius && !radiusChoices(p.grade).includes(pickedRadius))
+      setRadius(startRadiusFor(p.grade));
+  }, [p.grade, pickedRadius, autoRadius]);
+  // 자동이면 서버가 고르니, 미리 세기·저장은 그 등급의 최대 반경 안에서 (D-142)
+  const radiusKm = autoRadius ? maxRadiusFor(p.grade) : pickedRadius;
   // 위치를 못 잡으면 '위치 확인 불가 · 주소 입력' (SFR-009)
   const [locOk, setLocOk] = useState<boolean | null>(null);
   const [addrOpen, setAddrOpen] = useState(false);
@@ -142,7 +158,10 @@ export default function PatientScreen() {
     setSending(true);
     const r = active
       ? await actions.updateAssessment(p)
-      : await actions.create(p.grade, p, radiusKm);
+      : await actions.create(p.grade, p, autoRadius ? startRadiusFor(p.grade) : pickedRadius, {
+          radius: autoRadius,
+          expand: autoExpand,
+        });
     setSending(false);
     if (!r.ok) return Alert.alert('보내지 못했어요', r.error);
     if (active) Alert.alert('변경 사항을 병원에 보냈어요', '병원 화면에 강조 표시돼요');
@@ -229,37 +248,59 @@ export default function PatientScreen() {
                   <Txt style={{ fontFamily: font.bold, fontSize: 13, color: color.muted }}>
                     반경
                   </Txt>
-                  {radiusChoices(p.grade).map((km) => (
-                    <Pressable
-                      key={km}
-                      onPress={() => setRadius(km)}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`반경 ${km}km`}
-                      accessibilityState={{ selected: radiusKm === km }}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: radiusKm === km ? color.primary : color.border,
-                        backgroundColor: radiusKm === km ? color.primary : color.card,
-                      }}
-                    >
-                      <Txt
+                  {(['auto', ...radiusChoices(p.grade)] as const).map((km) => {
+                    const on = km === 'auto' ? autoRadius : !autoRadius && pickedRadius === km;
+                    return (
+                      <Pressable
+                        key={km}
+                        onPress={() => (km === 'auto' ? setAutoRadius() : setRadius(km))}
+                        accessibilityRole="radio"
+                        accessibilityLabel={km === 'auto' ? '반경 자동' : `반경 ${km}km`}
+                        accessibilityState={{ selected: on }}
                         style={{
-                          fontFamily: font.bold,
-                          fontSize: 13,
-                          color: radiusKm === km ? color.primaryText : color.foreground,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: on ? color.primary : color.border,
+                          backgroundColor: on ? color.primary : color.card,
                         }}
                       >
-                        {km}km
-                      </Txt>
-                    </Pressable>
-                  ))}
+                        <Txt
+                          style={{
+                            fontFamily: font.bold,
+                            fontSize: 13,
+                            color: on ? color.primaryText : color.foreground,
+                          }}
+                        >
+                          {km === 'auto' ? '자동' : `${km}km`}
+                        </Txt>
+                      </Pressable>
+                    );
+                  })}
                   <Txt style={{ flex: 1, textAlign: 'right', fontFamily: font.bold, fontSize: 13 }}>
+                    {autoRadius ? `최대 ${radiusKm}km ` : ''}
                     {targets ?? '-'}곳
                   </Txt>
                 </View>
+                {/* 자동 넓히기 (D-142): 승인 0곳이면 서버가 반경을 넓혀 새 병원에만 다시 요청 */}
+                <Pressable
+                  onPress={() => setAutoExpand(!autoExpand)}
+                  accessibilityRole="switch"
+                  accessibilityLabel="승인이 없으면 반경을 자동으로 넓혀 다시 요청"
+                  accessibilityState={{ checked: autoExpand }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 }}
+                >
+                  <Switch
+                    value={autoExpand}
+                    onValueChange={setAutoExpand}
+                    trackColor={{ true: color.success, false: color.borderStrong }}
+                    style={{ transform: [{ scale: 0.8 }] }}
+                  />
+                  <Txt style={{ flex: 1, fontSize: 13, color: color.muted }}>
+                    승인이 없으면 반경을 자동으로 넓혀 다시 요청 (최대 {maxRadiusFor(p.grade)}km)
+                  </Txt>
+                </Pressable>
                 {locOk === false || manualLabel ? (
                   <Pressable
                     onPress={() => setAddrOpen(true)}
@@ -501,8 +542,10 @@ export default function PatientScreen() {
                   }}
                 >
                   <Txt style={text.strong}>
-                    {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}반경 {radiusKm}km 안{' '}
-                    {targets ?? '-'}곳에 요청합니다
+                    {p.grade ? `${p.grade} 이상 · ` : '모든 등급 · '}
+                    {autoRadius
+                      ? `반경 자동(가까운 곳부터 3곳 이상) · 최대 ${radiusKm}km 안 ${targets ?? '-'}곳`
+                      : `반경 ${radiusKm}km 안 ${targets ?? '-'}곳에 요청합니다`}
                   </Txt>
                   <Txt style={[text.caption, { marginTop: 4, color: color.muted }]}>
                     등급 바꾸기는 1단계에서

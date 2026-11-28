@@ -146,6 +146,8 @@ test('환자 정보: 필수 12개가 다 차야 요청할 수 있고, 확인 불
   await fireEvent.press(btn());
   await waitFor(() => expect(create).toHaveBeenCalled());
   expect(create.mock.calls[0]![1]).toMatchObject({ complaint: '흉통', sex: '확인 불가' });
+  // 반경은 기본 '자동'(서버가 3곳 이상인 가장 작은 반경), 자동 넓히기 켬 (D-142)
+  expect(create.mock.calls[0]![3]).toEqual({ radius: true, expand: true });
 });
 
 test('요청 화면: 승인 칸 · 남은 시간 · 대기 병원', async () => {

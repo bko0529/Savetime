@@ -98,6 +98,10 @@ export type EngineState = {
   navDeviceId: string | null;
   /** 이 기기가 위치 기록·경로 안내 담당인가 */
   navIsMe: boolean;
+  /** 승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청하는지 (D-142) */
+  autoExpand: boolean;
+  /** 서버가 저절로 넓혀 다시 요청한 반경 (안내용, 대원이 넓힌 것은 아님) */
+  autoExpandedTo: number | null;
   /** 이 기기에서 병원을 확정했나 (확정하자마자 길 안내 페이지를 연다) */
   confirmedHere: boolean;
   /** 담당 단말이 병원 입구까지 남은 거리 (m) */
@@ -153,6 +157,8 @@ const initial = (): EngineState => ({
   etaMin: null,
   navDeviceId: null,
   navIsMe: false,
+  autoExpand: true,
+  autoExpandedTo: null,
   confirmedHere: false,
   remainingM: null,
   arriveRequested: false,
@@ -448,6 +454,7 @@ export type ServerTransport = {
   version: number;
   serverNow: string;
   requestRadiusKm: number;
+  autoExpand?: boolean;
   fallbackRadiusKm: number;
   fallbackReason: FallbackReason | null;
   currentRound: { roundNo: number; sentAt: string; respondUntil: string } | null;
@@ -474,10 +481,21 @@ export type ServerTransport = {
 
 /** 테스트에서도 쓰려고 꺼내 둠: 서버 이송 건 1개를 화면 상태로 */
 let lastT: ServerTransport | null = null;
+let lastRequestRadius: number | null = null;
+/** 대원이 '반경 넓혀 다시 요청'을 누른 중 (자동 넓히기 안내와 구분) */
+let expandingByMe = false;
 
 export function apply(t: ServerTransport, myDevice = myDeviceId) {
   lastT = t;
   const from = s.status;
+  const prevRequestRadius = s.transportId === t.id ? lastRequestRadius : null;
+  lastRequestRadius = t.requestRadiusKm;
+  // 예비 추천에서 대원이 누르지 않았는데 반경이 넓어져 요청 중이 됐으면 서버의 자동 넓히기 (D-142)
+  if (from === 'fallback' && t.status === 'requesting' && prevRequestRadius !== null)
+    s.autoExpandedTo =
+      t.requestRadiusKm > prevRequestRadius && !expandingByMe ? t.requestRadiusKm : null;
+  if (s.transportId !== t.id) s.autoExpandedTo = null;
+  s.autoExpand = t.autoExpand ?? true;
   s.transportId = t.id;
   s.version = t.version;
   // 요청 중에는 요청 반경, 예비 추천·전화 확인에서는 추천(넓힌) 반경을 보여 준다
@@ -946,7 +964,16 @@ async function phoneResult(body: {
 
 export const actions = {
   /** 이송 요청 (SFR-004·163). 환자 정보는 평가 항목만 (이름·연락처 없음, SER-012) */
-  async create(grade: Grade, patient: Patient, radiusKm = START_RADIUS) {
+  /**
+   * '병원에 요청'. auto.radius 면 서버가 요청할 병원이 3곳 이상인 가장 작은 반경을 고르고(radiusKm 은 무시),
+   * auto.expand 면 승인 0곳일 때 서버가 반경을 저절로 넓혀 다시 요청한다 (D-142)
+   */
+  async create(
+    grade: Grade,
+    patient: Patient,
+    radiusKm = START_RADIUS,
+    auto: { radius: boolean; expand: boolean } = { radius: false, expand: true },
+  ) {
     return guard(async () => {
       const location = await currentLocation();
       if (!location)
@@ -961,6 +988,8 @@ export const actions = {
           locationConsent: true,
           assessment: toAssessment(patient),
           requestedGrade: grade ? GRADE_NO[grade] : null,
+          autoRadius: auto.radius,
+          autoExpand: auto.expand,
           ...(prevTransportId ? { prevTransportId } : {}),
         },
       });
@@ -1000,10 +1029,15 @@ export const actions = {
       const next = nextRadiusFor(s.grade, s.radius);
       if (!next)
         throw new ApiError(409, 'MAX_RADIUS', `최대 반경(${maxRadiusFor(s.grade)}km)이에요`);
-      await api('POST', `/transports/${tid()}/rounds`, {
-        body: { kind: 'expand', radiusKm: next, version: s.version },
-      });
-      await refresh();
+      expandingByMe = true;
+      try {
+        await api('POST', `/transports/${tid()}/rounds`, {
+          body: { kind: 'expand', radiusKm: next, version: s.version },
+        });
+        await refresh();
+      } finally {
+        expandingByMe = false;
+      }
       void loadNearby();
     });
   },

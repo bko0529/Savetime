@@ -273,6 +273,7 @@ CREATE TABLE transport (                               -- 이송 건
   request_radius_km     smallint         NOT NULL DEFAULT 20 CHECK (request_radius_km IN (10,20,30,40,60,80)),
   requested_grade       smallint         CHECK (requested_grade IN (1,2,3)),  -- NULL = 등급 안 고름(전체). 고른 등급 이상에만 요청 (SFR-162)
   fallback_radius_km    smallint         NOT NULL DEFAULT 20 CHECK (fallback_radius_km IN (10,20,30,40,60,80)),
+  auto_expand           boolean          NOT NULL DEFAULT true,             -- 승인 0곳이면 서버가 반경을 저절로 넓혀 다시 요청 (D-142, SFR-131)
   origin_lat            numeric(9,6),                   -- 원본 위치: 이송 끝나면 NULL
   origin_lng            numeric(9,6),
   location_consent      boolean          NOT NULL,

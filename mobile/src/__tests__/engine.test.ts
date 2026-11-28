@@ -404,3 +404,25 @@ describe('환자 정보 → 평가 항목', () => {
     });
   });
 });
+
+describe('자동 반경 넓히기 안내 (D-142)', () => {
+  test('예비 추천에서 대원이 누르지 않았는데 반경이 넓어져 요청 중이 되면 자동 넓히기로 안내', () => {
+    apply(T({ status: 'requesting', requestRadiusKm: 10 }), 'ios-me');
+    apply(
+      T({ status: 'fallback', requestRadiusKm: 10, fallbackReason: 'all_rejected', version: 4 }),
+      'ios-me',
+    );
+    apply(T({ status: 'requesting', requestRadiusKm: 30, version: 5 }), 'ios-me');
+    expect(getEngine().autoExpandedTo).toBe(30);
+  });
+
+  test('반경이 그대로면(다시 요청 등) 자동 넓히기 안내를 하지 않는다', () => {
+    apply(T({ status: 'requesting', requestRadiusKm: 20 }), 'ios-me');
+    apply(
+      T({ status: 'fallback', requestRadiusKm: 20, fallbackReason: 'all_rejected', version: 4 }),
+      'ios-me',
+    );
+    apply(T({ status: 'requesting', requestRadiusKm: 20, version: 5 }), 'ios-me');
+    expect(getEngine().autoExpandedTo).toBeNull();
+  });
+});

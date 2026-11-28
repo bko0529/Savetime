@@ -142,6 +142,16 @@ test('반경 넓히기: 한 단계씩, 40km면 불가, 새 병원 0곳이면 불
   assert.equal(code(() => T('fallback', 'EXPAND_ROUND', { ...U(), currentRadiusKm: 20, nextRadiusKm: 30, newTargetCount: 0 })), 'NO_REQUEST_TARGET');
 });
 
+test('자동 넓히기: 서버 사건이라 버전이 필요 없고, 새 병원 없는 반경은 건너뛸 수 있다 (D-142)', () => {
+  const ctx = { now: new Date(), version: 3, maxRadiusKm: 40, newTargetCount: 2 };
+  const r = T('fallback', 'AUTO_EXPAND_ROUND', { ...ctx, currentRadiusKm: 10, nextRadiusKm: 30 });
+  assert.deepEqual([r.to, r.history.reason], ['requesting', 'auto_expand']);
+  assert.equal(code(() => T('fallback', 'AUTO_EXPAND_ROUND', { ...ctx, currentRadiusKm: 40, nextRadiusKm: 60 })), 'MAX_RADIUS');
+  assert.equal(code(() => T('fallback', 'AUTO_EXPAND_ROUND', { ...ctx, currentRadiusKm: 20, nextRadiusKm: 20 })), 'MAX_RADIUS');
+  assert.equal(code(() => T('fallback', 'AUTO_EXPAND_ROUND', { ...ctx, currentRadiusKm: 20, nextRadiusKm: 30, newTargetCount: 0 })), 'NO_REQUEST_TARGET');
+  assert.equal(code(() => T('requesting', 'AUTO_EXPAND_ROUND', { ...ctx, currentRadiusKm: 20, nextRadiusKm: 30 })), 'INVALID_TRANSITION');
+});
+
 test('대학병원급은 40 → 60 → 80km 까지 넓힐 수 있고, 다른 등급은 40km가 끝 (D-141)', () => {
   const top = { ...U(), maxRadiusKm: 80, newTargetCount: 1 };
   assert.equal(T('fallback', 'EXPAND_ROUND', { ...top, currentRadiusKm: 40, nextRadiusKm: 60 }).to, 'requesting');

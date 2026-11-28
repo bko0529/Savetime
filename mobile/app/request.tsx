@@ -160,6 +160,11 @@ export default function RequestScreen() {
   };
   const excludedNames = e.excluded.map((id) => hospital(id).name);
   const nextRadius = nextRadiusFor(e.grade, e.radius) ?? undefined;
+  // 서버가 자동으로 넓힐 경우: 승인이 한 번도 없이 닫혔고(전부 거절·2분·전달 0) 자동 넓히기가 켜져 있음
+  const autoExpandSoon =
+    e.autoExpand &&
+    ['all_rejected', 'expired_no_approval', 'none_delivered'].includes(e.fallbackReason ?? '') &&
+    nextRadiusFor(e.grade, e.radius) !== null;
   const subtitle = fallback
     ? `${cur.length}곳 응답 종료 · 반경 ${e.radius}km`
     : `${cur.length}곳 요청 · ${e.grade ? `${e.grade} 이상` : '모든 등급'} · 반경 ${e.radius}km`;
@@ -217,6 +222,17 @@ export default function RequestScreen() {
       {fallback && e.fallbackReason ? (
         <View style={{ marginBottom: 16 }}>
           <Notice tone="warn">{`${REASON_LABEL[e.fallbackReason] ?? '승인한 병원이 없어요'} · 가까운 병원에 전화로 확인하세요`}</Notice>
+        </View>
+      ) : null}
+      {/* 자동 넓히기 (D-142): 승인 0곳이면 서버가 몇 초 안에 넓혀 다시 요청한다 */}
+      {fallback && autoExpandSoon ? (
+        <View style={{ marginBottom: 16 }}>
+          <Notice tone="info">곧 반경을 넓혀 새 병원에 자동으로 다시 요청해요</Notice>
+        </View>
+      ) : null}
+      {!fallback && e.autoExpandedTo ? (
+        <View style={{ marginBottom: 12 }}>
+          <Notice tone="ok">{`승인한 병원이 없어 반경을 ${e.autoExpandedTo}km로 넓혀 새 병원에 다시 요청했어요`}</Notice>
         </View>
       ) : null}
       {!fallback && notice ? (

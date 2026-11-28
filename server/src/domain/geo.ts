@@ -19,6 +19,13 @@ export function maxRadiusFor(grade: number | null | undefined): RadiusKm {
   return grade === 1 ? TOP_GRADE_MAX_RADIUS_KM : MAX_RADIUS_KM;
 }
 
+/** 자동 시작 반경을 고를 때 요청할 병원이 이만큼은 있어야 한다 (D-142) */
+export const AUTO_RADIUS_MIN_TARGETS = 3;
+/** 자동 시작·자동 넓히기에서 차례로 볼 반경: 대학병원급 40·60·80km, 나머지 10·20·30·40km */
+export function autoRadiusSteps(grade: number | null | undefined): RadiusKm[] {
+  return grade === 1 ? [40, 60, 80] : [10, 20, 30, 40];
+}
+
 // 두 좌표 사이 직선거리(m, 하버사인). 위치 기록은 5초 간격이라 구간을 직선으로 이어도 실제 거리와 거의 같다
 export function distanceM(
   a: { lat: number; lng: number },

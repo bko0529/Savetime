@@ -23,6 +23,8 @@ import { createFcmSender } from './modules/push/fcm.js';
 import { createRealtime } from './modules/realtime/server.js';
 import { PAUSE_REMIND_EVERY_MS, remindLongPauses } from './modules/hospital-web/pause.js';
 import { AUTO_END_EVERY_MS, endInactiveTransports } from './modules/transport/autoEnd.js';
+import { runAutoExpand } from './modules/transport/autoExpand.js';
+import { refineRoundEtas } from './modules/transport/routeEta.js';
 import { PREV_PATIENT_SWEEP_EVERY_MS, releaseEndedTransports } from './modules/team/prevPatient.js';
 import { createEtaLookup } from './modules/transport/eta.js';
 import { createGeocoder } from './modules/transport/geocode.js';
@@ -235,6 +237,25 @@ scheduledJobs.push({
   run: async () => {
     const events = await endInactiveTransports(pool, logger);
     realtime?.publish(events);
+  },
+});
+
+// 자동 반경 넓히기 (D-142, SFR-131): 승인 0곳으로 요청이 모두 닫힌 이송 건을 5초마다 찾아 다음 반경으로 다시 요청.
+// 새 회차라 대원이 누른 '반경 넓혀 다시 요청'과 같이 커밋 뒤 2분·5분 타이머·길찾기를 건다
+scheduledJobs.push({
+  name: 'transport-auto-expand',
+  everyMs: 5_000,
+  run: async () => {
+    const { events, roundIds } = await runAutoExpand(pool);
+    realtime?.publish(events);
+    for (const roundId of roundIds) {
+      realtime?.startRound(roundId);
+      if (eta) {
+        refineRoundEtas(pool, eta, roundId)
+          .then((more) => realtime?.publish(more))
+          .catch(() => {});
+      }
+    }
   },
 });
 

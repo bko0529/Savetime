@@ -7,6 +7,7 @@ import { pino } from 'pino';
 import request from 'supertest';
 import { createApp } from '../../app.js';
 import { addParamedic, TEST_PASSWORD, withAuthContext } from '../../testing/auth.js';
+import { runAutoExpand } from './autoExpand.js';
 import type { AuthContext } from '../auth/session.js';
 
 const logger = pino({ level: 'silent' });
@@ -186,6 +187,73 @@ test('요청할 병원이 0곳이면 오류가 아니라 201 + 예비 추천(no_
 
     const { rows } = await ctx.pool.query('SELECT name FROM event_log');
     assert.deepEqual(rows, [{ name: 'transport.created' }, { name: 'draft.updated' }]);
+  });
+});
+
+test('시작 반경 자동: 요청할 병원이 3곳 이상인 가장 작은 반경, 없으면 최대 (D-142)', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    await addHospital(ctx.pool, '5km', { dLat: 0.045 });
+    await addHospital(ctx.pool, '15km-a', { dLat: 0.135 });
+    await addHospital(ctx.pool, '15km-b', { dLat: 0.14 });
+    // 10km 안 1곳 → 20km 안 3곳 → 20km 로 시작
+    const auto = await post(ctx, kim, body({ radiusKm: 10, autoRadius: true }));
+    assert.equal(auto.status, 201);
+    assert.equal(auto.body.requestRadiusKm, 20);
+    assert.equal(auto.body.requests.length, 3);
+    assert.equal(auto.body.autoExpand, true);
+  });
+});
+
+test('시작 반경 자동: 대학병원급이 80km 안에도 없으면 80km 에서 예비 추천, 자동 넓히기는 끌 수 있다', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    await addHospital(ctx.pool, '일반', { dLat: 0.045, grade: 3 });
+    const res = await post(
+      ctx,
+      kim,
+      body({ radiusKm: 40, requestedGrade: 1, autoRadius: true, autoExpand: false }),
+    );
+    assert.equal(res.status, 201);
+    assert.equal(res.body.requestRadiusKm, 80);
+    assert.equal(res.body.status, 'fallback');
+    assert.equal(res.body.autoExpand, false);
+  });
+});
+
+test('자동 넓히기: 승인 0곳으로 닫히면 서버가 다음 반경의 새 병원에만, 넓힐 데 없으면 멈춤 (D-142)', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    await addHospital(ctx.pool, '5km', { dLat: 0.045 });
+    const res = await post(ctx, kim, body({ radiusKm: 10 }));
+    const id = res.body.id as string;
+    await addHospital(ctx.pool, '25km', { dLat: 0.225 });
+    const closeAll = (reason: string) =>
+      ctx.pool.query(
+        `UPDATE transport SET status = 'fallback', fallback_reason = $2 WHERE id = $1`,
+        [id, reason],
+      );
+
+    // 승인이 있었다가 5분이 지난 경우는 건드리지 않는다
+    await closeAll('approval_window');
+    assert.deepEqual((await runAutoExpand(ctx.pool)).roundIds, []);
+
+    // 전부 거절 → 20km 에는 새 병원이 없어 건너뛰고 30km 로, 25km 병원에만
+    await closeAll('all_rejected');
+    const first = await runAutoExpand(ctx.pool);
+    assert.equal(first.roundIds.length, 1);
+    const now = await current(ctx, kim);
+    assert.equal(now.body.status, 'requesting');
+    assert.equal(now.body.requestRadiusKm, 30);
+    const names = now.body.requests.map((r: { hospitalName: string }) => r.hospitalName);
+    // 새 회차는 25km 병원에만 (이미 요청한 5km 병원에는 다시 보내지 않음). 응답에는 지금 회차만 담긴다
+    assert.deepEqual(names, ['25km']);
+
+    // 다시 2분 승인 0곳 → 40km 안에 새 병원이 없으니 자동 넓히기를 끄고 예비 추천 그대로
+    await closeAll('expired_no_approval');
+    assert.deepEqual((await runAutoExpand(ctx.pool)).roundIds, []);
+    const after = await current(ctx, kim);
+    assert.deepEqual([after.body.status, after.body.autoExpand], ['fallback', false]);
   });
 });
 
