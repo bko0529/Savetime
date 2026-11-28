@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -115,9 +115,26 @@ export function HospitalAdmin() {
 
   const items = list.data?.items ?? [];
 
+  // 알림(PC 등록·이상 PC·키 만료)을 누르고 왔으면 그 병원으로 검색하고, PC 알림이면 등록 PC 창을 연다
+  const [openPcsFor, setOpenPcsFor] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (!q) return;
+    setInput(q);
+    setQuery(q);
+    if (params.get('pcs') === '1') setOpenPcsFor(q);
+  }, []);
+  useEffect(() => {
+    if (openPcsFor === null || !list.isSuccess) return;
+    const target = items.find((h) => h.name === openPcsFor);
+    if (target) setPcsOf(target);
+    setOpenPcsFor(null);
+  }, [openPcsFor, list.isSuccess, items]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold">병원 관리</h1>
+    <div className="panel gap-5">
+      <h1 className="section-title text-[24px] tracking-[-0.02em]">병원 관리</h1>
       <form onSubmit={search} className="flex max-w-xl gap-3" role="search">
         <input
           aria-label="병원 이름"
@@ -125,9 +142,9 @@ export function HospitalAdmin() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={40}
-          className="h-12 flex-1 rounded-lg border-2 border-input px-3 text-lg"
+          className="field h-12 flex-1 rounded-xl text-base"
         />
-        <Button type="submit" size="lg">
+        <Button type="submit" className="h-12 rounded-xl px-6">
           검색
         </Button>
       </form>
@@ -138,100 +155,104 @@ export function HospitalAdmin() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">찾는 병원이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          찾는 병원이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
-          <thead>
-            <tr className="border-b-2 border-foreground text-left">
-              <th className="p-3">병원</th>
-              <th className="p-3">계정</th>
-              <th className="p-3">등록 PC</th>
-              <th className="p-3">라이선스 키</th>
-              <th className="p-3">응급실 입구</th>
-              <th className="p-3">
-                <span className="sr-only">작업</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((h) => (
-              <tr key={h.id} className="border-b">
-                <td className="p-3 font-bold">{h.name}</td>
-                <td className="p-3">{accountText(h)}</td>
-                <td className="p-3 tabular-nums">
-                  {h.pcCount}/{h.pcLimit}
-                  {(h.pcCount ?? 0) > 0 && (
-                    <Button
-                      variant="link"
-                      className="ml-2 text-lg"
-                      aria-label={`${h.name} 등록 PC 보기`}
-                      onClick={() => setPcsOf(h)}
-                    >
-                      PC 보기
-                    </Button>
-                  )}
-                </td>
-                {/* 발급 뒤에는 앞 4자리만 보여 준다 (SFR-123) */}
-                <td className="p-3 font-mono">
-                  {h.license ? `${h.license.prefix}-····  (${h.license.daysLeft}일 남음)` : '—'}
-                </td>
-                {/* 저장 안 한 병원은 공공 데이터 좌표로 도착 판정 (SFR-145) */}
-                <td className="p-3">
-                  <div className="flex flex-col items-start gap-1">
-                    {h.entrance ? (
-                      <span>지정됨</span>
-                    ) : (
-                      <span className="font-bold text-destructive">입구 좌표 없음</span>
-                    )}
-                    <Button
-                      variant="link"
-                      className="h-auto p-0 text-lg"
-                      aria-label={`${h.name} 응급실 입구 ${h.entrance ? '바꾸기' : '지정'}`}
-                      onClick={() => setEntranceOf(h)}
-                    >
-                      {h.entrance ? '바꾸기' : '입구 지정'}
-                    </Button>
-                  </div>
-                </td>
-                <td className="p-3">
-                  <div className="flex justify-end gap-2">
-                    {!h.license && !h.accountActive && (
-                      <Button onClick={() => setPending({ kind: 'issue', hospital: h })}>
-                        계정 발급
-                      </Button>
-                    )}
-                    {/* 키 폐기·재발급 (SFR-146): 키가 있거나, 폐기됐지만 계정이 살아 있으면 재발급 */}
-                    {(h.license || h.accountActive) && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setPending({ kind: 'reissue', hospital: h })}
-                      >
-                        키 재발급
-                      </Button>
-                    )}
-                    {h.license && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setPending({ kind: 'revoke', hospital: h })}
-                      >
-                        키 폐기
-                      </Button>
-                    )}
-                    {h.license && h.accountActive && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => setPending({ kind: 'suspend', hospital: h })}
-                      >
-                        정지
-                      </Button>
-                    )}
-                  </div>
-                </td>
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">병원</th>
+                <th className="px-3 py-3.5">계정</th>
+                <th className="px-3 py-3.5">등록 PC</th>
+                <th className="px-3 py-3.5">라이선스 키</th>
+                <th className="px-3 py-3.5">응급실 입구</th>
+                <th className="px-3 py-3.5">
+                  <span className="sr-only">작업</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((h) => (
+                <tr key={h.id}>
+                  <td className="px-3 py-4 font-extrabold">{h.name}</td>
+                  <td className="px-3 py-4">{accountText(h)}</td>
+                  <td className="px-3 py-4 tabular-nums">
+                    {h.pcCount}/{h.pcLimit}
+                    {(h.pcCount ?? 0) > 0 && (
+                      <Button
+                        variant="link"
+                        className="ml-2 text-lg"
+                        aria-label={`${h.name} 등록 PC 보기`}
+                        onClick={() => setPcsOf(h)}
+                      >
+                        PC 보기
+                      </Button>
+                    )}
+                  </td>
+                  {/* 발급 뒤에는 앞 4자리만 보여 준다 (SFR-123) */}
+                  <td className="px-3 py-4 font-mono">
+                    {h.license ? `${h.license.prefix}-····  (${h.license.daysLeft}일 남음)` : '—'}
+                  </td>
+                  {/* 저장 안 한 병원은 공공 데이터 좌표로 도착 판정 (SFR-145) */}
+                  <td className="px-3 py-4">
+                    <div className="flex flex-col items-start gap-1">
+                      {h.entrance ? (
+                        <span>지정됨</span>
+                      ) : (
+                        <span className="font-bold text-destructive">입구 좌표 없음</span>
+                      )}
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-lg"
+                        aria-label={`${h.name} 응급실 입구 ${h.entrance ? '바꾸기' : '지정'}`}
+                        onClick={() => setEntranceOf(h)}
+                      >
+                        {h.entrance ? '바꾸기' : '입구 지정'}
+                      </Button>
+                    </div>
+                  </td>
+                  <td className="px-3 py-4">
+                    <div className="flex justify-end gap-2">
+                      {!h.license && !h.accountActive && (
+                        <Button onClick={() => setPending({ kind: 'issue', hospital: h })}>
+                          계정 발급
+                        </Button>
+                      )}
+                      {/* 키 폐기·재발급 (SFR-146): 키가 있거나, 폐기됐지만 계정이 살아 있으면 재발급 */}
+                      {(h.license || h.accountActive) && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setPending({ kind: 'reissue', hospital: h })}
+                        >
+                          키 재발급
+                        </Button>
+                      )}
+                      {h.license && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setPending({ kind: 'revoke', hospital: h })}
+                        >
+                          키 폐기
+                        </Button>
+                      )}
+                      {h.license && h.accountActive && (
+                        <Button
+                          variant="destructive"
+                          onClick={() => setPending({ kind: 'suspend', hospital: h })}
+                        >
+                          정지
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {pcsOf && <HospitalPcs key={pcsOf.id} hospital={pcsOf} onClose={() => setPcsOf(null)} />}
@@ -295,7 +316,7 @@ function ConfirmDialog({
               onChange={(e) => setReason(e.target.value)}
               maxLength={KEY_REASON_MAX}
               placeholder="예: 키 유출 의심, 병원 탈퇴"
-              className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+              className="field h-12 rounded-xl text-lg"
             />
           </label>
         )}
@@ -352,7 +373,7 @@ function IssuedKeyDialog({
         </DialogDescription>
         <p
           aria-label="라이선스 키"
-          className="rounded-lg border-2 border-foreground bg-muted p-4 text-center font-mono text-2xl font-bold tracking-wider break-all"
+          className="well rounded-xl border-border-strong p-4 text-center font-mono text-2xl font-extrabold tracking-wider break-all"
         >
           {issued?.key}
         </p>

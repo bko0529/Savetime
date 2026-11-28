@@ -86,7 +86,7 @@ describe('라이선스 키 만료 안내 배너 (SFR-168)', () => {
   it('40일 남았으면 배너가 없다', async () => {
     serverWith(session(40));
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
+    await screen.findByRole('tab', { name: /요청/ });
     expect(screen.queryByText(BANNER)).toBeNull();
   });
 });
@@ -99,7 +99,7 @@ describe('키 폐기·재발급되면 병원 웹이 막힌다 (SFR-146)', () => 
       'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
+    await screen.findByRole('tab', { name: /요청/ });
     socket.serverConnect();
 
     socket.fire('pc.revoked', envelope({ reason: 'key_revoked' }));

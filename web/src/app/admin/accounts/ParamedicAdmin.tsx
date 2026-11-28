@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { ApiError, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { ExpandableBox } from '../ExpandableBox';
 import { useAdminApi } from '../useAdminApi';
 import { ResetPasswordButton } from './ResetPassword';
 
@@ -89,8 +90,8 @@ export function ParamedicAdmin() {
   const items = list.data?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold">대원 계정</h1>
+    <div className="panel gap-5">
+      <h1 className="section-title text-[24px] tracking-[-0.02em]">대원 계정</h1>
       <form onSubmit={search} className="flex max-w-xl gap-3" role="search">
         <input
           aria-label="이름 또는 사번"
@@ -98,9 +99,9 @@ export function ParamedicAdmin() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={40}
-          className="h-12 flex-1 rounded-lg border-2 border-input px-3 text-lg"
+          className="field h-12 flex-1 rounded-xl text-base"
         />
-        <Button type="submit" size="lg">
+        <Button type="submit" className="h-12 rounded-xl px-6">
           검색
         </Button>
       </form>
@@ -111,61 +112,77 @@ export function ParamedicAdmin() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">찾는 대원이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          찾는 대원이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
-          <thead>
-            <tr className="border-b-2 border-foreground text-left">
-              <th className="p-3">이름</th>
-              <th className="p-3">사번</th>
-              <th className="p-3">소속</th>
-              <th className="p-3">상태</th>
-              <th className="p-3">
-                <span className="sr-only">작업</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="p-3 font-bold">{p.name}</td>
-                <td className="p-3 tabular-nums">{p.employeeNo}</td>
-                <td className="p-3">
-                  {p.agencyName} · {p.safetyCenter}
-                </td>
-                <td className="p-3">
-                  {STATUS_TEXT[p.status ?? ''] ?? p.status}
-                  {p.hasActiveTransport && (
-                    <span className="ml-2 font-bold text-destructive">· 이송 중</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {/* 비밀번호를 잊은 대원 (SFR-021) */}
-                    <ResetPasswordButton paramedic={p} />
-                    {p.status === 'approved' && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => setPending({ kind: 'suspend', paramedic: p })}
-                      >
-                        정지
-                      </Button>
-                    )}
-                    {p.status === 'suspended' && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
-                      >
-                        정지 해제
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        // 화면에는 낮은 상자(스크롤), '대원 더 보기'를 누르면 큰 창에 전체 목록
+        <ExpandableBox
+          title="대원 계정"
+          label="대원 더 보기"
+          showMore={items.length > 4}
+          boxClassName="panel-table max-h-[340px]"
+        >
+          {(expanded) => (
+            <table className="data-table data-table-flush overflow-visible">
+              <thead
+                className={
+                  expanded ? 'sticky -top-8 z-10 bg-surface' : 'sticky top-0 z-10 bg-surface'
+                }
+              >
+                <tr className="text-left">
+                  <th className="px-3 py-3.5">이름</th>
+                  <th className="px-3 py-3.5">사번</th>
+                  <th className="px-3 py-3.5">소속</th>
+                  <th className="px-3 py-3.5">상태</th>
+                  <th className="px-3 py-3.5">
+                    <span className="sr-only">작업</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-4 font-extrabold">{p.name}</td>
+                    <td className="px-3 py-4 tabular-nums">{p.employeeNo}</td>
+                    <td className="px-3 py-4">
+                      {p.agencyName} · {p.safetyCenter}
+                    </td>
+                    <td className="px-3 py-4">
+                      {STATUS_TEXT[p.status ?? ''] ?? p.status}
+                      {p.hasActiveTransport && (
+                        <span className="ml-2 font-bold text-destructive">· 이송 중</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {/* 비밀번호를 잊은 대원 (SFR-021) */}
+                        <ResetPasswordButton paramedic={p} />
+                        {p.status === 'approved' && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => setPending({ kind: 'suspend', paramedic: p })}
+                          >
+                            정지
+                          </Button>
+                        )}
+                        {p.status === 'suspended' && (
+                          <Button
+                            variant="outline"
+                            onClick={() => setPending({ kind: 'unsuspend', paramedic: p })}
+                          >
+                            정지 해제
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </ExpandableBox>
       )}
 
       {pending?.kind === 'suspend' && (
@@ -256,14 +273,14 @@ function SuspendDialog({
               value={etcText}
               onChange={(e) => setEtcText(e.target.value)}
               maxLength={ETC_MAX}
-              className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+              className="field h-12 rounded-xl text-lg"
             />
           )}
         </fieldset>
         {warned && (
           <p
             role="alert"
-            className="rounded-lg bg-destructive px-4 py-3 text-lg font-bold text-white"
+            className="btn-solid-brand rounded-xl px-4 py-3 text-lg font-bold text-white"
           >
             진행 중 이송 1건이 있어요. 팀의 마지막 대원이면 이송이 &apos;취소&apos;로 끝나요.
           </p>
