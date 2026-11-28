@@ -1376,7 +1376,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/HospitalCard'
-                    description: 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 고른 등급 이상 먼저, 그 안에서 직선거리순 (SFR-098, D-128)
+                    description: 응급실 빈 병상 1개 이상 + 이상치·제외 병원 뺀 상위 5곳. 등급을 골랐으면 그 등급 이상만(다른 등급은 빠짐), 직선거리순 (SFR-098, D-128, D-140)
                   map:
                     type: array
                     items:

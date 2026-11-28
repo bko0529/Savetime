@@ -42,7 +42,10 @@ export function rankHospitals<T extends Candidate>(
   const byDistance = [...candidates].sort(
     (a, b) => a.distanceKm - b.distanceKm || Number(a.id) - Number(b.id),
   );
-  const usable = byDistance.filter((c) => !c.excluded);
+  // 등급을 골랐으면 그 등급 이상(숫자가 같거나 작음)만 남기고 다른 등급은 목록에서도 아예 뺀다
+  // (요청 대상과 같게, SFR-162 · D-140). 고르지 않았으면 모든 등급
+  const meetsGrade = (c: T) => requestedGrade === null || c.grade <= requestedGrade;
+  const usable = byDistance.filter((c) => !c.excluded && meetsGrade(c));
 
   // 병상 정보가 아예 없는 병원은 빼지 않고 따로 보여 준다 (SFR-098). 전화로 확인할 수 있게.
   const noBedInfo = usable.filter((c) => !hasBedInfo(c)).slice(0, NO_BED_INFO_MAX);
@@ -50,11 +53,8 @@ export function rankHospitals<T extends Candidate>(
   // 응급실 빈 병상이 0개거나 비어 있으면(정보 없음 = 0개, SFR-089) 제외한다 (SFR-030)
   const passed = usable.filter((c) => hasBedInfo(c) && !c.anomaly && (c.beds?.er.avail ?? 0) > 0);
 
-  // 등급을 골랐으면 그 등급 이상(숫자가 같거나 작음)을 먼저, 그 안에서 거리순 (SFR-162, D-128)
-  const meetsGrade = (c: T) => requestedGrade === null || c.grade <= requestedGrade;
-  const ordered = [...passed.filter(meetsGrade), ...passed.filter((c) => !meetsGrade(c))];
-
-  const items = ordered.slice(0, TOP).map((c, i) => ({ ...c, rank: i + 1 }));
+  // 거리순 (D-128)
+  const items = passed.slice(0, TOP).map((c, i) => ({ ...c, rank: i + 1 }));
   // 후보가 0곳이면 반경을 넓힐지 묻고, 이미 40km면 전화 확인을 안내한다 (SFR-029)
   const emptyGuide =
     items.length > 0 ? null : radiusKm >= MAX_RADIUS_KM ? 'call_nearby' : 'expand_radius';

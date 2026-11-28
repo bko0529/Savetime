@@ -369,9 +369,12 @@ async function useCachedList() {
     const c = await latestCards(await currentLocation());
     if (!c) return;
     c.cards.forEach((x) => fromCard(x as Card));
+    // 고른 등급 이상만 (서버 추천과 같은 규칙, D-140)
+    const gradeNo = s.grade ? GRADE_NO[s.grade] : null;
     const sorted = [...c.cards]
       .sort((a, b) => a.distanceKm - b.distanceKm)
-      .filter((x) => !s.excluded.includes(String(x.id)));
+      .filter((x) => !s.excluded.includes(String(x.id)))
+      .filter((x) => gradeNo === null || x.grade <= gradeNo);
     s.nearby = sorted
       .filter((x) => x.beds.er)
       .slice(0, 5)

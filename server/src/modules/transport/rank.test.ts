@@ -69,20 +69,32 @@ test('병상 정보가 전혀 없으면 빼지 않고 따로 거리순 최대 3�
   assert.deepEqual(ids(result.noBedInfo), [allBlank.id, noRow[0].id, noRow[1].id]);
 });
 
-test('등급을 고르면 그 등급 이상을 먼저, 그 안에서 거리순 (SFR-162, D-128)', () => {
+test('등급을 고르면 그 등급 이상만, 다른 등급은 목록에서 아예 뺀다 (SFR-162, D-140)', () => {
   const near3 = hospital(1, { grade: 3 });
   const mid2 = hospital(2, { grade: 2 });
   const far1 = hospital(9, { grade: 1 });
   const near2 = hospital(1.5, { grade: 2 });
+  const noBeds3 = hospital(0.5, { grade: 3, beds: null });
 
-  const picked2 = rankHospitals([near3, mid2, far1, near2], { ...options, requestedGrade: 2 });
-  assert.deepEqual(ids(picked2.items), [near2.id, mid2.id, far1.id, near3.id]);
+  const picked2 = rankHospitals([near3, mid2, far1, near2, noBeds3], {
+    ...options,
+    requestedGrade: 2,
+  });
+  assert.deepEqual(ids(picked2.items), [near2.id, mid2.id, far1.id]);
+  assert.deepEqual(ids(picked2.noBedInfo), []);
 
   const picked1 = rankHospitals([near3, mid2, far1, near2], { ...options, requestedGrade: 1 });
-  assert.deepEqual(ids(picked1.items), [far1.id, near3.id, near2.id, mid2.id]);
+  assert.deepEqual(ids(picked1.items), [far1.id]);
 
-  const none = rankHospitals([near3, mid2, far1, near2], options);
+  const none = rankHospitals([near3, mid2, far1, near2, noBeds3], options);
   assert.deepEqual(ids(none.items), [near3.id, near2.id, mid2.id, far1.id]);
+  assert.deepEqual(ids(none.noBedInfo), [noBeds3.id]);
+});
+
+test('고른 등급 병원이 반경 안에 없으면 반경 넓히기 안내 (다른 등급이 있어도)', () => {
+  const result = rankHospitals([hospital(1, { grade: 3 })], { ...options, requestedGrade: 1 });
+  assert.equal(result.items.length, 0);
+  assert.equal(result.emptyGuide, 'expand_radius');
 });
 
 test('이번 이송의 제외 병원은 추천과 병상 정보 없음 묶음에서 모두 뺀다 (SFR-112)', () => {
@@ -106,13 +118,11 @@ test('거리가 같으면 ID 순으로 늘 같은 결과를 낸다', () => {
 });
 
 test('예상 이동시간은 통과한 후보 중 직선거리 가까운 10곳만 구한다 (SFR-072)', () => {
-  const list = Array.from({ length: 15 }, (_, i) => hospital(i + 1, { grade: i === 14 ? 1 : 3 }));
+  const list = Array.from({ length: 15 }, (_, i) => hospital(i + 1));
   const blocked = hospital(0.5, { er: 0 });
-  const result = rankHospitals([...list, blocked], { ...options, requestedGrade: 1 });
+  const result = rankHospitals([...list, blocked], options);
   assert.deepEqual(
     result.etaTargets.map((c) => c.distanceKm),
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
   );
-  // 등급 우선으로 1위가 된 15km 병원은 거리상 10곳 밖이라 이동시간이 없다
-  assert.equal(result.items[0].distanceKm, 15);
 });
