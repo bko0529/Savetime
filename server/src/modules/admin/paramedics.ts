@@ -219,6 +219,8 @@ export function adminParamedicRouter(
       return p.id;
     });
     await forgetSessionState({ redis }, paramedicId);
+    // 커밋한 뒤에: 그 대원 폰을 바로 로그인 화면으로 (정지와 같은 방식, SER-016). 안 보내면 다음 요청 때에야 401 로 끊긴다
+    await realtime?.forceLogoutParamedic(paramedicId, 'password_reset');
     // 비밀번호가 담긴 응답은 브라우저·프록시가 저장하지 않게 한다
     res.set('Cache-Control', 'no-store');
     res.json({ tempPassword });

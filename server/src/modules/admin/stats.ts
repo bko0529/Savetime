@@ -17,9 +17,13 @@ const querySchema = z.object({
   days: z.coerce
     .number()
     .int()
-    .refine((d) => d === 7 || d === 30)
+    // 0 = 전체 기간 (관리자 화면 '전체')
+    .refine((d) => d === 0 || d === 7 || d === 30)
     .default(7),
 });
+
+// '전체'는 넉넉히 100년으로 센다 (SQL 을 기간 하나로 쓰기 위해)
+const ALL_DAYS = 36_500;
 
 // 거절 원장 출처 → 응답의 칸 이름
 const SOURCE_KEY = {
@@ -51,13 +55,14 @@ const COUNTED_REQUESTS = `
    WHERE hr.in_stats
      AND hr.status <> 'delivery_failed'
      AND NOT (hr.status = 'waiting' AND r.respond_until > now())
-     AND r.sent_at > now() - interval '30 days'`;
+     AND r.sent_at > now() - make_interval(days => greatest($1::int, 30))`;
 
 export function adminStatsRouter(pool: pg.Pool, adminOnly: RequestHandler): Router {
   const router = Router();
 
   router.get('/admin/stats/hospitals', adminOnly, async (req, res) => {
     const { days } = parseBody(querySchema, req.query);
+    const span = days === 0 ? ALL_DAYS : days;
 
     // 고른 기간의 수치 + 거절률 급등을 보려고 7일·30일 수치를 함께 센다
     const { rows: hospitals } = await pool.query<HospitalRow>(
@@ -74,13 +79,14 @@ export function adminStatsRouter(pool: pg.Pool, adminOnly: RequestHandler): Rout
               count(*) FILTER (WHERE c.sent_at > now() - interval '7 days')::int AS requests7,
               count(*) FILTER (WHERE c.sent_at > now() - interval '7 days'
                                  AND c.status = 'rejected')::int AS rejected7,
-              count(*)::int AS requests30,
-              count(*) FILTER (WHERE c.status = 'rejected')::int AS rejected30
+              count(*) FILTER (WHERE c.sent_at > now() - interval '30 days')::int AS requests30,
+              count(*) FILTER (WHERE c.sent_at > now() - interval '30 days'
+                                 AND c.status = 'rejected')::int AS rejected30
          FROM counted c JOIN hospital h ON h.id = c.hospital_id
         GROUP BY c.hospital_id, h.name
        HAVING count(*) FILTER (WHERE c.sent_at > now() - make_interval(days => $1)) > 0
         ORDER BY h.name`,
-      [days],
+      [span],
     );
 
     // 거절 원장: 병원·출처·사유별 건수
@@ -94,7 +100,7 @@ export function adminStatsRouter(pool: pg.Pool, adminOnly: RequestHandler): Rout
          FROM rejection_record
         WHERE created_at > now() - make_interval(days => $1)
         GROUP BY hospital_id, source, coalesce(reason, 'etc')`,
-      [days],
+      [span],
     );
 
     // 익명 소요시간: 병원별·전체 평균 (출발 시각이 기간 안인 이송)
@@ -110,13 +116,13 @@ export function adminStatsRouter(pool: pg.Pool, adminOnly: RequestHandler): Rout
         WHERE coalesce(departed_at, arrived_at) > now() - make_interval(days => $1)
           AND hospital_id IS NOT NULL
         GROUP BY hospital_id`,
-      [days],
+      [span],
     );
     // 맨 위 핵심 지표 '요청→출발' 전체 평균 (병원이 정해지기 전에 끝난 건도 포함)
     const { rows: overall } = await pool.query<{ to_depart: number | null }>(
       `SELECT round(avg(request_to_depart_sec))::int AS to_depart FROM transport_stat
         WHERE coalesce(departed_at, arrived_at) > now() - make_interval(days => $1)`,
-      [days],
+      [span],
     );
     const timeOf = new Map(times.map((t) => [t.hospital_id!, t]));
 

@@ -93,7 +93,7 @@ export function ResetPasswordButton({ paramedic }: { paramedic: { id?: number; n
           </DialogDescription>
           <p
             aria-label="임시 비밀번호"
-            className="rounded-lg border-2 border-foreground bg-muted p-4 text-center font-mono text-2xl font-bold tracking-wider break-all"
+            className="well rounded-xl border-border-strong p-4 text-center font-mono text-2xl font-extrabold tracking-wider break-all"
           >
             {temp}
           </p>

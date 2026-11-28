@@ -13,7 +13,7 @@ import {
 import { ApiError, NETWORK_ERROR, type ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import type { components } from '@/lib/api/schema';
-import { bearer, useAdminAuth } from '../AdminAuth';
+import { bearer, useAdminAuth, withAdminToken } from '../AdminAuth';
 import { useAdminApi } from '../useAdminApi';
 
 type SignupList =
@@ -42,7 +42,7 @@ const timeText = (iso?: string) => (iso ? new Date(iso).toLocaleString('ko-KR') 
 // 키를 ['admin', …] 밖에 두어 승인·반려 뒤 관리자 화면 전체를 새로 받을 때 같이 다시 받지 않게 하고,
 // 다시 받기(창 포커스·재연결·재시도)를 모두 끈다. 창을 닫으면(gcTime 0) 받아 둔 사진도 캐시에서 바로 지운다
 function useSignupPhoto(signupId: number | undefined) {
-  const { tokens, signOut } = useAdminAuth();
+  const { current, refresh, signOut } = useAdminAuth();
   const photo = useQuery({
     queryKey: ['signup-photo', signupId],
     enabled: signupId !== undefined,
@@ -52,30 +52,30 @@ function useSignupPhoto(signupId: number | undefined) {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    queryFn: async () => {
-      let res: Response;
-      try {
-        res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
-          headers: bearer(tokens),
-          cache: 'no-store',
-        });
-      } catch {
-        throw new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요');
-      }
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as {
-          error?: { code?: string; message?: string };
-        } | null;
-        const err = new ApiError(
-          res.status,
-          body?.error?.code ?? 'UNKNOWN',
-          body?.error?.message ?? '사진을 불러오지 못했어요',
-        );
-        if (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_REVOKED') signOut();
-        throw err;
-      }
-      return res.blob();
-    },
+    // 사진은 JSON 이 아니라 apiFetch 대신 fetch 로 받는다. 토큰이 끝났으면 새로 받아 한 번 더 (SFR-082)
+    queryFn: () =>
+      withAdminToken({ current, refresh, signOut }, async (tokens) => {
+        let res: Response;
+        try {
+          res = await fetch(`/api/v1/admin/signups/${signupId}/photo`, {
+            headers: bearer(tokens),
+            cache: 'no-store',
+          });
+        } catch {
+          throw new ApiError(0, NETWORK_ERROR, '서버에 연결할 수 없어요');
+        }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            error?: { code?: string; message?: string };
+          } | null;
+          throw new ApiError(
+            res.status,
+            body?.error?.code ?? 'UNKNOWN',
+            body?.error?.message ?? '사진을 불러오지 못했어요',
+          );
+        }
+        return res.blob();
+      }),
   });
 
   // 받은 사진(blob)을 이 탭에서만 쓰는 주소로 바꾼다. 창을 닫거나 바뀌면 바로 버린다
@@ -132,13 +132,31 @@ export function SignupReview() {
   }
 
   const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+
+  // 알림에서 '새 가입 신청'을 누르고 왔으면(?signup=ID) 그 신청 창을 바로 연다. 이미 처리된 신청이면 목록만
+  const [linked, setLinked] = useState<number | null>(null);
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get('signup'));
+    if (id) setLinked(id);
+  }, []);
+  useEffect(() => {
+    if (linked === null || !list.isSuccess) return;
+    const target = items.find((s) => s.id === linked);
+    if (target) setOpen(target);
+    setLinked(null);
+  }, [linked, list.isSuccess, items]);
   // 아직 다 받지 않았으면 '30건 이상'처럼 보여 준다 (받은 개수가 전체인 것처럼 보이지 않게)
   const countText = `${items.length}건${list.hasNextPage ? ' 이상' : ''}`;
 
   return (
-    <section aria-labelledby="signups-title" className="flex flex-col gap-4">
-      <h2 id="signups-title" className="text-2xl font-bold">
-        가입 승인 대기 {list.isSuccess && <span className="tabular-nums">{countText}</span>}
+    <section aria-labelledby="signups-title" className="panel">
+      <h2 id="signups-title" className="section-title panel-title">
+        가입 승인 대기{' '}
+        {list.isSuccess && (
+          <span className="rounded-full border border-brand/25 bg-brand-soft px-3 py-0.5 text-sm font-extrabold text-brand-deep tabular-nums">
+            {countText}
+          </span>
+        )}
       </h2>
       {list.isError && (
         <p role="alert" className="text-lg font-bold text-destructive">
@@ -146,44 +164,50 @@ export function SignupReview() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">기다리는 가입 신청이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          기다리는 가입 신청이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
-          <thead>
-            <tr className="border-b-2 border-foreground text-left">
-              <th className="p-3">이름</th>
-              <th className="p-3">소속</th>
-              <th className="p-3">사번</th>
-              <th className="p-3">신청 시각</th>
-              <th className="p-3">
-                <span className="sr-only">작업</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((s) => (
-              <tr key={s.id} className="border-b">
-                <td className="p-3 font-bold">
-                  {s.name} <span className="font-normal">{s.rank}</span>
-                  {s.resubmitted && (
-                    <span className="ml-2 text-base font-bold text-destructive">다시 신청</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  {s.agencyName} · {s.safetyCenter}
-                </td>
-                <td className="p-3 tabular-nums">{s.employeeNo}</td>
-                <td className="p-3 tabular-nums">{timeText(s.createdAt)}</td>
-                <td className="p-3 text-right">
-                  <Button onClick={() => setOpen(s)} aria-label={`${s.name} 신청 확인`}>
-                    사진 보고 확인
-                  </Button>
-                </td>
+        <div className="panel-table">
+          <table className="data-table data-table-flush">
+            <thead>
+              <tr className="text-left">
+                <th className="px-3 py-3.5">이름</th>
+                <th className="px-3 py-3.5">소속</th>
+                <th className="px-3 py-3.5">사번</th>
+                <th className="px-3 py-3.5">신청 시각</th>
+                <th className="px-3 py-3.5">
+                  <span className="sr-only">작업</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-3 py-4 font-extrabold">
+                    {s.name} <span className="font-medium text-muted-foreground">{s.rank}</span>
+                    {s.resubmitted && (
+                      <span className="ml-2 rounded-full border border-danger-line bg-danger-soft px-2.5 py-0.5 text-xs font-bold text-danger-strong">
+                        다시 신청
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-4">
+                    {s.agencyName} · {s.safetyCenter}
+                  </td>
+                  <td className="px-3 py-4 tabular-nums">{s.employeeNo}</td>
+                  <td className="px-3 py-4 tabular-nums">{timeText(s.createdAt)}</td>
+                  <td className="px-3 py-4 text-right">
+                    <Button onClick={() => setOpen(s)} aria-label={`${s.name} 신청 확인`}>
+                      사진 확인
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {list.hasNextPage && (
         <Button
@@ -241,7 +265,7 @@ function ReviewDialog({
           공무원증 사진과 신청 정보가 맞는지 확인하세요. 승인·반려하면 사진은 바로 지워져요.
         </DialogDescription>
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="flex min-h-48 items-center justify-center rounded-lg border-2 border-input bg-muted">
+          <div className="flex min-h-48 items-center justify-center well rounded-xl">
             {photo.url ? (
               // blob URL 이라 next/image 최적화를 쓰지 않는다
               <img
@@ -257,7 +281,7 @@ function ReviewDialog({
               <p className="text-lg text-muted-foreground">사진 불러오는 중…</p>
             )}
           </div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-lg">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-lg [&_dt]:whitespace-nowrap">
             <dt className="font-bold">이름</dt>
             <dd>{signup.name}</dd>
             <dt className="font-bold">계급</dt>
@@ -300,7 +324,7 @@ function ReviewDialog({
                 value={etcText}
                 onChange={(e) => setEtcText(e.target.value)}
                 maxLength={ETC_MAX}
-                className="h-12 rounded-lg border-2 border-input px-3 text-lg"
+                className="field h-12 rounded-xl text-lg"
               />
             )}
           </fieldset>

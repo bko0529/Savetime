@@ -32,15 +32,16 @@ describe('요청 목록 (SFR-135)', () => {
         onOpen={() => {}}
       />,
     );
-    const rows = screen.getAllByRole('row').slice(1);
-    expect(rows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+    // 요청 하나가 카드 하나 (번호 버튼이 카드마다 하나)
+    const cards = within(screen.getByRole('list', { name: '요청 목록' })).getAllByRole('listitem');
+    expect(cards.map((c) => within(c).getByRole('button').textContent)).toEqual([
       'R-3',
       'R-1',
       'R-2',
     ]);
-    expect(within(rows[0]).getByText('0:40')).toBeTruthy();
-    expect(within(rows[0]).getByText('응답 대기')).toBeTruthy();
-    expect(within(rows[0]).getByText('약 9분')).toBeTruthy();
+    expect(cards[0].textContent).toContain('R-3 · 흉통');
+    expect(within(cards[0]).getByText('0:40')).toBeTruthy();
+    expect(within(cards[0]).getByText('도착 예상 약 9분')).toBeTruthy();
   });
 
   it('남은 시간 30초 이하는 빨간색 (0:25)', () => {
@@ -85,6 +86,51 @@ describe('요청 목록 (SFR-135)', () => {
     render(<RequestList items={[item(7, 60)]} nowMs={NOW} selectedId={null} onOpen={onOpen} />);
     fireEvent.click(screen.getByRole('button', { name: 'R-7' }));
     expect(onOpen).toHaveBeenCalledWith(7);
+    // 카드 클릭과 겹쳐 두 번 열지 않는다
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('번호가 아닌 카드의 다른 곳(주 증상·남은 시간)을 눌러도 그 요청을 연다', () => {
+    const onOpen = vi.fn();
+    render(
+      <RequestList
+        items={[item(7, 60), item(8, 90, { chiefComplaint: '복통' })]}
+        nowMs={NOW}
+        selectedId={null}
+        onOpen={onOpen}
+      />,
+    );
+    fireEvent.click(screen.getByText('도착 예상 약 9분', { selector: 'li:nth-child(2) span' }));
+    expect(onOpen).toHaveBeenLastCalledWith(8);
+    fireEvent.click(screen.getByText('1:00'));
+    expect(onOpen).toHaveBeenLastCalledWith(7);
+  });
+
+  it('아직 안 연 대기 요청은 깜빡이고 NEW, 연 요청·승인한 요청은 그대로', () => {
+    render(
+      <RequestList
+        items={[
+          item(1, 60),
+          item(2, 80),
+          item(3, 90, { status: 'approved', respondedBy: '박서연' }),
+        ]}
+        nowMs={NOW}
+        selectedId={null}
+        onOpen={() => {}}
+        seenIds={new Set([2])}
+      />,
+    );
+    const cards = screen.getAllByRole('listitem');
+    expect(cards[0].className).toContain('request-new');
+    expect(within(cards[0]).getByText('NEW')).toBeTruthy();
+    expect(cards[1].className).not.toContain('request-new');
+    expect(cards[2].className).not.toContain('request-new');
+    expect(screen.getAllByText('NEW')).toHaveLength(1);
+  });
+
+  it('연 요청 목록을 넘기지 않으면 강조하지 않는다', () => {
+    render(<RequestList items={[item(1, 60)]} nowMs={NOW} selectedId={null} onOpen={() => {}} />);
+    expect(screen.queryByText('NEW')).toBeNull();
   });
 
   it('요청이 없으면 안내 문구', () => {

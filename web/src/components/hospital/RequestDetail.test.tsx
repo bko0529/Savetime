@@ -45,16 +45,98 @@ describe('요청 상세 (SFR-118)', () => {
     fakeServer({ 'GET /hw/requests/102': { status: 200, body: detail() } });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
 
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
-    expect(screen.getByText('도착 예상 12분')).toBeTruthy();
-    expect(screen.getByText(/응급실 5\/20 · 수술실 1\/4 · 중환자실 0\/10/)).toBeTruthy();
-    // 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
+    // 제목: 번호 · 성별 나이대 · 주 증상
+    expect(
+      (await screen.findByRole('heading', { level: 2, name: 'R-102 · 남 60대 · 갑작스러운 두통' }))
+        .textContent,
+    ).toBeTruthy();
+    // 남은 시간 25초 → 빨간색 칩
+    expect(screen.getByText('0:25').className).toContain('text-destructive');
+    // 환자 평가 정보 카드: 산소포화도 86%만 강조, 맥박 88은 기본 (인수 기준)
+    expect(screen.getByRole('region', { name: '환자 평가 정보' })).toBeTruthy();
     const spo2 = screen.getByText('⚠ 86%');
     expect(spo2.className).toContain('text-destructive');
     expect(screen.getByText('88회/분').className).not.toContain('text-destructive');
-    expect(screen.getByText('60대')).toBeTruthy();
-    // 남은 시간 25초 → 빨간색
-    expect(screen.getByText('남은 시간 0:25').className).toContain('text-destructive');
+    // 우리 병원 카드: 병상(빈 병상 / 전체)과 길찾기로 잰 도착 예상
+    const ours = screen.getByRole('region', { name: '우리 병원' });
+    expect(ours.textContent).toContain('응급실5 / 20');
+    expect(ours.textContent).toContain('수술실1 / 4');
+    expect(ours.textContent).toContain('중환자실0 / 10');
+    expect(ours.textContent).toContain('도착 예상12분 (길찾기)');
+    // 승인 전 안내: 지금 유효한 승인과 응급실 빈 병상
+    expect(screen.getByText(/지금 유효한 승인 0건 · 응급실 병상 5개/)).toBeTruthy();
+  });
+
+  it("대원이 '확인 불가'로 보낸 칸은 X, 성별·나이를 모르면 제목에 '성별 X'·'나이 X'", async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          assessment: {
+            chiefComplaint: '의식 저하',
+            sex: 'U',
+            ageBand: '60s',
+            bp: 'unknown',
+            unknownFields: ['ageBand', 'pulse'],
+          },
+          abnormalFields: [],
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'R-102 · 성별 X 나이 X · 의식 저하' }),
+    ).toBeTruthy();
+    const card = screen.getByRole('region', { name: '환자 평가 정보' });
+    // 혈압('unknown')과 맥박(unknownFields) 둘 다 X
+    expect(card.querySelectorAll('[data-unknown]')).toHaveLength(2);
+    expect(card.textContent).toContain('혈압X확인 불가');
+    expect(card.textContent).toContain('맥박X확인 불가');
+  });
+
+  it('과거력·KTAS 등 앱이 받는 항목을 모두 보여 주고, 비운 칸은 입력 안 함', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          assessment: {
+            chiefComplaint: '흉통',
+            sex: 'M',
+            ageBand: '60s',
+            history: '고혈압·당뇨',
+            ktas: 2,
+            trauma: 'no',
+            unknownFields: [],
+          },
+          abnormalFields: [],
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    const card = await screen.findByRole('region', { name: '환자 평가 정보' });
+    expect(card.textContent).toContain('과거력고혈압·당뇨');
+    expect(card.textContent).toContain('KTAS2단계');
+    // 비운 선택 항목도 줄은 있다
+    expect(card.textContent).toContain('체온입력 안 함');
+    expect(card.textContent).toContain('혈당입력 안 함');
+    // 외상 없음이면 외상 원인 줄은 없다
+    expect(card.textContent).not.toContain('외상 원인');
+  });
+
+  it('수술 가능 여부를 우리 병원 카드 맨 위에', async () => {
+    fakeServer({
+      'GET /hw/requests/102': {
+        status: 200,
+        body: detail({
+          ourHospital: { capability: { name: '뇌출혈수술', available: true }, beds: null },
+        }),
+      },
+    });
+    renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
+    expect(await screen.findByText('[뇌출혈수술]')).toBeTruthy();
+    expect(screen.getByText('가능 ✓')).toBeTruthy();
+    // 병상 정보가 없으면 승인 전 안내를 보여 주지 않는다
+    expect(screen.queryByText(/지금 유효한 승인/)).toBeNull();
   });
 
   it('길찾기 전 추정 시간은 (추정)으로', async () => {
@@ -62,7 +144,7 @@ describe('요청 상세 (SFR-118)', () => {
       'GET /hw/requests/102': { status: 200, body: detail({ etaSource: 'straight', etaMin: 9 }) },
     });
     renderWithQuery(<RequestDetail requestId={102} nowMs={NOW} onClose={() => {}} />);
-    expect(await screen.findByText('도착 예상 약 9분 (추정)')).toBeTruthy();
+    expect(await screen.findByText('약 9분 (추정)')).toBeTruthy();
   });
 
   // 상세는 열람 기록 때문에 다시 받지 않는다. 확정 뒤 시간은 도착 예정 목록(이미 받아 둔 값)을 따른다
@@ -85,7 +167,7 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([{ id: 102, status: 'confirmed', etaMin: 4 }]);
-    expect(await screen.findByText('도착 예상 4분')).toBeTruthy();
+    expect(await screen.findByText('4분')).toBeTruthy();
     expect(screen.queryByText(/추정/)).toBeNull();
   });
 
@@ -110,7 +192,7 @@ describe('요청 상세 (SFR-118)', () => {
       },
     });
     renderWithIncoming([]);
-    expect(await screen.findByText('갑작스러운 두통')).toBeTruthy();
+    expect(await screen.findByRole('region', { name: '우리 병원' })).toBeTruthy();
     expect(screen.queryByText(/도착 예상/)).toBeNull();
   });
 

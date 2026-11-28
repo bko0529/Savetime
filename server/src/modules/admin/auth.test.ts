@@ -9,7 +9,7 @@ import { pino } from 'pino';
 import request from 'supertest';
 import { createApp } from '../../app.js';
 import { hashPassword } from '../auth/password.js';
-import { signAccessToken, signingKey } from '../auth/tokens.js';
+import { hashRefreshToken, signAccessToken, signingKey } from '../auth/tokens.js';
 import { TEST_REDIS_URL, withSchemaPool } from '../../testing/services.js';
 import { LOCK_MINUTES, MAX_FAILURES } from './auth.js';
 import { verifyAdminAccessToken } from './tokens.js';
@@ -24,6 +24,7 @@ interface Harness {
   jwtKey: Uint8Array;
   login: (body: object, origin?: string) => request.Test;
   enroll: (body: object) => request.Test;
+  refresh: (refreshToken: string) => request.Test;
 }
 
 async function withAdminApp(use: (h: Harness) => Promise<void>): Promise<void> {
@@ -43,6 +44,11 @@ async function withAdminApp(use: (h: Harness) => Promise<void>): Promise<void> {
           request(app).post('/api/v1/admin/auth/login').set('Origin', origin).send(body),
         enroll: (body) =>
           request(app).post('/api/v1/admin/auth/otp/enroll').set('Origin', ORIGIN).send(body),
+        refresh: (refreshToken) =>
+          request(app)
+            .post('/api/v1/admin/auth/refresh')
+            .set('Origin', ORIGIN)
+            .send({ refreshToken }),
       });
     } finally {
       redis.disconnect();
@@ -206,5 +212,78 @@ test('대원 토큰은 관리자 토큰으로 인정하지 않는다', async () 
   assert.deepEqual(await verifyAdminAccessToken(key, paramedicToken), {
     ok: false,
     reason: 'invalid',
+  });
+});
+
+// 관리자 화면을 15분 넘게 써도 로그아웃되지 않게 (SFR-082, SER-016)
+async function signedIn(h: Harness): Promise<{ accessToken: string; refreshToken: string }> {
+  const secret = (await addAdmin(h.pool, { enrolled: true }))!;
+  const res = await h.login({ loginId: 'admin', password: PASSWORD, otp: await codeFor(secret) });
+  assert.equal(res.status, 200);
+  return res.body;
+}
+
+test('갱신 토큰으로 새 관리자 토큰을 받고, 쓴 갱신 토큰은 다시 못 쓴다', async () => {
+  await withAdminApp(async (h) => {
+    const first = await signedIn(h);
+
+    const res = await h.refresh(first.refreshToken);
+    assert.equal(res.status, 200);
+    assert.equal((await verifyAdminAccessToken(h.jwtKey, res.body.accessToken)).ok, true);
+    assert.notEqual(res.body.refreshToken, first.refreshToken);
+
+    const reuse = await h.refresh(first.refreshToken);
+    assert.equal(reuse.status, 401);
+    assert.equal(reuse.body.error.code, 'TOKEN_REVOKED');
+    // 새로 받은 것은 쓸 수 있다
+    assert.equal((await h.refresh(res.body.refreshToken)).status, 200);
+  });
+});
+
+test('재발급해도 만료 시각은 처음 로그인 기준 그대로, 지나면 TOKEN_EXPIRED', async () => {
+  await withAdminApp(async (h) => {
+    const first = await signedIn(h);
+    const before = await h.pool.query<{ expires_at: Date }>(
+      "SELECT expires_at FROM refresh_token WHERE owner_type = 'admin'",
+    );
+    const next = (await h.refresh(first.refreshToken)).body;
+    const after = await h.pool.query<{ expires_at: Date }>(
+      "SELECT expires_at FROM refresh_token WHERE owner_type = 'admin' AND revoked_at IS NULL",
+    );
+    assert.equal(after.rows[0].expires_at.getTime(), before.rows[0].expires_at.getTime());
+
+    await h.pool.query("UPDATE refresh_token SET expires_at = now() - interval '1 second'");
+    const res = await h.refresh(next.refreshToken);
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+});
+
+test('대원 갱신 토큰·없는 토큰으로는 관리자 토큰을 못 받는다', async () => {
+  await withAdminApp(async (h) => {
+    await signedIn(h);
+    // 같은 갱신 토큰 표에 대원 몫으로 들어 있는 값
+    const paramedicToken = 'paramedic-refresh-token-value';
+    await h.pool.query(
+      `INSERT INTO refresh_token (owner_type, owner_id, token_hash, expires_at)
+       VALUES ('paramedic', 1, $1, now() + interval '1 hour')`,
+      [hashRefreshToken(paramedicToken)],
+    );
+    for (const token of [paramedicToken, 'no-such-token']) {
+      const res = await h.refresh(token);
+      assert.equal(res.status, 401);
+      assert.equal(res.body.error.code, 'TOKEN_REVOKED');
+    }
+  });
+});
+
+test('같은 갱신 토큰으로 동시에 두 번 와도 한 번만 바꿔 준다', async () => {
+  await withAdminApp(async (h) => {
+    const first = await signedIn(h);
+    const results = await Promise.all([
+      h.refresh(first.refreshToken),
+      h.refresh(first.refreshToken),
+    ]);
+    assert.deepEqual(results.map((r) => r.status).sort(), [200, 401]);
   });
 });

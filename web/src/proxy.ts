@@ -11,7 +11,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(decision.to, request.url));
   }
   if (decision.type === 'notFound') {
-    return new NextResponse('페이지를 찾을 수 없어요', { status: 404 });
+    // 글자 한 줄 대신 앱의 '페이지를 찾을 수 없어요' 화면(app/not-found.tsx)을 보여 준다.
+    // 없는 경로로 바꿔 넘기면 Next 가 그 화면을 404 상태로 그린다
+    return NextResponse.rewrite(new URL('/__not-found', request.url));
   }
   return NextResponse.next();
 }

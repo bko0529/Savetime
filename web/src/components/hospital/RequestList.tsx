@@ -3,128 +3,106 @@
 import type { components } from '@/lib/api/schema';
 import { isUrgent, remainingText } from '@/lib/assessment/labels';
 import { cn } from '@/lib/utils';
-import { Chip, type Tone } from './Chip';
-import { table } from './tableStyles';
+import { Chip } from './Chip';
 
 export type HwRequestItem = components['schemas']['HwRequestItem'];
-
-const STATUS_TEXT: Record<string, string> = {
-  waiting: '응답 대기',
-  approved: '승인',
-};
-const STATUS_TONE: Record<string, Tone> = { waiting: 'warning', approved: 'success' };
-
-// 응답 2분 중 남은 비율. 막대를 그리는 데만 쓴다 (시간 판정은 서버, 규칙 6)
-const RESPOND_WINDOW_MS = 2 * 60 * 1000;
-function remainingPercent(respondUntil: string, nowMs: number): number {
-  const ratio = (Date.parse(respondUntil) - nowMs) / RESPOND_WINDOW_MS;
-  return Math.min(100, Math.max(0, ratio * 100));
-}
 
 type Props = {
   items: HwRequestItem[];
   nowMs: number;
   selectedId: number | null;
   onOpen: (id: number) => void;
+  // 이 화면에서 한 번이라도 연 요청. 아직 안 연 대기 요청은 빨갛게 깜빡이고 NEW 를 붙인다.
+  // 없으면 강조하지 않는다
+  seenIds?: ReadonlySet<number>;
 };
 
-// 요청 목록 (SFR-135). 서버가 남은 시간 짧은 순으로 준다 — 이상 수치로 순서를 바꾸지 않는다 (SFR-155, D-38).
-// 구급대 소속은 API 에도 없고 여기서도 보여 주지 않는다 (D-98)
-export function RequestList({ items, nowMs, selectedId, onOpen }: Props) {
+function etaText(item: HwRequestItem): string | null {
+  if (item.etaMin == null) return null;
+  return `도착 예상 ${item.etaSource === 'straight' ? '약 ' : ''}${item.etaMin}분`;
+}
+
+// 요청 목록 (SFR-135): 요청 하나를 카드 하나로. 서버가 남은 시간 짧은 순으로 준다 —
+// 이상 수치로 순서를 바꾸지 않는다 (SFR-155, D-38). 구급대 소속은 API 에도 없고 여기서도 보여 주지 않는다 (D-98)
+export function RequestList({ items, nowMs, selectedId, onOpen, seenIds }: Props) {
   if (items.length === 0) {
-    return <p className={table.empty}>지금 응답할 요청이 없어요.</p>;
+    return (
+      <p className="rounded-[16px] border border-line bg-card px-5 py-8 text-center text-[18px] text-muted-foreground">
+        지금 응답할 요청이 없어요.
+      </p>
+    );
   }
   return (
-    <div className="overflow-x-auto">
-      <table className={table.root}>
-        <thead>
-          <tr className={table.headRow}>
-            <th className={table.th}>번호</th>
-            <th className={table.th}>주 증상</th>
-            <th className={table.th}>이상 수치</th>
-            <th className={table.th}>도착 예상</th>
-            <th className={table.th}>상태</th>
-            <th className={table.th}>남은 시간</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const id = item.id!;
-            const waiting = item.status === 'waiting';
-            const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
-            return (
-              <tr
-                key={id}
-                className={cn(
-                  table.row,
-                  selectedId === id && 'bg-selected shadow-[inset_4px_0_0_var(--foreground)]',
-                  urgent && 'bg-urgent shadow-[inset_4px_0_0_var(--destructive)]',
+    <ul className="flex flex-col gap-3" aria-label="요청 목록">
+      {items.map((item) => {
+        const id = item.id!;
+        const waiting = item.status === 'waiting';
+        const urgent = waiting && item.respondUntil && isUrgent(item.respondUntil, nowMs);
+        const selected = selectedId === id;
+        const eta = etaText(item);
+        const isNew = waiting && !!seenIds && !seenIds.has(id);
+        return (
+          <li
+            key={id}
+            // 카드 어디를 눌러도 상세가 열린다. 키보드(Tab·Enter)는 아래 번호 버튼으로 연다
+            onClick={() => onOpen(id)}
+            aria-current={selected || undefined}
+            className={cn(
+              'flex cursor-pointer flex-col gap-2 rounded-[16px] border bg-card px-5 py-4 shadow-[var(--shadow-card)] transition-colors hover:border-border-strong',
+              selected ? 'border-2 border-foreground' : 'border-line',
+              // 깜빡임 모양은 globals.css 의 .request-new
+              isNew && 'request-new border-2',
+            )}
+            data-new={isNew || undefined}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 text-[18px] font-extrabold break-words">
+                <button
+                  type="button"
+                  className="font-extrabold tabular-nums focus-visible:underline"
+                  // 카드의 onClick 과 두 번 열리지 않게 여기서 멈춘다
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen(id);
+                  }}
+                >
+                  {item.label}
+                </button>
+                {item.chiefComplaint ? ` · ${item.chiefComplaint}` : ''}
+                {isNew && (
+                  <span className="ml-2 inline-flex rounded-full bg-destructive px-2 py-0.5 align-middle text-[12px] font-bold text-white">
+                    NEW
+                  </span>
                 )}
-                aria-selected={selectedId === id}
-              >
-                <td className={cn(table.td, 'whitespace-nowrap')}>
-                  {/* 행 전체가 아니라 버튼을 둬야 키보드(Tab·Enter)로도 열 수 있다 */}
-                  <button
-                    type="button"
-                    className="font-extrabold tabular-nums underline underline-offset-4"
-                    onClick={() => onOpen(id)}
-                  >
-                    {item.label}
-                  </button>
-                </td>
-                <td className={cn(table.td, 'min-w-[96px] break-words')}>
-                  {item.chiefComplaint ?? '—'}
-                </td>
-                <td className={table.td}>
-                  {item.abnormalCount ? (
-                    <Chip tone="danger" className="rounded-[8px] text-[17px] font-extrabold">
-                      ⚠ 이상 {item.abnormalCount}
-                    </Chip>
-                  ) : (
-                    '—'
+              </p>
+              {waiting && item.respondUntil ? (
+                <span
+                  className={cn(
+                    'shrink-0 text-[24px] leading-none font-extrabold tabular-nums',
+                    urgent && 'text-destructive',
                   )}
-                </td>
-                <td className={cn(table.td, 'whitespace-nowrap tabular-nums')}>
-                  {item.etaMin != null
-                    ? `${item.etaSource === 'straight' ? '약 ' : ''}${item.etaMin}분`
-                    : '—'}
-                </td>
-                <td className={table.td}>
-                  <Chip tone={STATUS_TONE[item.status ?? ''] ?? 'neutral'}>
-                    {STATUS_TEXT[item.status ?? ''] ?? item.status}
-                    {item.respondedBy ? ` · ${item.respondedBy}` : ''}
-                  </Chip>
-                </td>
-                <td className={cn(table.td, 'min-w-[96px]')}>
-                  {waiting && item.respondUntil ? (
-                    <>
-                      <span
-                        className={cn(
-                          'text-[22px] font-bold tabular-nums',
-                          urgent && 'font-extrabold text-destructive',
-                        )}
-                      >
-                        {remainingText(item.respondUntil, nowMs)}
-                      </span>
-                      <div
-                        aria-hidden
-                        className="mt-1 h-[5px] overflow-hidden rounded-full bg-line-soft"
-                      >
-                        <div
-                          className={cn('h-full', urgent ? 'bg-destructive' : 'bg-foreground')}
-                          style={{ width: `${remainingPercent(item.respondUntil, nowMs)}%` }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                >
+                  {remainingText(item.respondUntil, nowMs)}
+                </span>
+              ) : (
+                <Chip tone="success" className="shrink-0">
+                  승인{item.respondedBy ? ` · ${item.respondedBy}` : ''}
+                </Chip>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[15px] text-muted-foreground">
+                {eta ?? '도착 예상 정보 없음'}
+              </span>
+              {item.abnormalCount ? (
+                <Chip tone="danger" className="border border-danger-line py-0.5 text-[15px]">
+                  ⚠ 이상 {item.abnormalCount}
+                </Chip>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
