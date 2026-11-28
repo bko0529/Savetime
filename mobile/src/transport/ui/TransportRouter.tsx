@@ -1,7 +1,7 @@
 /**
  * 이송 상태가 바뀌면 맞는 화면으로 보낸다 (Lovable app-gate 의 '이송 건 상태 → 화면' 그대로).
  * - 앱을 켜고 서버에서 진행 중 이송을 처음 읽었을 때:
- *   진행 중이면 그 상태 화면으로 바로 (SFR-133), 없으면 환자 정보 입력이 첫 화면 (SFR-107)
+ *   진행 중이면 그 상태 화면으로 바로 (SFR-133), 없으면 홈이 첫 화면 (SFR-107, D-138)
  * - 그 뒤에는 팀원이 다른 폰에서 요청·확정해도 같은 화면으로 따라간다
  * - 이동 중: 길 안내 담당 폰·병원을 확정한 폰은 앱 안 길 안내 페이지(카카오내비)로 바로, 나머지 팀원 폰은 이송 화면
  * - 환자 정보 입력 화면에서 요청하면 그 화면을 요청 화면으로 '바꿔' 연다 (뒤로 가기로 입력 화면이 다시 나오지 않게)
@@ -26,9 +26,9 @@ export function TransportRouter() {
     const navHere = e.navIsMe || e.confirmedHere;
     const key = `${e.status}:${e.phoneTarget}:${navHere}`;
     if (prev.current === null) {
-      // 앱을 켠 뒤 처음: 진행 중 이송이면 그 화면, 아니면 환자 정보 입력
+      // 앱을 켠 뒤 처음: 진행 중 이송이면 그 화면 (SFR-133), 아니면 홈 그대로 (SFR-107, D-138 — 러버블과 같게)
       prev.current = key;
-      const to = isActive(e.status) ? routeForStatus(e.status, e.phoneTarget, navHere) : '/patient';
+      const to = isActive(e.status) ? routeForStatus(e.status, e.phoneTarget, navHere) : null;
       if (to && pathRef.current === '/') router.navigate(to);
       return;
     }

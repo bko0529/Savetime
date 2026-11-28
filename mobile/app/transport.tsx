@@ -75,7 +75,7 @@ export default function TransportScreen() {
       title={near ? `${h.name} 응급실 입구` : `${h.name} · ${left}분 남음`}
       subtitle={
         near
-          ? '응급실 입구 근처예요'
+          ? '응급실 입구 30m 안이에요'
           : e.navIsMe
             ? '이송 중 · 이 폰이 경로 안내·위치 기록 담당'
             : '이송 중 · 경로 안내는 담당 폰에서'
@@ -97,7 +97,7 @@ export default function TransportScreen() {
             </BigButton>
           ) : (
             <BigButton variant="outline" onPress={() => setManualNear(true)}>
-              도착했어요 (입구 근처에서는 저절로 켜져요)
+              도착했어요 (입구 30m 안에서 켜져요)
             </BigButton>
           )}
           <BigButton variant="outline" onPress={cancel}>

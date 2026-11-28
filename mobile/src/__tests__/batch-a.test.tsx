@@ -97,12 +97,12 @@ beforeEach(() => {
   mockPath = '/';
 });
 
-describe('첫 화면 · 앱 재실행 복구 (SFR-107 · 133)', () => {
-  test('진행 중 이송이 없으면 환자 정보 입력이 첫 화면', async () => {
+describe('첫 화면 · 앱 재실행 복구 (SFR-107 · 133, D-138)', () => {
+  test('진행 중 이송이 없으면 홈이 첫 화면 (D-138, 러버블과 같게)', async () => {
     await render(<TransportRouter />);
     expect(mockRouter.navigate).not.toHaveBeenCalled(); // 서버를 읽기 전에는 기다림
     await act(async () => __setLoadedForTest());
-    expect(mockRouter.navigate).toHaveBeenCalledWith('/patient');
+    expect(mockRouter.navigate).not.toHaveBeenCalled(); // 홈 그대로
   });
   test('진행 중 이송이 있으면 그 상태 화면으로 바로', async () => {
     apply(T({ status: 'moving' }), 'ios-me');

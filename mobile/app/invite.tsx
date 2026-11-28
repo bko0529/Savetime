@@ -184,7 +184,8 @@ export default function InviteScreen() {
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Users size={14} color={color.muted} style={{ marginTop: 2 }} />
                 <Txt style={[text.caption, { flex: 1, color: color.muted }]}>
-                  수락하면 이 대원과 한 팀이 돼요. 팀은 최대 4명 · 운전은 1명이에요.
+                  수락하면 이 대원과 한 팀이 돼요. 팀은 최대 4명 · 운전은 1명이고, 이미 운전 대원이
+                  있으면 내 역할은 처치로 들어가요.
                 </Txt>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>

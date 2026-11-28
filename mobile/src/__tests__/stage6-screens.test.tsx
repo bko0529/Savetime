@@ -126,7 +126,7 @@ test('이동 중: 입구 근처가 아니면 도착 처리가 꺼져 있고, 누
   await render(<TransportScreen />);
   expect(screen.queryByRole('button', { name: '도착 처리' })).toBeNull();
   await fireEvent.press(
-    screen.getByRole('button', { name: '도착했어요 (입구 근처에서는 저절로 켜져요)' }),
+    screen.getByRole('button', { name: '도착했어요 (입구 30m 안에서 켜져요)' }),
   );
   await fireEvent.press(screen.getByRole('button', { name: '도착 처리' }));
   expect(arrive).toHaveBeenCalledWith('button');

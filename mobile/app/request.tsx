@@ -421,7 +421,7 @@ export default function RequestScreen() {
             justifyContent: 'space-between',
           }}
         >
-          <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>추천 병원 (상위 5곳)</Txt>
+          <Txt style={{ fontFamily: font.extrabold, fontSize: 15 }}>가까운 병원 (거리순)</Txt>
           <Pressable
             onPress={() => void refreshNow()}
             disabled={refreshing}

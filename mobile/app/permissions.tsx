@@ -143,8 +143,9 @@ export default function PermissionsScreen() {
         </View>
       ) : null}
       <Txt style={[text.caption, { marginTop: 20, color: color.muted }]}>
-        위치는 &apos;앱 사용 중&apos;에만 쓰고, 백그라운드 위치 권한은 여기서 묻지 않아요. 카메라는
-        공무원증 촬영 · QR 스캔 때 물어요.
+        위치는 &apos;앱 사용 중 허용&apos;만 받아요. 이송 중에는 화면이 꺼져도 길 안내와 도착 예상
+        시간 전달을 위해 위치를 계속 쓰고, 이송이 끝나면 멈춰요. 카메라는 공무원증 촬영 · QR 스캔 때
+        물어요.
       </Txt>
     </PhoneScreen>
   );
