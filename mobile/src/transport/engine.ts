@@ -50,6 +50,7 @@ import { retryOnVersionConflict } from './versionRetry';
 import { hospitalAlerts } from './hospitalAlerts';
 import { latestCards, saveCards, type CachedCard } from '../offline/cache';
 import { whenOnline } from '../offline/net';
+import { onBackgroundFixes, startBackgroundLocation, stopBackgroundLocation } from './bgLocation';
 import { enqueue, flush } from '../offline/queue';
 import type { AlertKind } from './notify';
 
@@ -1148,22 +1149,34 @@ export function latestReq(id: string) {
 }
 
 // ---------------- 이동 중: 경로 안내 담당 · 위치 기록 (SFR-036·037·121·132) ----------------
-// 운전 역할 단말은 확정 뒤 '내가 담당'이라고 알린다. 담당 단말만 5초마다 위치를 올린다 (화면이 켜져 있는 동안).
-// 백그라운드 위치(COR-014)와 카카오 내비 SDK 남은 시간은 9단계에서 붙인다.
+// 운전 역할 단말은 확정 뒤 '내가 담당'이라고 알린다. 담당 단말만 약 5초마다 위치를 올린다.
+// 실제 GPS 는 OS 백그라운드 위치 업데이트(bgLocation.ts, SFR-079 · COR-014)로 받아서 화면이 꺼져도 끊기지 않는다.
+// 못 보낸 위치는 모아 두었다가 다음에 한꺼번에 보낸다.
 // 시연(고정 위치)에서는 병원 입구 쪽으로 시속 약 40km 로 움직이는 것처럼 흉내 내고, 남은 분을 1분마다 같이 보낸다.
 const SPEED_MPS = 11;
 const STEP_SEC = 5;
 let lastFix: Fix | null = null;
+type Point = { lat: number; lng: number; speedKmh: number; recordedAt: string };
 let drive: {
-  timer: ReturnType<typeof setInterval>;
+  /** 시연 흉내·백그라운드 위치를 못 켰을 때만 쓰는 5초 타이머 */
+  timer: ReturnType<typeof setInterval> | null;
   at: LatLng;
   target: LatLng;
   minuteSent: number;
+  /** 아직 서버에 못 보낸 위치 (끊겨도 모았다가 보낸다) */
+  points: Point[];
+  sending: boolean;
 } | null = null;
+/** 못 보낸 위치는 이만큼까지만 모은다 (5초 간격 약 15분) */
+const MAX_PENDING_POINTS = 180;
 let claiming = false;
 
 function stopDrive() {
-  if (drive) clearInterval(drive.timer);
+  if (drive?.timer) clearInterval(drive.timer);
+  if (drive && !FIXED_LOCATION) {
+    onBackgroundFixes(null);
+    void stopBackgroundLocation();
+  }
   drive = null;
   lastFix = null;
   s.remainingM = null;
@@ -1257,17 +1270,26 @@ async function startDrive(target: LatLng) {
   if (starting) return;
   starting = true;
   const start = (await currentLocation()) ?? target;
+  if (drive || s.status !== 'moving') {
+    starting = false;
+    return;
+  }
+  drive = { at: start, target, minuteSent: 0, points: [], sending: false, timer: null };
+  // 실제 GPS: OS 백그라운드 위치로 받는다 (화면이 꺼져도). 못 켜면(권한 없음 등) 화면이 켜진 동안 5초마다 묻는다
+  const background = !FIXED_LOCATION && (await startBackgroundLocation());
   starting = false;
-  if (drive || s.status !== 'moving') return;
-  drive = {
-    at: start,
-    target,
-    minuteSent: 0,
-    timer: setInterval(() => void stepDrive(), STEP_SEC * 1000),
-  };
-  void stepDrive();
+  if (!drive) {
+    if (background) void stopBackgroundLocation();
+    return;
+  }
+  if (background) onBackgroundFixes((fixes) => void handleFixes(fixes));
+  else {
+    drive.timer = setInterval(() => void stepDrive(), STEP_SEC * 1000);
+    void stepDrive();
+  }
 }
 
+/** 시연 흉내 또는 화면이 켜진 동안 한 번 묻기 */
 async function stepDrive() {
   const d = drive;
   if (!d || !s.transportId) return;
@@ -1280,37 +1302,49 @@ async function stepDrive() {
   } else {
     fix = await currentFix(3000);
   }
-  if (fix) d.at = { lat: fix.lat, lng: fix.lng };
+  await handleFixes(fix ? [fix] : []);
+}
+
+/** 위치를 받으면: 도착 판정 · 남은 거리 갱신 → 서버로 (못 보낸 것까지 한꺼번에) */
+export async function handleFixes(fixes: Fix[]) {
+  const d = drive;
+  if (!d || !s.transportId) return;
+  for (const fix of fixes) {
+    d.at = { lat: fix.lat, lng: fix.lng };
+    // 도착 버튼 (SFR-038): 이상치 좌표(SFR-040)는 판정에 쓰지 않는다
+    if (!isOutlier(lastFix, fix)) {
+      s.nearEntrance = nearEntrance(distanceM(d.at, d.target), fix.accuracyM, fix.speedKmh);
+      lastFix = fix;
+    }
+    // 위치 기록은 좌표·속도·시각만 (SFR-041 고지 범위)
+    d.points.push({
+      lat: fix.lat,
+      lng: fix.lng,
+      speedKmh: fix.speedKmh ?? 0,
+      recordedAt: new Date(fix.at).toISOString(),
+    });
+  }
+  if (d.points.length > MAX_PENDING_POINTS) d.points = d.points.slice(-MAX_PENDING_POINTS);
   const left = distanceM(d.at, d.target);
   s.remainingM = Math.round(left);
-  // 도착 버튼 (SFR-038): 이상치 좌표(SFR-040)는 판정에 쓰지 않는다
-  if (fix && !isOutlier(lastFix, fix)) {
-    s.nearEntrance = nearEntrance(left, fix.accuracyM, fix.speedKmh);
-    lastFix = fix;
-  }
   const etaMin = Math.ceil(left / SPEED_MPS / 60);
   emit();
+  if (d.sending || d.points.length === 0) return;
   // 남은 분은 1분에 한 번만 실어 보낸다 (그 사이는 서버가 지난 시간을 뺀다)
   const sendEta = now() - d.minuteSent >= 60_000 || etaMin === 0;
+  // 서버는 한 번에 120개까지 받는다 (나머지는 다음 위치 때)
+  const batch = d.points.slice(0, 120);
+  d.sending = true;
   try {
     await api('POST', `/transports/${s.transportId}/locations`, {
-      body: {
-        deviceId: await deviceId(),
-        // 위치 기록은 좌표·속도·시각만 (SFR-041 고지 범위)
-        points: [
-          {
-            lat: d.at.lat,
-            lng: d.at.lng,
-            speedKmh: fix?.speedKmh ?? 0,
-            recordedAt: new Date(now()).toISOString(),
-          },
-        ],
-        ...(sendEta ? { etaMin } : {}),
-      },
+      body: { deviceId: await deviceId(), points: batch, ...(sendEta ? { etaMin } : {}) },
     });
+    d.points = d.points.slice(batch.length);
     if (sendEta) d.minuteSent = now();
   } catch {
-    /* 끊기면 다음 5초에 다시 */
+    /* 끊기면 모아 두었다가 다음 위치 때 같이 보낸다 */
+  } finally {
+    d.sending = false;
   }
 }
 

@@ -20,6 +20,8 @@ import { setRouteOpener, setTransportNotifier, startTransportSync } from '../src
 import { notifyTeam } from '../src/transport/notify';
 import { startDraftSync } from '../src/transport/teamDraft';
 import { InvitePush } from '../src/duty/InvitePush';
+// 백그라운드 위치 작업은 앱이 켜질 때 먼저 정의돼야 OS 가 부를 수 있다 (SFR-079)
+import '../src/transport/bgLocation';
 import { NetBanner } from '../src/offline/NetBanner';
 import { useNet } from '../src/offline/net';
 import { loadPatient } from '../src/transport/patientStore';

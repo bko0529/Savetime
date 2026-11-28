@@ -29,7 +29,10 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "반경 안 병원에 이송을 요청하고, 길 안내와 병원 도착 예상 시간 계산에 위치를 써요.",
-          "locationAlwaysAndWhenInUsePermission": "이송 중에는 화면이 꺼져도 길 안내와 병원 도착 예상 시간 전달을 위해 위치를 써요. 이송이 끝나면 멈춰요."
+          "locationAlwaysAndWhenInUsePermission": "이송 중에는 화면이 꺼져도 길 안내와 병원 도착 예상 시간 전달을 위해 위치를 써요. 이송이 끝나면 멈춰요.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       "expo-notifications",

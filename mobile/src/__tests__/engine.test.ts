@@ -19,6 +19,17 @@ jest.mock('../transport/location', () => ({
   ...jest.requireActual('../transport/location'),
   currentLocation: jest.fn(async () => ({ lat: 36.815, lng: 127.1139 })),
 }));
+// 백그라운드 위치 (SFR-079): OS 가 위치를 넘겨주는 것을 테스트가 흉내 낸다
+let mockBgListener: ((fixes: unknown[]) => void) | null = null;
+const mockBgStart = jest.fn(async () => true);
+const mockBgStop = jest.fn(async () => undefined);
+jest.mock('../transport/bgLocation', () => ({
+  onBackgroundFixes: (fn: ((fixes: unknown[]) => void) | null) => {
+    mockBgListener = fn;
+  },
+  startBackgroundLocation: () => mockBgStart(),
+  stopBackgroundLocation: () => mockBgStop(),
+}));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
@@ -295,6 +306,10 @@ test('운전 역할이면 이동 시작 때 경로 안내 담당을 맡고, 담�
     '/transports/t-1/nav-device',
     { body: { deviceId: 'ios-me', version: 3 } },
   ]);
+  // 담당이 되면 OS 백그라운드 위치를 켜고(SFR-079), OS 가 넘겨준 위치를 서버로 보낸다
+  expect(mockBgStart).toHaveBeenCalled();
+  mockBgListener!([{ lat: 36.81, lng: 127.12, accuracyM: 5, speedKmh: 40, at: Date.now() }]);
+  await new Promise((r) => setTimeout(r, 20));
   const loc = mockApi.mock.calls.find((c) => c[1] === '/transports/t-1/locations');
   expect(loc).toBeTruthy();
   const body = (
@@ -303,6 +318,53 @@ test('운전 역할이면 이동 시작 때 경로 안내 담당을 맡고, 담�
   expect(body.deviceId).toBe('ios-me');
   expect(Object.keys(body.points[0]!).sort()).toEqual(['lat', 'lng', 'recordedAt', 'speedKmh']);
   expect(typeof body.etaMin).toBe('number'); // 처음에는 남은 분도 같이
+  actions.reset();
+  // 이송이 끝나면(화면 비우기) 백그라운드 위치도 멈춘다
+  expect(mockBgStop).toHaveBeenCalled();
+});
+
+test('못 보낸 위치는 모아 두었다가 다음에 한꺼번에 보낸다 (끊김 대비)', async () => {
+  teamStore.set({
+    team: {
+      id: 1,
+      code: '1',
+      members: [{ paramedicId: 1, name: '김', role: 'driver', isMe: true }],
+    },
+  });
+  const confirmedHospital = {
+    id: 101,
+    name: '순천향대',
+    erPhone: null,
+    memo: null,
+    extraMemo: null,
+    entrance: { lat: 36.8, lng: 127.13 },
+    requestStatus: 'confirmed' as const,
+    closeReason: null,
+  };
+  const moving = T({ status: 'moving', navDeviceId: 'ios-me', confirmedHospital });
+  mockApi.mockImplementation(async (_m: string, path: string) => {
+    if (path === '/transports/t-1/locations') throw new Error('offline');
+    return moving;
+  });
+  apply(moving, 'ios-me');
+  await new Promise((r) => setTimeout(r, 20));
+  const fix = (n: number) => ({
+    lat: 36.81 + n / 1000,
+    lng: 127.12,
+    accuracyM: 5,
+    speedKmh: 40,
+    at: Date.now() + n,
+  });
+  mockBgListener!([fix(1)]);
+  await new Promise((r) => setTimeout(r, 10));
+  mockBgListener!([fix(2)]);
+  await new Promise((r) => setTimeout(r, 10));
+  mockApi.mockClear();
+  mockApi.mockResolvedValue(moving);
+  mockBgListener!([fix(3)]);
+  await new Promise((r) => setTimeout(r, 20));
+  const sent = mockApi.mock.calls.find((c) => c[1] === '/transports/t-1/locations');
+  expect((sent![2] as { body: { points: unknown[] } }).body.points).toHaveLength(3);
   actions.reset();
 });
 
