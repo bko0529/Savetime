@@ -1399,6 +1399,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/admin/auth/refresh': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 관리자 토큰 재발급
+     * @description 15분짜리 관리자 accessToken 이 끝나면 refreshToken 으로 새 토큰을 받는다. 쓸 때마다 새 refreshToken 으로 바뀌고 예전 값은 못 쓴다. 만료 시각은 처음 로그인 기준(최대 14시간) 그대로.
+     *
+     *     **요구사항**: SFR-082, SER-016
+     *     **화면**: (관리자 모든 화면)
+     *     **오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED
+     */
+    post: operations['post_admin_auth_refresh'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/admin/signups': {
     parameters: {
       query?: never;
@@ -5023,6 +5047,41 @@ export interface operations {
       };
     };
   };
+  post_admin_auth_refresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          refreshToken: string;
+        };
+      };
+    };
+    responses: {
+      /** @description 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Tokens'];
+        };
+      };
+      /** @description 오류 (코드는 오류 코드표) */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
   get_admin_signups: {
     parameters: {
       query?: {
@@ -5616,8 +5675,19 @@ export interface operations {
             items: {
               id?: number;
               /** @enum {string} */
-              kind?: 'collect_fail' | 'signup' | 'pc_change' | 'key_expiring' | 'odd_pc';
+              kind?:
+                | 'collect_fail'
+                | 'signup'
+                | 'pc_change'
+                | 'key_expiring'
+                | 'odd_pc'
+                | 'api_quota'
+                | 'integrity';
               text?: string;
+              /** @description 알림 대상 ID. signup = 가입 신청 ID, pc_change·odd_pc = 병원 ID, key_expiring = 라이선스 키 ID, integrity = 발견 건수, api_quota = 80·100. 누르면 해당 화면으로 갈 때 쓴다 */
+              refId?: number | null;
+              /** @description 병원 관련 알림(pc_change·odd_pc·key_expiring)의 병원 이름. 병원 관리 화면에서 그 병원을 찾을 때 쓴다 */
+              hospitalName?: string | null;
               occurrences?: number;
               /** Format: date-time */
               lastAt?: string;
@@ -5718,7 +5788,8 @@ export interface operations {
   get_admin_stats_hospitals: {
     parameters: {
       query?: {
-        days?: 7 | 30;
+        /** @description 기간(일). 0 = 전체 기간 */
+        days?: 0 | 7 | 30;
       };
       header?: never;
       path?: never;
@@ -5734,7 +5805,7 @@ export interface operations {
         content: {
           'application/json': {
             /** @enum {integer} */
-            days?: 7 | 30;
+            days?: 0 | 7 | 30;
             /** @description 핵심 지표 (전체 평균, 병원이 정해지기 전에 끝난 건 포함). 기록이 없으면 null */
             avgRequestToDepartSec?: number | null;
             hospitals?: components['schemas']['HospitalStat'][];
