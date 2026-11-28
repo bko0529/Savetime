@@ -10,6 +10,9 @@ export default tseslint.config(
       '**/.next/**',
       '**/next-env.d.ts',
       '**/.expo/**',
+      // expo prebuild 가 만드는 네이티브 폴더 (깃 제외)
+      'mobile/ios/**',
+      'mobile/android/**',
       // 디자인 시안(참고 자료)의 자동 생성 실행 파일. 실제 화면은 web/ 의 .tsx 로 구현한다
       'docs/design-handoff-web-ui/**',
     ],

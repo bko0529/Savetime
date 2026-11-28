@@ -36,10 +36,12 @@ static BOOL svSdkReady = NO;
     completion(nil);
     return;
   }
+  // 1.12.14 헤더 기준: 사용자 구분 값은 appUserId, csId 는 쓰지 않음
   [[KNSDK sharedInstance] initializeWithAppKey:appKey
                                  clientVersion:clientVersion
-                                       userKey:userKey
-                                    completion:^(KNError *aError) {
+                                          csId:nil
+                                     appUserId:userKey
+                                    completion:^(KNError *_Nullable aError) {
                                       dispatch_async(dispatch_get_main_queue(), ^{
                                         if (aError) {
                                           completion([NSString stringWithFormat:@"%@ %@", aError.code ?: @"", aError.msg ?: @""]);
@@ -89,7 +91,7 @@ static BOOL svSdkReady = NO;
               completion:^(KNError *aError, KNTrip *aTrip) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                   if (aError || !aTrip) {
-                    [weakSelf finishWith:[NSString stringWithFormat:@"error:%@", aError.code ?: @"no_trip"]];
+                    [weakSelf finishWith:[NSString stringWithFormat:@"error:%@", aError ? aError.code : @"no_trip"]];
                     return;
                   }
                   [weakSelf startGuideWithTrip:aTrip];
@@ -108,7 +110,7 @@ static BOOL svSdkReady = NO;
 
   // 구급차: 추천 경로, 도로 통제·스쿨존 피하기 (가이드 예시 값)
   KNRoutePriority priority = KNRoutePriority_Recommand;
-  KNRouteAvoidOption avoid = KNRouteAvoidOption_RoadEvent | KNRouteAvoidOption_SZone;
+  SInt32 avoid = KNRouteAvoidOption_RoadEvent | KNRouteAvoidOption_SZone;
   KNNaviView *naviView = [[KNNaviView alloc] initWithGuidance:guidance
                                                          trip:trip
                                                   routeOption:priority
@@ -154,7 +156,17 @@ static BOOL svSdkReady = NO;
 - (void)guidance:(KNGuidance *)aGuidance routeUnchangedWithError:(KNError *)aError {
   [self.naviView guidance:aGuidance routeUnchangedWithError:aError];
 }
-- (void)guidanceRouteChanged:(KNGuidance *)aGuidance { [self.naviView guidanceRouteChanged:aGuidance]; }
+- (void)guidanceRouteChanged:(KNGuidance *)aGuidance
+                   fromRoute:(KNRoute *)aFromRoute
+                fromLocation:(KNLocation *)aFromLocation
+                     toRoute:(KNRoute *)aToRoute
+                  toLocation:(KNLocation *)aToLocation
+                      reason:(KNGuideRouteChangeReason)aChangeReason {
+  [self.naviView guidanceRouteChanged:aGuidance];
+}
+- (void)guidance:(KNGuidance *)aGuidance didUpdateIndoorRoute:(KNRoute *_Nullable)aRoute {
+  [self.naviView guidance:aGuidance didUpdateIndoorRoute:aRoute];
+}
 - (void)guidanceGuideEnded:(KNGuidance *)aGuidance {
   // 목적지 도착 · 안내 종료. 주행 결과 창은 띄우지 않고 바로 앱으로 돌아간다 (도착 처리는 앱 화면에서)
   self.arrived = YES;

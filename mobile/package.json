@@ -5,8 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "gen:api": "npx --yes openapi-typescript@7.13.0 ../docs/design-v0.2/openapi.yaml -o src/api/schema.d.ts",
     "typecheck": "tsc --noEmit",
     "test": "jest"

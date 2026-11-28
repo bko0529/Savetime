@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# 개발 빌드 때 자동으로 만들어지는 네이티브 폴더 (npx expo prebuild 로 다시 만듦)
+/ios
+/android

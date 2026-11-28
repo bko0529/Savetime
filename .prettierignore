@@ -18,3 +18,6 @@ perf/results/
 # openapi-typescript 가 만드는 파일 (npm run gen:api -w mobile)
 mobile/src/api/schema.d.ts
 mobile/.expo/
+# expo prebuild 가 만드는 네이티브 폴더 (깃 제외)
+mobile/ios/
+mobile/android/

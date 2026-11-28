@@ -11,8 +11,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  # 카카오모빌리티 공식 CocoaPods (2026-11-05 공지 기준 최신, Xcode 27 대응)
-  s.dependency 'KNSDK-UI', '1.12.20'
+  # 카카오모빌리티 공식 CocoaPods 의 최신 (1.12.20 이후는 SPM 으로만 배포됨)
+  s.dependency 'KNSDK-UI', '1.12.14'
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.source_files = '**/*.{h,m,swift}'
