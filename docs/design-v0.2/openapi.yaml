@@ -3043,6 +3043,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /admin/auth/refresh:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 관리자 토큰 재발급
+      description: "15분짜리 관리자 accessToken 이 끝나면 refreshToken 으로 새 토큰을 받는다. 쓸 때마다 새 refreshToken\
+        \ 으로 바뀌고 예전 값은 못 쓴다. 만료 시각은 처음 로그인 기준(최대 14시간) 그대로.\n\n**요구사항**: SFR-082, SER-016\
+        \  \n**화면**: (관리자 모든 화면)  \n**오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED"
+      operationId: post_admin_auth_refresh
+      security: *id001
+      x-error-codes:
+      - TOKEN_REVOKED
+      - TOKEN_EXPIRED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required:
+              - refreshToken
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /admin/signups:
     get:
       tags:
@@ -3704,8 +3741,18 @@ paths:
                           - pc_change
                           - key_expiring
                           - odd_pc
+                          - api_quota
+                          - integrity
                         text:
                           type: string
+                        refId:
+                          type: integer
+                          nullable: true
+                          description: '알림 대상 ID. signup = 가입 신청 ID, pc_change·odd_pc = 병원 ID, key_expiring = 라이선스 키 ID, integrity = 발견 건수, api_quota = 80·100. 누르면 해당 화면으로 갈 때 쓴다'
+                        hospitalName:
+                          type: string
+                          nullable: true
+                          description: 병원 관련 알림(pc_change·odd_pc·key_expiring)의 병원 이름. 병원 관리 화면에서 그 병원을 찾을 때 쓴다
                         occurrences:
                           type: integer
                         lastAt:
@@ -3834,9 +3881,10 @@ paths:
         schema:
           type: integer
           enum:
+          - 0
           - 7
           - 30
-        description: ''
+        description: 기간(일). 0 = 전체 기간
       responses:
         '200':
           description: 성공
@@ -3848,6 +3896,7 @@ paths:
                   days:
                     type: integer
                     enum:
+                    - 0
                     - 7
                     - 30
                   avgRequestToDepartSec:

@@ -67,7 +67,7 @@ async function withStats(use: (h: Harness) => Promise<void>): Promise<void> {
       jwtKey,
       stats: (days, token = adminToken) =>
         request(app)
-          .get(`/api/v1/admin/stats/hospitals${days ? `?days=${days}` : ''}`)
+          .get(`/api/v1/admin/stats/hospitals${days !== undefined ? `?days=${days}` : ''}`)
           .set('Origin', WEB_ORIGIN)
           .set('Authorization', `Bearer ${token}`),
       hospital: async (name) => {
@@ -238,7 +238,7 @@ test('승인 취소율은 (승인 취소 + 수용 불가) ÷ 승인, 요청→�
   });
 });
 
-test('기간 밖·요청 없는 병원은 빠지고, days 는 7·30 만, 관리자가 아니면 401', async () => {
+test('기간 밖·요청 없는 병원은 빠지고, days 는 7·30·0(전체) 만, 관리자가 아니면 401', async () => {
   await withStats(async (h) => {
     const old = await h.hospital('옛병원');
     await h.requests(old, 12, { ago: '20 days', respondSec: 30 });
@@ -250,6 +250,17 @@ test('기간 밖·요청 없는 병원은 빠지고, days 는 7·30 만, 관리�
     );
     assert.equal((await h.stats()).body.days, 7, '기본은 7일');
     assert.equal((await h.stats(14)).status, 400);
+
+    // 전체 기간(days=0): 30일보다 오래된 기록도 센다
+    const older = await h.hospital('오래된병원');
+    await h.requests(older, 11, { ago: '60 days', respondSec: 40 });
+    assert.ok(!(await h.stats(30)).body.hospitals.some((x: Stat) => x.name === '오래된병원'));
+    const all = await h.stats(0);
+    assert.equal(all.status, 200);
+    assert.equal(all.body.days, 0);
+    const allByName = byName(all.body);
+    assert.equal(allByName['오래된병원'].requests, 11);
+    assert.equal(allByName['옛병원'].requests, 12);
 
     const paramedic = await signAccessToken(h.jwtKey, { paramedicId: '1', sessionVersion: 1 });
     assert.equal((await h.stats(7, paramedic)).status, 401);

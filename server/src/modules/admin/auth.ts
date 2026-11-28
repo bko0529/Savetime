@@ -37,6 +37,7 @@ const loginSchema = z.object({
   otp: otpCode.optional(),
 });
 const enrollSchema = z.object({ setupToken: z.string().min(1).max(100), otp: otpCode });
+const refreshSchema = z.object({ refreshToken: z.string().min(1).max(100) });
 
 interface AdminRow {
   id: string;
@@ -85,12 +86,21 @@ async function recordFailure(client: pg.PoolClient, adminId: string): Promise<nu
   return rows[0].lock_seconds;
 }
 
-async function issueTokens(ctx: AdminContext, adminId: string) {
+// 로그인 때는 지금부터 sessionHours 만큼, 재발급 때는 바꾸는 토큰(previousId)의 만료 시각을 그대로 쓴다.
+// 그래서 15분마다 재발급해도 처음 로그인부터 14시간이 지나면 다시 로그인해야 한다.
+async function issueTokens(
+  ctx: AdminContext,
+  db: pg.Pool | pg.PoolClient,
+  adminId: string,
+  previousId: string | null = null,
+) {
   const refreshToken = newRefreshToken();
-  await ctx.pool.query(
+  await db.query(
     `INSERT INTO refresh_token (owner_type, owner_id, token_hash, expires_at)
-     VALUES ('admin', $1, $2, now() + make_interval(hours => $3))`,
-    [adminId, hashRefreshToken(refreshToken), ctx.sessionHours],
+     VALUES ('admin', $1, $2,
+             coalesce((SELECT expires_at FROM refresh_token WHERE id = $4),
+                      now() + make_interval(hours => $3)))`,
+    [adminId, hashRefreshToken(refreshToken), ctx.sessionHours, previousId],
   );
   return { accessToken: await signAdminAccessToken(ctx.jwtKey, adminId), refreshToken };
 }
@@ -165,7 +175,7 @@ export function adminAuthRouter(ctx: AdminContext): Router {
       });
     }
 
-    res.json(await issueTokens(ctx, outcome.adminId));
+    res.json(await issueTokens(ctx, ctx.pool, outcome.adminId));
   });
 
   router.post('/admin/auth/otp/enroll', async (req, res) => {
@@ -199,7 +209,36 @@ export function adminAuthRouter(ctx: AdminContext): Router {
     await ctx.redis.del(key, `${key}:tries`);
     if (rowCount === 0) throw expired();
 
-    res.json(await issueTokens(ctx, state.adminId));
+    res.json(await issueTokens(ctx, ctx.pool, state.adminId));
+  });
+
+  // 15분짜리 관리자 토큰이 끝나면 갱신 토큰으로 새 토큰을 받는다 (SFR-082, SER-016).
+  // 대원 /auth/refresh 와 같은 규칙: 쓸 때마다 새 갱신 토큰으로 바꾸고, 예전 것은 다시 못 쓴다.
+  router.post('/admin/auth/refresh', async (req, res) => {
+    const { refreshToken } = parseBody(refreshSchema, req.body);
+    const tokens = await withTransaction(ctx.pool, async (client) => {
+      // 같은 토큰으로 동시에 두 번 와도 한 번만 바꿔 준다 (FOR UPDATE 로 줄 세우기)
+      const { rows } = await client.query<{
+        id: string;
+        owner_id: string;
+        revoked: boolean;
+        expired: boolean;
+      }>(
+        `SELECT t.id, t.owner_id, t.revoked_at IS NOT NULL AS revoked, t.expires_at <= now() AS expired
+           FROM refresh_token t
+           JOIN admin a ON a.id = t.owner_id
+          WHERE t.token_hash = $1 AND t.owner_type = 'admin'
+          FOR UPDATE OF t`,
+        [hashRefreshToken(refreshToken)],
+      );
+      const row = rows[0];
+      // 대원 갱신 토큰·이미 쓴 토큰·없는 토큰은 모두 같은 답
+      if (!row || row.revoked) throw new AppError(401, 'TOKEN_REVOKED', '다시 로그인해 주세요');
+      if (row.expired) throw new AppError(401, 'TOKEN_EXPIRED', '로그인 시간이 지났어요');
+      await client.query('UPDATE refresh_token SET revoked_at = now() WHERE id = $1', [row.id]);
+      return issueTokens(ctx, client, row.owner_id, row.id);
+    });
+    res.json(tokens);
   });
 
   return router;

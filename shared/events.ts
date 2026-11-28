@@ -39,7 +39,7 @@ export interface AppHospitalRequest {
 export interface AppServerEvents {
   // --- 계정 (paramedic 방) ---
   'account.signup_result': (e: Envelope<{ result: 'approved' | 'rejected'; reason: string | null }>) => void;          // 푸시 (SFR-083)
-  'account.force_logout':  (e: Envelope<{ reason: 'suspended' | 'pin_failed' | 'withdrawn' }>) => void;              // SER-016
+  'account.force_logout':  (e: Envelope<{ reason: 'suspended' | 'pin_failed' | 'withdrawn' | 'password_reset' }>) => void;              // SER-016
 
   // --- 팀 ---
   'team.invited':          (e: Envelope<{ inviteId: number; teamCode: string; fromName: string; expiresAt: string }>) => void; // paramedic 방 · 푸시

@@ -151,9 +151,10 @@ describe('병원 관리 (SFR-123)', () => {
     expect(screen.queryByRole('button', { name: '정지' })).toBeNull();
   });
 
-  it('관리자 토큰이 끝나면 로그아웃시켜 로그인 화면으로 보낸다', async () => {
+  it('관리자 토큰이 끝나고 갱신도 안 되면 로그아웃시켜 로그인 화면으로 보낸다', async () => {
     fakeServer({
       'GET /admin/hospitals': { status: 401, body: apiError('TOKEN_EXPIRED') },
+      'POST /admin/auth/refresh': { status: 401, body: apiError('TOKEN_EXPIRED') },
     });
     renderAdmin(<HospitalAdmin />);
     await waitFor(() => expect(screen.getByTestId('signed-in').textContent).toBe('no'));
@@ -351,7 +352,7 @@ describe('관리자 알림 목록 (SFR-100)', () => {
     expect(server.callsTo('POST /admin/notifications/2/read')).toHaveLength(1);
   });
 
-  it('더 보기는 커서를 그대로(인코딩해서) 보낸다', async () => {
+  it('목록 상자를 끝까지 내리면 다음 쪽을 받는다 (커서는 그대로 인코딩해서)', async () => {
     const cursor = '2026-11-04T05:09:00.123Z|7';
     const server = fakeServer({
       'GET /admin/notifications?limit=30': {
@@ -364,7 +365,9 @@ describe('관리자 알림 목록 (SFR-100)', () => {
       },
     });
     renderAdmin(<Notifications />);
-    fireEvent.click(await screen.findByRole('button', { name: '알림 더 보기' }));
+    await screen.findByText('새 가입 신청');
+    // 스크롤 상자 끝에 닿으면 다음 30개를 받는다
+    fireEvent.scroll(screen.getByTestId('관리자 알림 상자'));
     expect(await screen.findByText('이상 PC 등록 감지')).toBeTruthy();
     expect(
       server.callsTo(`GET /admin/notifications?limit=30&cursor=${encodeURIComponent(cursor)}`),
@@ -373,7 +376,7 @@ describe('관리자 알림 목록 (SFR-100)', () => {
 });
 
 describe('관리자 작업 이력 (SFR-091)', () => {
-  it('시각·관리자·작업·대상을 최신순으로 보여 주고, 더 보기로 이어 받는다', async () => {
+  it('시각·관리자·작업·대상을 최신순으로 보여 주고, 상자를 내리면 이어 받는다', async () => {
     const at = '2026-11-04T01:05:00Z';
     const server = fakeServer({
       'GET /admin/audit-logs?limit=30': {
@@ -393,10 +396,13 @@ describe('관리자 작업 이력 (SFR-091)', () => {
     });
     renderAdmin(<AuditLog />);
     expect(await screen.findByText('병원 계정 정지')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    // 다음 쪽이 있으면 '더 보기'(큰 창) 버튼이 있고, 상자를 끝까지 내리면 다음 30개를 받는다
+    expect(screen.getByRole('button', { name: '관리자 작업 이력 더 보기' })).toBeTruthy();
+    fireEvent.scroll(screen.getByTestId('관리자 작업 이력 상자'));
     expect(await screen.findByText('병원 계정 발급')).toBeTruthy();
     expect(screen.getAllByRole('row')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+    // 다 받았고 항목이 적으면 버튼이 없어진다
+    expect(screen.queryByRole('button', { name: '관리자 작업 이력 더 보기' })).toBeNull();
     expect(server.callsTo('GET /admin/audit-logs?limit=30&cursor=7')).toHaveLength(1);
   });
 });

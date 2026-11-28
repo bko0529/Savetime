@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ApiError, apiFetch } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
 import { MEMO_MAX } from './ExtraMemoDialog';
@@ -56,6 +57,12 @@ const STALE_CODES = new Set([
   'INVALID_TRANSITION',
 ]);
 
+// 인계 시안: 승인(검정)·거절(빨강)은 그라데이션·그림자 없이 평평한 색으로
+const flat = {
+  approve: 'bg-foreground bg-none shadow-none hover:bg-foreground/90',
+  reject: 'bg-destructive bg-none shadow-none hover:bg-destructive/90',
+};
+
 type Props = {
   requestId: number;
   // 상세를 열 때 받은 version. 그사이 다른 PC 가 응답했으면 서버가 막는다 (SFR-160)
@@ -64,10 +71,18 @@ type Props = {
   canAnswer: boolean;
   // 승인했거나 우리 병원으로 확정된 요청이면 '승인 취소'를 보여 준다 (SFR-128)
   canCancelApproval?: boolean;
+  // 승인 전에 보여 줄 안내 (지금 유효한 승인 수·응급실 빈 병상). 없으면 안 보여 준다
+  approvalHint?: string | null;
 };
 
 // 승인·거절 (SFR-119), 승인 취소 (SFR-128). 응답자 이름은 서버가 근무 시작 때 입력한 담당자 이름으로 남긴다
-export function RequestActions({ requestId, version, canAnswer, canCancelApproval }: Props) {
+export function RequestActions({
+  requestId,
+  version,
+  canAnswer,
+  canCancelApproval,
+  approvalHint,
+}: Props) {
   const queryClient = useQueryClient();
   // 열려 있는 사유 창: 거절 / 승인 취소
   const [reasonFor, setReasonFor] = useState<'reject' | 'cancelApproval' | null>(null);
@@ -119,20 +134,28 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
   return (
     // 'contents': 아래 승인·거절 줄이 상세 카드 전체를 기준으로 화면 아래에 붙게 한다
     <div className="contents">
-      {answer.isError && (
+      {answer.isError && !(canAnswer && overApproval) && (
         <p role="alert" className="text-xl font-bold text-destructive">
           {answerErrorText(answer.error)}
         </p>
       )}
+      {/* 과승인 경고: 이유와 '그래도 승인'을 한 빨간 상자에 묶어, 한 번 더 결정하는 자리라는 게 보이게 한다 */}
       {canAnswer && overApproval && (
-        <Button
-          size="lg"
-          className="h-14 w-fit text-xl"
-          disabled={answer.isPending}
-          onClick={() => send(approve({ overApprovalConfirmed: true }))}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-danger-line bg-danger-soft px-5 py-4"
         >
-          그래도 승인
-        </Button>
+          <p className="text-xl font-bold text-danger-strong">{answerErrorText(answer.error)}</p>
+          <Button
+            size="lg"
+            variant="destructive"
+            className={cn('h-14 w-fit rounded-[12px] text-xl', flat.reject)}
+            disabled={answer.isPending}
+            onClick={() => send(approve({ overApprovalConfirmed: true }))}
+          >
+            그래도 승인
+          </Button>
+        </div>
       )}
       {canAnswer && (
         <label className="flex flex-col gap-1 text-[15px] font-semibold text-muted-foreground">
@@ -146,11 +169,19 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           />
         </label>
       )}
+      {canAnswer && approvalHint && (
+        <p className="rounded-[12px] border border-info-strong/20 bg-info-soft px-4 py-3 text-[16px] font-semibold text-info-strong">
+          {approvalHint}
+        </p>
+      )}
       {canAnswer && (
         <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-3 bg-card py-3">
           <Button
             size="lg"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className={cn(
+              'h-[72px] w-full rounded-[12px] text-[26px] font-extrabold',
+              flat.approve,
+            )}
             disabled={answer.isPending}
             onClick={() => send(approve())}
           >
@@ -159,14 +190,15 @@ export function RequestActions({ requestId, version, canAnswer, canCancelApprova
           <Button
             size="lg"
             variant="destructive"
-            className="h-[72px] w-full rounded-[12px] text-[26px] font-extrabold"
+            className={cn('h-[72px] w-full rounded-[12px] text-[26px] font-extrabold', flat.reject)}
             disabled={answer.isPending}
             onClick={() => {
               answer.reset();
               setReasonFor('reject');
             }}
+            aria-label="거절"
           >
-            거절
+            거절 (사유 선택)
           </Button>
         </div>
       )}

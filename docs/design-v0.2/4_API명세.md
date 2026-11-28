@@ -140,6 +140,7 @@
 |---|---|---|---|---|---|---|
 | POST | `/admin/auth/login` | 관리자 로그인 (비밀번호 + OTP) | 없음 | - | A-01 로그인 | SFR-082, SFR-152 |
 | POST | `/admin/auth/otp/enroll` | 첫 로그인 OTP 앱 연결 | 없음 | - | A-01 로그인 | SFR-152 |
+| POST | `/admin/auth/refresh` | 관리자 토큰 재발급 (15분 만료 뒤) | 없음 | - | (관리자 모든 화면) | SFR-082, SER-016 |
 | GET | `/admin/signups` | 가입 승인 대기 목록 | 관리자 | - | A-01 가입 승인 | SFR-083 |
 | GET | `/admin/signups/{id}/photo` | 공무원증 사진 보기 (열람 기록) | 관리자 | - | A-01 가입 승인 | SFR-083, DAR-012, SER-015 |
 | POST | `/admin/signups/{id}/approve` | 가입 승인 | 관리자 | - | A-01 가입 승인 | SFR-083, SFR-091 |
@@ -263,7 +264,7 @@
 | H-01 | `POST /hw/pc/register` · `GET /hw/session` · `POST /hw/shifts` · `POST /hw/shifts/current/alarm-on` |
 | H-02 | `POST /hw/shifts/current/end` · `PUT /hw/pause` · `GET /hw/requests` · `GET /hw/requests/{requestId}` · `POST /hw/requests/{requestId}/approve` · `POST /hw/requests/{requestId}/reject` · `POST /hw/requests/{requestId}/cancel-approval` |
 | H-03 | `POST /hw/requests/{requestId}/cancel-approval` · `GET /hw/incoming` · `POST /hw/requests/{requestId}/extra-memo` · `POST /hw/requests/{requestId}/confirm-arrival` · `POST /hw/requests/{requestId}/unacceptable` |
-| A-01 | `POST /admin/auth/login` · `POST /admin/auth/otp/enroll` · `GET /admin/signups` · `GET /admin/signups/{id}/photo` · `POST /admin/signups/{id}/approve` · `POST /admin/signups/{id}/reject` · `GET /admin/paramedics` · `POST /admin/paramedics/{id}/suspend` · `POST /admin/paramedics/{id}/unsuspend` · `POST /admin/paramedics/{id}/reset-password` |
+| A-01 | `POST /admin/auth/login` · `POST /admin/auth/otp/enroll` · `POST /admin/auth/refresh` · `GET /admin/signups` · `GET /admin/signups/{id}/photo` · `POST /admin/signups/{id}/approve` · `POST /admin/signups/{id}/reject` · `GET /admin/paramedics` · `POST /admin/paramedics/{id}/suspend` · `POST /admin/paramedics/{id}/unsuspend` · `POST /admin/paramedics/{id}/reset-password` |
 | A-02 | `GET /admin/notifications` · `POST /admin/notifications/{id}/read` · `GET /admin/audit-logs` · `GET /admin/stats/hospitals` · `GET /admin/feature-flags` · `PUT /admin/feature-flags` |
 | A-03 | `GET /admin/hospitals` · `POST /admin/hospitals/{id}/account` · `POST /admin/hospitals/{id}/license-keys` · `POST /admin/license-keys/{id}/revoke` · `POST /admin/hospitals/{id}/suspend` · `GET /admin/hospitals/{id}/pcs` · `DELETE /admin/pcs/{id}` · `PUT /admin/hospitals/{id}/entrance` |
 

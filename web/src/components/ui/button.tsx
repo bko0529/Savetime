@@ -7,16 +7,20 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/80',
+        // 대원 앱처럼 진한 남색 그라데이션 + 그림자
+        default: 'btn-solid-primary text-primary-foreground hover:brightness-125',
         outline:
-          'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+          'border-border-strong bg-card shadow-[var(--shadow-card)] hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
           'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
         // 병원 화면은 대비가 높아야 해서 연한 빨강 대신 꽉 찬 빨강 + 흰 글자
         destructive:
-          'bg-destructive text-white hover:bg-destructive/85 focus-visible:border-destructive focus-visible:ring-destructive/40',
+          'btn-solid-brand text-white hover:brightness-110 focus-visible:border-destructive focus-visible:ring-destructive/40',
+        // 승인처럼 '좋은 쪽' 결정 버튼
+        success:
+          'btn-solid-success text-success-foreground hover:brightness-110 focus-visible:ring-success/40',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

@@ -337,6 +337,8 @@ test('비밀번호 초기화: 임시 비밀번호가 한 번 표시되고 작업
     const old = await h.app().get('/api/v1/me').set('Authorization', `Bearer ${before}`);
     assert.equal(old.status, 401);
     assert.equal((await login(h, 'kim01')).status, 401);
+    // 폰은 바로 로그인 화면으로 (account.force_logout)
+    assert.deepEqual(h.forcedOut, [id]);
   });
 });
 
