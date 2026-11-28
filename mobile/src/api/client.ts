@@ -52,34 +52,45 @@ export function noteServerTime(iso: string | null | undefined) {
 
 // ---- refresh: 동시에 여러 요청이 401 을 받아도 갱신은 한 번만 ----
 // 갱신할 때마다 refresh 토큰이 새 값으로 바뀌고 예전 값은 못 쓰기 때문에, 두 번 보내면 두 번째가 실패한다
-let refreshing: Promise<boolean> | null = null;
-export function refreshTokens(): Promise<boolean> {
+//
+// 결과를 셋으로 나눈다. 서버에 닿지 못한 것(offline)은 '로그인이 끝난 것'이 아니다 → 저장된 로그인을 지우면 안 된다
+// (실제로 있었던 버그: 서버가 잠깐 꺼진 사이 앱을 다시 열면 로그인이 풀렸다)
+export type RefreshResult = 'ok' | 'rejected' | 'offline';
+let refreshing: Promise<RefreshResult> | null = null;
+export function refreshTokensResult(): Promise<RefreshResult> {
   const t = hooks.get();
-  if (!t?.refreshToken) return Promise.resolve(false);
-  refreshing ??= (async () => {
+  if (!t?.refreshToken) return Promise.resolve('rejected');
+  refreshing ??= (async (): Promise<RefreshResult> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: t.refreshToken }),
       });
-      if (!res.ok) return false;
+      netHooks.online();
+      // 서버 고장(5xx)도 로그인이 끝난 게 아니다
+      if (res.status >= 500) return 'offline';
+      if (!res.ok) return 'rejected';
       await hooks.set((await res.json()) as Tokens);
-      return true;
+      return 'ok';
     } catch {
-      return false;
+      netHooks.offline();
+      return 'offline';
     } finally {
       refreshing = null;
     }
   })();
   return refreshing;
 }
+export async function refreshTokens(): Promise<boolean> {
+  return (await refreshTokensResult()) === 'ok';
+}
 
 /** 실시간 연결이 TOKEN_EXPIRED 로 거절됐을 때: 토큰을 새로 받고, 안 되면 로그인 화면으로 */
 export async function ensureFreshToken(): Promise<boolean> {
-  const ok = await refreshTokens();
-  if (!ok) hooks.lost();
-  return ok;
+  const r = await refreshTokensResult();
+  if (r === 'rejected') hooks.lost();
+  return r === 'ok';
 }
 
 /** 지금 access 토큰 (실시간 연결에 씀) */
@@ -138,7 +149,10 @@ export async function api<T = unknown>(
 
   // 401 = 토큰 만료. 로그인 요청(auth: false)은 갱신하지 않는다 (비밀번호가 틀린 것일 뿐)
   if (res.status === 401 && auth && !retried && hooks.get()) {
-    if (await refreshTokens()) return api<T>(method, path, opt, true);
+    const r = await refreshTokensResult();
+    if (r === 'ok') return api<T>(method, path, opt, true);
+    if (r === 'offline')
+      throw new ApiError(0, 'NETWORK', '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요');
     hooks.lost();
   }
 

@@ -21,10 +21,12 @@ import { notifyTeam } from '../src/transport/notify';
 import { startDraftSync } from '../src/transport/teamDraft';
 import { InvitePush } from '../src/duty/InvitePush';
 import { NetBanner } from '../src/offline/NetBanner';
+import { useNet } from '../src/offline/net';
 import { loadPatient } from '../src/transport/patientStore';
 import { TransportAlerts } from '../src/transport/ui/TransportAlerts';
 import { TransportRouter } from '../src/transport/ui/TransportRouter';
 import { useStore } from '../src/state/store';
+import { Txt } from '../src/ui/kit';
 import { applyScheme, color } from '../src/ui/theme';
 import { effectiveScheme, loadThemePref, useThemePref } from '../src/ui/themePref';
 
@@ -35,16 +37,25 @@ setTransportNotifier((kind, title, body) => void notifyTeam(kind, title, body));
 setRouteOpener(() => router.navigate('/navi'));
 
 function Splash() {
+  const { online } = useNet();
   return (
     <View
       style={{
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 12,
+        padding: 24,
         backgroundColor: color.background,
       }}
     >
       <ActivityIndicator color={color.accent} />
+      {/* 앱을 열 때 서버에 닿지 못하면: 로그인은 그대로 두고 다시 시도 중임을 알린다 */}
+      {!online ? (
+        <Txt style={{ fontSize: 15, color: color.muted, textAlign: 'center' }}>
+          서버에 연결하는 중이에요 · 로그인은 그대로예요
+        </Txt>
+      ) : null}
     </View>
   );
 }

@@ -15,7 +15,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ApiError, api, refreshTokens, setTokenHooks, type Me, type Tokens } from '../api/client';
+import {
+  ApiError,
+  api,
+  refreshTokensResult,
+  setTokenHooks,
+  type Me,
+  type Tokens,
+} from '../api/client';
 import { toSignupFormData, type SignupForm } from './signupForm';
 import { clearTeam, refreshTeam } from '../duty/team';
 import { actions as transportActions } from '../transport/engine';
@@ -55,6 +62,9 @@ const AuthContext = createContext<AuthValue | null>(null);
 // 토큰은 React 상태가 아니라 모듈 변수에 둔다: 화면을 다시 그리지 않아도 되고, api() 가 바로 꺼내 쓸 수 있다
 let tokens: Tokens | null = null;
 
+/** 앱을 열 때 서버에 닿지 못하면 다시 시도하는 간격 */
+export const RETRY_MS = 3000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: 'loading' });
 
@@ -78,19 +88,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [signOutLocal]);
 
-  // 앱을 열 때: 근무 중(refresh 토큰이 살아 있음)이면 로그인을 묻지 않는다
+  // 앱을 열 때: 근무 중(refresh 토큰이 살아 있음)이면 로그인을 묻지 않는다.
+  // 서버에 닿지 못하면(인터넷 끊김·서버 재시작) 로그인을 지우지 않고 잠시 뒤 다시 시도한다
   useEffect(() => {
+    let alive = true;
     (async () => {
       const saved = await loadRefreshToken();
       if (!saved) return setState({ status: 'signedOut' });
       tokens = { refreshToken: saved };
-      if (!(await refreshTokens())) return signOutLocal();
-      try {
-        setState({ status: 'signedIn', me: await api<Me>('GET', '/me') });
-      } catch {
-        await signOutLocal();
+      for (;;) {
+        const r = await refreshTokensResult();
+        if (!alive) return;
+        if (r === 'rejected') return signOutLocal();
+        if (r === 'ok') {
+          try {
+            const me = await api<Me>('GET', '/me');
+            if (alive) setState({ status: 'signedIn', me });
+            return;
+          } catch (e) {
+            if (!(e instanceof ApiError) || e.status !== 0) return signOutLocal();
+          }
+        }
+        await new Promise((res) => setTimeout(res, RETRY_MS));
+        if (!alive) return;
       }
     })();
+    return () => {
+      alive = false;
+    };
   }, [signOutLocal]);
 
   const login = useCallback(async (loginId: string, password: string) => {

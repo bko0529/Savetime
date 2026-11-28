@@ -125,3 +125,55 @@ test('서버 오류 문구를 그대로 돌려준다 (없는 소방서 코드)',
   });
   expect(r).toBe('소속기관 코드를 찾을 수 없어요');
 });
+
+/**
+ * 실제로 있었던 버그 (2026-11-28): 서버가 잠깐 꺼진 사이 앱을 다시 열면 로그인이 풀렸다.
+ * 서버에 닿지 못한 것은 '근무가 끝난 것'이 아니다 → 저장된 로그인을 지우지 않고 다시 시도한다
+ */
+describe('앱을 다시 열 때 서버에 닿지 못하면', () => {
+  const SecureStore = jest.requireMock('expo-secure-store') as {
+    setItemAsync: (k: string, v: string) => Promise<void>;
+    getItemAsync: (k: string) => Promise<string | null>;
+  };
+  const me = { id: 1, name: '김구조', status: 'approved' };
+
+  test('로그인을 지우지 않고 기다렸다가, 서버가 돌아오면 그대로 들어간다', async () => {
+    jest.useFakeTimers();
+    await SecureStore.setItemAsync('savetime.refreshToken', 'r-1');
+    let up = false;
+    global.fetch = jest.fn(async (url: string) => {
+      if (!up) throw new TypeError('Network request failed');
+      const path = url.replace(/^.*\/api\/v1/, '');
+      if (path === '/auth/refresh') return json(200, { accessToken: 'a-2', refreshToken: 'r-2' });
+      if (path === '/me') return json(200, me);
+      return json(404, {});
+    }) as unknown as typeof fetch;
+
+    await render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => jest.advanceTimersByTime(10));
+    expect(screen.getByText('loading')).toBeTruthy();
+    expect(await SecureStore.getItemAsync('savetime.refreshToken')).toBe('r-1');
+
+    up = true;
+    await act(async () => jest.advanceTimersByTime(3500));
+    await waitFor(() => expect(screen.getByText('approved:김구조')).toBeTruthy());
+    expect(await SecureStore.getItemAsync('savetime.refreshToken')).toBe('r-2');
+    jest.useRealTimers();
+  });
+
+  test('서버가 토큰을 거절하면(근무 끝남) 그때는 로그인 화면으로', async () => {
+    await SecureStore.setItemAsync('savetime.refreshToken', 'r-old');
+    routes = { 'POST /auth/refresh': () => json(401, { error: { code: 'TOKEN_REVOKED' } }) };
+    await render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signedOut')).toBeTruthy());
+    expect(await SecureStore.getItemAsync('savetime.refreshToken')).toBeNull();
+  });
+});
