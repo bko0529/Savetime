@@ -6,7 +6,7 @@
  * - 목적지 변경은 길게 눌러서, 한 번만
  * - 병원에는 구급차 위치를 보내지 않고 도착 예상 시간만 보낸다
  */
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertTriangle, MapPin, Navigation, Phone, Send, Timer } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Vibration, View } from 'react-native';
@@ -28,7 +28,12 @@ export default function TransportScreen() {
   const e = useEngine();
   const router = useRouter();
   const h = e.confirmedId ? hospital(e.confirmedId) : null;
-  const [manualNear, setManualNear] = useState(false);
+  // 길 안내 페이지에서 카카오내비가 '도착'을 알리고 돌아왔으면 도착 처리를 바로 켠다
+  const { arrived } = useLocalSearchParams<{ arrived?: string }>();
+  const [manualNear, setManualNear] = useState(arrived === '1');
+  useEffect(() => {
+    if (arrived === '1') setManualNear(true);
+  }, [arrived]);
   const [destOpen, setDestOpen] = useState(false);
 
   useEffect(() => setManualNear(false), [h?.id]);

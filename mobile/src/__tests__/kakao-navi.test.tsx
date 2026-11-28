@@ -88,14 +88,12 @@ test('확정 병원 입구로 앱 안 카카오내비를 띄운다 (출발=내 �
     startLng: 127.1139,
     userKey: 'dev-123',
   });
-  expect(screen.getByText('카카오내비 경로를 받는 중…')).toBeTruthy();
+  expect(screen.getByText('순천향대 천안병원까지 경로를 받는 중…')).toBeTruthy();
   await act(async () => navi.props.onReady());
-  expect(screen.queryByText('카카오내비 경로를 받는 중…')).toBeNull();
-  expect(screen.getByText('약 7분 남음 · 병원에 1분마다 전달')).toBeTruthy();
+  // 내비가 뜨면 화면 전체가 카카오내비 (우리 앱 띠 없음)
+  expect(screen.queryByText('순천향대 천안병원까지 경로를 받는 중…')).toBeNull();
+  expect(screen.queryByRole('button', { name: '이송 화면으로' })).toBeNull();
   expect(openUrl).not.toHaveBeenCalled();
-  // 아래 띠의 '이송 화면으로'
-  await fireEvent.press(screen.getByRole('button', { name: '이송 화면으로' }));
-  expect(mockNavigate).toHaveBeenCalledWith('/transport');
 });
 
 test('시작하지 못하면 이유와 다시 시도 — 다른 앱으로 넘기지 않는다 (D-137)', async () => {
@@ -109,16 +107,23 @@ test('시작하지 못하면 이유와 다시 시도 — 다른 앱으로 넘기
   expect(await screen.findByTestId('kakao-navi')).toBeTruthy();
 });
 
-test('내비가 도착을 알리면 도착 처리 버튼이 켜진다', async () => {
+test('카카오내비에서 도착하면 이송 화면으로 (도착 처리 켜짐), 안내를 끝내면 그냥 이송 화면으로', async () => {
   await render(<NaviScreen />);
-  expect(
-    screen.getByRole('button', { name: '도착 처리 (입구 근처에서 켜져요)' }).props
-      .accessibilityState,
-  ).toMatchObject({ disabled: true });
   const navi = await screen.findByTestId('kakao-navi');
   await act(async () => navi.props.onEnded(msg({ reason: 'arrived' })));
-  expect(screen.getByText('목적지에 도착했어요')).toBeTruthy();
-  expect(screen.getByRole('button', { name: '도착 처리' })).toBeTruthy();
+  expect(mockNavigate).toHaveBeenLastCalledWith({
+    pathname: '/transport',
+    params: { arrived: '1' },
+  });
+  await act(async () => navi.props.onEnded(msg({ reason: 'closed' })));
+  expect(mockNavigate).toHaveBeenLastCalledWith('/transport');
+});
+
+test('시작 전·실패 화면에서는 이송 화면으로 돌아갈 수 있다', async () => {
+  await render(<NaviScreen />);
+  await screen.findByTestId('kakao-navi');
+  await fireEvent.press(screen.getByRole('button', { name: '이송 화면으로' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/transport');
 });
 
 test('카카오내비가 없는 빌드(Expo Go)·내 위치 모름이면 이유를 보여 준다', async () => {
