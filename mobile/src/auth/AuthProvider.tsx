@@ -1,0 +1,236 @@
+/**
+ * 로그인 상태를 앱 전체에 알려 준다 (SFR-018).
+ * - loading: 앱을 막 열어 저장된 refresh 토큰을 확인하는 중
+ * - signedOut: 로그인 화면
+ * - signedIn: 서버가 준 내 정보(me). me.status 로 승인 대기·반려 화면을 고른다 (SFR-022·083)
+ *
+ * 자동 로그인·앱 잠금은 없다(D-110). 근무 동안만 refresh 토큰이 살아 있고, 근무가 끝나면 서버가 폐기한다.
+ */
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  ApiError,
+  api,
+  refreshTokensResult,
+  setTokenHooks,
+  type Me,
+  type Tokens,
+} from '../api/client';
+import { toSignupFormData, type SignupForm } from './signupForm';
+import { clearTeam, refreshTeam } from '../duty/team';
+import { actions as transportActions } from '../transport/engine';
+import { resetPatient } from '../transport/patientStore';
+import { connectRealtime, disconnectRealtime } from '../realtime/socket';
+import { wireAccountAndTeam } from '../realtime/wire';
+import { clearRefreshToken, getDeviceId, loadRefreshToken, saveRefreshToken } from './storage';
+
+type State =
+  { status: 'loading' } | { status: 'signedOut'; notice?: string } | { status: 'signedIn'; me: Me };
+
+type AuthValue = {
+  state: State;
+  /** 성공하면 null, 실패하면 화면에 보여 줄 문구 */
+  login: (loginId: string, password: string) => Promise<string | null>;
+  /** 가입 신청(SFR-017) · 반려 후 다시 신청(SFR-083). 성공하면 null */
+  signup: (f: SignupForm) => Promise<string | null>;
+  /** 서버에서 내 정보를 다시 받는다 (승인 결과 확인) */
+  refreshMe: () => Promise<void>;
+  /** 서버 로그아웃 + 이 기기 토큰 지우기 (승인 전·근무 전: 진행 중 이송이 없을 때) */
+  logout: () => Promise<void>;
+  /**
+   * 근무 종료 · 로그아웃 · 회원 탈퇴 (SFR-070 · 071 · 113). 화면이 먼저 확인을 받았으므로 confirmCancelActive=true.
+   * 팀의 마지막 대원이면 서버가 진행 중 이송을 '취소'로 끝낸다. 성공하면 null
+   */
+  leave: (kind: LeaveKind) => Promise<string | null>;
+  /** 비밀번호 바꾸기 (SFR-021). 성공하면 내 정보를 다시 읽어 '변경 필요'를 푼다 */
+  changePassword: (current: string, next: string) => Promise<string | null>;
+};
+
+export type LeaveKind = 'duty_end' | 'logout' | 'withdrawal';
+
+const resetTransport = () => transportActions.reset();
+
+const AuthContext = createContext<AuthValue | null>(null);
+
+// 토큰은 React 상태가 아니라 모듈 변수에 둔다: 화면을 다시 그리지 않아도 되고, api() 가 바로 꺼내 쓸 수 있다
+let tokens: Tokens | null = null;
+
+/** 앱을 열 때 서버에 닿지 못하면 다시 시도하는 간격 */
+export const RETRY_MS = 3000;
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<State>({ status: 'loading' });
+
+  const signOutLocal = useCallback(async (notice?: string) => {
+    tokens = null;
+    disconnectRealtime();
+    await clearTeam();
+    await clearRefreshToken();
+    setState({ status: 'signedOut', notice });
+  }, []);
+
+  // api.ts 에 토큰 꺼내기·저장·잃어버림 처리를 연결
+  useEffect(() => {
+    setTokenHooks({
+      get: () => tokens,
+      set: async (t) => {
+        tokens = t;
+        if (t.refreshToken) await saveRefreshToken(t.refreshToken);
+      },
+      lost: () => void signOutLocal('근무가 끝나 다시 로그인해야 해요'),
+    });
+  }, [signOutLocal]);
+
+  // 앱을 열 때: 근무 중(refresh 토큰이 살아 있음)이면 로그인을 묻지 않는다.
+  // 서버에 닿지 못하면(인터넷 끊김·서버 재시작) 로그인을 지우지 않고 잠시 뒤 다시 시도한다
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const saved = await loadRefreshToken();
+      if (!saved) return setState({ status: 'signedOut' });
+      tokens = { refreshToken: saved };
+      for (;;) {
+        const r = await refreshTokensResult();
+        if (!alive) return;
+        if (r === 'rejected') return signOutLocal();
+        if (r === 'ok') {
+          try {
+            const me = await api<Me>('GET', '/me');
+            if (alive) setState({ status: 'signedIn', me });
+            return;
+          } catch (e) {
+            if (!(e instanceof ApiError) || e.status !== 0) return signOutLocal();
+          }
+        }
+        await new Promise((res) => setTimeout(res, RETRY_MS));
+        if (!alive) return;
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [signOutLocal]);
+
+  const login = useCallback(async (loginId: string, password: string) => {
+    try {
+      const r = await api<{ tokens: Tokens; me: Me }>('POST', '/auth/login', {
+        auth: false,
+        body: { loginId: loginId.trim(), password, deviceId: await getDeviceId() },
+      });
+      tokens = r.tokens;
+      if (r.tokens.refreshToken) await saveRefreshToken(r.tokens.refreshToken);
+      setState({ status: 'signedIn', me: r.me });
+      return null;
+    } catch (e) {
+      // 서버 문구를 그대로 보여 준다 (5번 틀림 → 10분 잠금 안내도 서버가 만든다)
+      return e instanceof Error ? e.message : '잠시 후 다시 시도해 주세요';
+    }
+  }, []);
+
+  const refreshMe = useCallback(async () => {
+    try {
+      const me = await api<Me>('GET', '/me');
+      setState({ status: 'signedIn', me });
+    } catch {
+      /* 오프라인이면 지금 화면 그대로 (토큰이 끝났으면 lost() 가 로그인 화면으로 보냄) */
+    }
+  }, []);
+
+  const signup = useCallback(
+    async (f: SignupForm) => {
+      const reapply = state.status === 'signedIn' && state.me.status === 'rejected';
+      try {
+        if (reapply) {
+          // 반려된 뒤 다시 신청: 같은 계정이라 아이디·비밀번호 없이 내용·사진만 새로 (PUT /me/signup).
+          // 응답에는 status·appliedAt 만 와서(openapi 는 Me 라고 적혀 있음) 내 정보를 다시 받는다
+          await api('PUT', '/me/signup', { form: toSignupFormData(f, false) });
+          setState({ status: 'signedIn', me: await api<Me>('GET', '/me') });
+          return null;
+        }
+        await api('POST', '/auth/signup', { auth: false, form: toSignupFormData(f, true) });
+        // 통과하면 같은 아이디로 로그인 → me.status = pending → 승인 대기 화면
+        return await login(f.loginId, f.password);
+      } catch (e) {
+        return e instanceof ApiError ? e.message : '가입 신청을 보내지 못했어요';
+      }
+    },
+    [state, login],
+  );
+
+  const logout = useCallback(async () => {
+    // 승인 전·근무 전 계정은 팀·이송이 없어 확인 없이 끝난다. 근무 중에는 설정 화면의 leave() 를 쓴다
+    await api('POST', '/auth/logout').catch(() => undefined);
+    await signOutLocal();
+  }, [signOutLocal]);
+
+  const leave = useCallback(
+    async (kind: LeaveKind) => {
+      try {
+        if (kind === 'withdrawal') await api('DELETE', '/me?confirmCancelActive=true');
+        else await api('POST', '/auth/logout?confirmCancelActive=true');
+      } catch (e) {
+        // 탈퇴는 실패하면 계정이 남아 있으니 알려 준다. 로그아웃은 서버가 안 받아도 이 기기는 끝낸다
+        if (kind === 'withdrawal') return e instanceof ApiError ? e.message : '탈퇴하지 못했어요';
+      }
+      // 이 기기의 이송 화면·환자 입력도 비운다 (서버 이송 건은 서버가 처리)
+      resetTransport();
+      resetPatient();
+      await signOutLocal();
+      return null;
+    },
+    [signOutLocal],
+  );
+
+  const changePassword = useCallback(
+    async (current: string, next: string) => {
+      try {
+        await api('PUT', '/me/password', { body: { currentPassword: current, newPassword: next } });
+        await refreshMe();
+        return null;
+      } catch (e) {
+        // 지금 비밀번호가 틀렸는지·5번 틀려 잠겼는지는 서버 문구 그대로
+        return e instanceof ApiError ? e.message : '비밀번호를 바꾸지 못했어요';
+      }
+    },
+    [refreshMe],
+  );
+
+  // 로그인돼 있는 동안 실시간 연결 (승인 결과 · 강제 로그아웃 · 팀 초대 · 팀원 변화)
+  const signedIn = state.status === 'signedIn';
+  const approved = signedIn && state.me.status === 'approved';
+  useEffect(() => {
+    if (!signedIn) return;
+    connectRealtime();
+    const off = wireAccountAndTeam({
+      refreshMe: () => void refreshMe(),
+      forceLogout: (n) => void signOutLocal(n),
+    });
+    return () => {
+      off();
+      disconnectRealtime();
+    };
+  }, [signedIn, refreshMe, signOutLocal]);
+  // 승인된 대원: 서버의 내 팀으로 맞춘다 (근무 중이면 앱을 다시 열어도 이어서)
+  useEffect(() => {
+    if (approved) void refreshTeam();
+  }, [approved]);
+
+  const value = useMemo(
+    () => ({ state, login, signup, refreshMe, logout, leave, changePassword }),
+    [state, login, signup, refreshMe, logout, leave, changePassword],
+  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const v = useContext(AuthContext);
+  if (!v) throw new Error('useAuth 는 AuthProvider 안에서만 쓸 수 있어요');
+  return v;
+}

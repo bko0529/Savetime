@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "골든타임즈",
+    "slug": "savetime-paramedic",
+    "scheme": "savetime",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "kr.savetime.paramedic"
+    },
+    "android": {
+      "package": "kr.savetime.paramedic",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "반경 안 병원에 이송을 요청하고, 길 안내와 병원 도착 예상 시간 계산에 위치를 써요.",
+          "locationAlwaysAndWhenInUsePermission": "이송 중에는 화면이 꺼져도 길 안내와 병원 도착 예상 시간 전달을 위해 위치를 써요. 이송이 끝나면 멈춰요.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "팀 QR 코드를 찍으려고 카메라를 써요.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "가입 신청 때 공무원증 사진을 고르려고 사진을 봐요.",
+          "cameraPermission": "가입 신청 때 공무원증을 찍으려고 카메라를 써요.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing",
+      "expo-sqlite"
+    ]
+  }
+}

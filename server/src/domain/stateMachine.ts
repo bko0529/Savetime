@@ -212,7 +212,7 @@ export function phoneEvent(result: 'accepted' | 'no_answer' | 'skipped' | 'rejec
 }
 
 // ---------------- 4. 전이 함수 ----------------
-const RADIUS_STEPS = [10, 20, 30, 40];
+const RADIUS_STEPS = [10, 20, 30, 40, 60, 80];
 
 function findRow<R extends { from: unknown; event: unknown }>(table: R[], from: unknown, event: unknown): R {
   const r = table.find(t => t.from === from && t.event === event);
@@ -229,6 +229,7 @@ export interface TransportCtx {
   confirmedReqClosedReason?: CloseReason | null; // RE_REQUEST: 확정 병원 요청이 닫힌 이유
   destinationChangedBefore?: boolean;
   currentRadiusKm?: number; nextRadiusKm?: number; newTargetCount?: number; // EXPAND_ROUND·RE_REQUEST·CHANGE_DESTINATION
+  maxRadiusKm?: number;           // EXPAND_ROUND: 고른 등급의 최대 반경 (대학병원급 80km, 나머지 40km, D-141)
   cancelReason?: CancelReason; arrivalMethod?: ArrivalMethod;
   phoneReason?: PhoneProceedReason | null; destReason?: DestChangeReason | null; fallbackReason?: FallbackReason;
   openRequestsRemain?: boolean;   // 전화 확인에서 돌아갈 때: 현재 회차에 대기·유효 승인이 남았나 (서버가 같은 트랜잭션에서 셈)
@@ -271,7 +272,8 @@ export function transitionTransport(from: TransportStatus | null, event: Transpo
       break;
     case 'EXPAND_ROUND': {
       const i = RADIUS_STEPS.indexOf(ctx.currentRadiusKm ?? -1);
-      if (i < 0 || i === RADIUS_STEPS.length - 1) throw new TransitionError('MAX_RADIUS', '더 넓힐 반경이 없어요 (최대 40km)');
+      const max = ctx.maxRadiusKm ?? 40;
+      if (i < 0 || i === RADIUS_STEPS.length - 1 || RADIUS_STEPS[i] >= max) throw new TransitionError('MAX_RADIUS', `더 넓힐 반경이 없어요 (최대 ${max}km)`);
       if (ctx.nextRadiusKm !== RADIUS_STEPS[i + 1]) throw new TransitionError('MAX_RADIUS', '반경은 한 단계씩만 넓혀요');
       if (ctx.newTargetCount === 0) throw new TransitionError('NO_REQUEST_TARGET', '넓힌 반경에 새 병원이 없어요');
       break;

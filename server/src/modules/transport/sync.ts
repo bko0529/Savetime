@@ -11,7 +11,7 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
-import { isInKorea, RADIUS_KM } from '../../domain/geo.js';
+import { isInKorea, MAX_RADIUS_KM, RADIUS_KM } from '../../domain/geo.js';
 import { ACTIVE, TransitionError, transitionTransport } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
@@ -47,7 +47,8 @@ const recordSchema = z.discriminatedUnion('kind', [
     ...base,
     kind: z.literal('create_fallback'),
     assessment: assessmentSchema,
-    radiusKm: radius,
+    // 오프라인 건은 등급을 받지 않으므로 일반 최대(40km)까지 (D-141)
+    radiusKm: radius.refine((v) => v <= MAX_RADIUS_KM),
     location: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
   }),
   z.object({

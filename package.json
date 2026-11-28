@@ -6,7 +6,8 @@
   },
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "mobile"
   ],
   "scripts": {
     "prepare": "husky",

@@ -5,7 +5,7 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
-import { isInKorea, RADIUS_KM } from '../../domain/geo.js';
+import { isInKorea, maxRadiusFor, RADIUS_KM } from '../../domain/geo.js';
 import { transitionTransport, type CloseReason } from '../../domain/stateMachine.js';
 import { AppError } from '../../http/errors.js';
 import { parseBody } from '../../http/validate.js';
@@ -128,6 +128,7 @@ export async function startRound(client: pg.PoolClient, input: RoundInput): Prom
       clientVersion: input.clientVersion,
       currentRadiusKm: t.request_radius_km,
       nextRadiusKm: input.radiusKm,
+      maxRadiusKm: maxRadiusFor(t.requested_grade),
       newTargetCount: targets.length,
       confirmedReqClosedReason: t.confirmed_closed_reason,
     },

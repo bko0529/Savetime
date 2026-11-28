@@ -5,7 +5,7 @@ import { Router, type RequestHandler } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { withTransaction } from '../../db/transaction.js';
-import { isInKorea, RADIUS_KM } from '../../domain/geo.js';
+import { isInKorea, maxRadiusFor, RADIUS_KM } from '../../domain/geo.js';
 import {
   ACTIVE,
   CASCADE,
@@ -31,25 +31,31 @@ import { forgetScene, recordTransportStat } from '../stats/records.js';
 import { refineRoundEtas } from './routeEta.js';
 import { loadTransport } from './view.js';
 
-const createSchema = z.object({
-  id: z.uuid(),
-  // 직전 건의 제외 병원 이어받기(SFR-157)는 S4 예외 흐름에서 붙인다. 지금은 받기만 하고 쓰지 않는다
-  prevTransportId: z.uuid().nullable().optional(),
-  finishPrevious: z.boolean().optional(),
-  previousVersion: z.number().int().nullable().optional(),
-  radiusKm: z
-    .number()
-    .int()
-    .refine((v) => (RADIUS_KM as readonly number[]).includes(v)),
-  location: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
-  address: z.string().max(120).nullable().optional(),
-  locationConsent: z.boolean(),
-  assessment: assessmentSchema,
-  requestedGrade: z
-    .union([z.literal(1), z.literal(2), z.literal(3)])
-    .nullable()
-    .optional(),
-});
+const createSchema = z
+  .object({
+    id: z.uuid(),
+    // 직전 건의 제외 병원 이어받기(SFR-157)는 S4 예외 흐름에서 붙인다. 지금은 받기만 하고 쓰지 않는다
+    prevTransportId: z.uuid().nullable().optional(),
+    finishPrevious: z.boolean().optional(),
+    previousVersion: z.number().int().nullable().optional(),
+    radiusKm: z
+      .number()
+      .int()
+      .refine((v) => (RADIUS_KM as readonly number[]).includes(v)),
+    location: z.object({ lat: z.number(), lng: z.number() }).nullable().optional(),
+    address: z.string().max(120).nullable().optional(),
+    locationConsent: z.boolean(),
+    assessment: assessmentSchema,
+    requestedGrade: z
+      .union([z.literal(1), z.literal(2), z.literal(3)])
+      .nullable()
+      .optional(),
+  })
+  // 60·80km 는 대학병원급을 골랐을 때만 (D-141)
+  .refine((v) => v.radiusKm <= maxRadiusFor(v.requestedGrade), {
+    path: ['radiusKm'],
+    message: '반경이 너무 넓어요 (대학병원급만 80km까지)',
+  });
 type CreateInput = z.infer<typeof createSchema>;
 
 // '이동 중'인 이전 건을 도착(finish_previous)으로 끝낸다 (부록 A23). 새 건을 만드는 같은 트랜잭션에서 부른다

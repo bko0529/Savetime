@@ -142,6 +142,16 @@ test('반경 넓히기: 한 단계씩, 40km면 불가, 새 병원 0곳이면 불
   assert.equal(code(() => T('fallback', 'EXPAND_ROUND', { ...U(), currentRadiusKm: 20, nextRadiusKm: 30, newTargetCount: 0 })), 'NO_REQUEST_TARGET');
 });
 
+test('대학병원급은 40 → 60 → 80km 까지 넓힐 수 있고, 다른 등급은 40km가 끝 (D-141)', () => {
+  const top = { ...U(), maxRadiusKm: 80, newTargetCount: 1 };
+  assert.equal(T('fallback', 'EXPAND_ROUND', { ...top, currentRadiusKm: 40, nextRadiusKm: 60 }).to, 'requesting');
+  assert.equal(T('fallback', 'EXPAND_ROUND', { ...top, currentRadiusKm: 60, nextRadiusKm: 80 }).to, 'requesting');
+  assert.equal(code(() => T('fallback', 'EXPAND_ROUND', { ...top, currentRadiusKm: 80, nextRadiusKm: 80 })), 'MAX_RADIUS');
+  assert.equal(code(() => T('fallback', 'EXPAND_ROUND', { ...top, currentRadiusKm: 40, nextRadiusKm: 80 })), 'MAX_RADIUS');
+  const normal = { ...U(), maxRadiusKm: 40, newTargetCount: 1 };
+  assert.equal(code(() => T('fallback', 'EXPAND_ROUND', { ...normal, currentRadiusKm: 40, nextRadiusKm: 60 })), 'MAX_RADIUS');
+});
+
 test('취소: 진행 중 4개 상태 모두 가능, 종료 상태는 불가, 시스템 취소는 버전 없이', () => {
   for (const s of ACTIVE) assert.equal(T(s, 'CANCEL', U()).to, 'cancelled', s);
   assert.equal(code(() => T('arrived', 'CANCEL', U())), 'INVALID_TRANSITION');

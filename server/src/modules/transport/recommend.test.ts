@@ -132,7 +132,7 @@ test('주변 병원: 대한민국 밖 좌표와 없는 반경은 조회하지 �
   });
 });
 
-test('추천 목록: 게이트·제외·등급·병상 정보 없음을 반영하고 지도에는 반경 안 전체를 준다', async () => {
+test('추천 목록: 게이트·제외·등급(고른 등급 이상만, D-140)·병상 정보 없음을 반영하고 지도에는 반경 안 전체를 준다', async () => {
   await withApi(async ({ pool, paramedicId, get }) => {
     const transportId = await addTransport(pool, paramedicId, { requestedGrade: 2 });
     await addHospital(pool, '일반가까움', 1, { beds: OK_BEDS, grade: 3 });
@@ -140,7 +140,8 @@ test('추천 목록: 게이트·제외·등급·병상 정보 없음을 반영�
     await addHospital(pool, '대학먼곳', 12, { beds: OK_BEDS, grade: 1 });
     await addHospital(pool, '응급실0', 2, { beds: [0, 10, 2, 8, 1, 3] });
     await addHospital(pool, '이상치', 3, { beds: 'anomaly' });
-    await addHospital(pool, '정보없음', 4);
+    await addHospital(pool, '정보없음', 4, { grade: 2 });
+    await addHospital(pool, '정보없음일반', 4.5);
     const rejected = await addHospital(pool, '거절한곳', 0.5, { beds: OK_BEDS });
     await pool.query(
       `INSERT INTO excluded_hospital (transport_id, hospital_id, reason) VALUES ($1, $2, 'rejected')`,
@@ -152,10 +153,11 @@ test('추천 목록: 게이트·제외·등급·병상 정보 없음을 반영�
     assert.equal(res.status, 200);
     const names = (list: { name: string }[]) => list.map((c) => c.name);
     assert.equal(res.body.radiusKm, 20);
-    assert.deepEqual(names(res.body.items), ['종합중간', '대학먼곳', '일반가까움']);
+    // 종합병원급을 골랐으니 일반 병원(일반가까움 · 정보없음일반)은 목록에서 아예 빠진다
+    assert.deepEqual(names(res.body.items), ['종합중간', '대학먼곳']);
     assert.deepEqual(names(res.body.noBedInfo), ['정보없음']);
     assert.equal(res.body.emptyGuide, null);
-    assert.equal(res.body.map.length, 7);
+    assert.equal(res.body.map.length, 8);
     const excludedCard = res.body.map.find((c: { name: string }) => c.name === '거절한곳');
     assert.deepEqual([excludedCard.excluded, excludedCard.rank], [true, null]);
 

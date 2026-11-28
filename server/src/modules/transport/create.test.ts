@@ -189,6 +189,17 @@ test('요청할 병원이 0곳이면 오류가 아니라 201 + 예비 추천(no_
   });
 });
 
+test('60·80km 는 대학병원급을 골랐을 때만 (D-141)', async () => {
+  await withAuthContext(async (ctx) => {
+    const [kim] = await team(ctx, 'kim01');
+    const wide = await post(ctx, kim, body({ radiusKm: 60, requestedGrade: 2 }));
+    assert.equal(wide.status, 400);
+    const top = await post(ctx, kim, body({ radiusKm: 80, requestedGrade: 1 }));
+    assert.equal(top.status, 201);
+    assert.equal(top.body.requestRadiusKm, 80);
+  });
+});
+
 test('같은 id로 다시 보내면 새로 만들지 않고 처음 결과를 돌려준다', async () => {
   await withAuthContext(async (ctx) => {
     const [kim] = await team(ctx, 'kim01');
