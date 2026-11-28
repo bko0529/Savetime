@@ -154,7 +154,9 @@ export function ShiftScreen({
             </Chip>
           )}
           {/* 근무 중일 때만 '근무 종료' */}
-          {shift !== null && <EndShiftButton staffName={shift.staffName} />}
+          {shift !== null && (
+            <EndShiftButton staffName={shift.staffName} waitingCount={waitingInTime} />
+          )}
         </div>
       </header>
 
