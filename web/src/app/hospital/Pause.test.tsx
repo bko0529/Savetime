@@ -5,15 +5,6 @@ import { fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock('@/lib/alarm/browserAlarm', () => ({
-  unlockSound: vi.fn(async () => true),
-  askNotificationPermission: vi.fn(async () => 'granted'),
-  startAlarmLoop: vi.fn(),
-  stopAlarmLoop: vi.fn(),
-  showRequestNotification: vi.fn(),
-  // 알림 권한 안내 띠(SFR-136, #49)가 이 함수로 권한을 읽는다
-  notificationPermission: vi.fn(() => 'granted'),
-}));
 
 const SESSION = 'GET /hw/session';
 const LIST = 'GET /hw/requests?status=open';

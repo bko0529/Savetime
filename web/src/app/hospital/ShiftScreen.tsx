@@ -9,11 +9,12 @@ import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
 import { Chip } from '@/components/hospital/Chip';
 import { EndShiftButton } from '@/components/hospital/EndShiftButton';
 import { IncomingList } from '@/components/hospital/IncomingList';
+import { NewRequestToasts } from '@/components/hospital/NewRequestToasts';
 import { PauseControl } from '@/components/hospital/PauseControl';
 import { RequestDetail } from '@/components/hospital/RequestDetail';
 import { RequestList } from '@/components/hospital/RequestList';
 import { cn } from '@/lib/utils';
-import { useHospitalAlarm, type AlarmState } from './useHospitalAlarm';
+import { useHospitalRealtime } from './useHospitalRealtime';
 import { useIncoming } from './useIncoming';
 import { useNewRequests } from './useNewRequests';
 import { usePcRevoked } from './usePcRevoked';
@@ -28,14 +29,13 @@ const inputClass =
   'h-[56px] rounded-[10px] border-2 border-input px-4 text-xl outline-none focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/40';
 
 // 근무 시작: 담당자 이름만 받는다 (SFR-117)
-function StartShift({ onStarted }: { onStarted: () => void }) {
+function StartShift() {
   const queryClient = useQueryClient();
   const [staffName, setStaffName] = useState('');
   const start = useMutation({
     mutationFn: (body: ShiftBody) =>
       apiFetch('/hw/shifts', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
-      onStarted();
       void queryClient.invalidateQueries({ queryKey: ['hw', 'session'] });
     },
   });
@@ -74,18 +74,6 @@ function StartShift({ onStarted }: { onStarted: () => void }) {
   );
 }
 
-// 알림이 꺼져 있을 때 왜 꺼졌는지에 맞춰 안내한다
-function offMessage(alarm: AlarmState, startedHere: boolean): string {
-  if (alarm.kind === 'turned_off' && alarm.reason === 'no_ack') {
-    return '새 요청에 이 PC가 응답하지 않아 알림이 꺼졌어요. 다시 켜 주세요.';
-  }
-  if (alarm.kind === 'turned_off' && alarm.reason === 'resume_failed') {
-    return '연결은 다시 됐지만 알림을 복구하지 못했어요. 알림 켜기를 다시 누르세요.';
-  }
-  // 새로고침하거나 다시 열면 브라우저가 소리를 막으므로 사람이 다시 눌러야 한다 (SFR-117)
-  return startedHere ? '알림 켜기를 눌러야 새 요청을 받아요.' : '알림 켜기를 다시 누르세요.';
-}
-
 export function ShiftScreen({
   shift,
   pause = { paused: false, pausedAt: null },
@@ -106,14 +94,14 @@ export function ShiftScreen({
   pause?: { paused: boolean; pausedAt: string | null };
   createSocket?: () => HospitalSocket;
 }) {
-  const { socket, connection, alarm, turnOn } = useHospitalAlarm(createSocket);
+  // 근무 중이면 연결되자마자 자동으로 요청을 받는다. '알림 켜기'를 누를 필요가 없다
+  const { socket, connection } = useHospitalRealtime(createSocket, shift?.id ?? null);
   usePcRevoked(socket);
   // 근무 중일 때만 요청을 받는다
   const incoming = useNewRequests(shift ? socket : null);
   const arriving = useIncoming(shift ? socket : null);
-  const [startedHere, setStartedHere] = useState(false);
   // 상세는 다른 주소로 옮기지 않고 같은 화면에 연다. 주소를 바꾸면 화면이 새로 그려지며
-  // 실시간 연결·알림 켜짐(탭 메모리에만 있음)이 끊기기 때문이다
+  // 실시간 연결이 끊겼다 다시 붙기 때문이다
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 이 탭에서 연 요청. 아직 안 연 대기 요청 카드는 깜빡여서 새 요청이 한눈에 보이게 한다.
   // 화면 표시용이라 탭 메모리에만 둔다 (새로고침하면 대기 요청이 다시 깜빡임)
@@ -123,7 +111,7 @@ export function ShiftScreen({
     setSeenIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
   };
   const newCount = incoming.waiting.filter((r) => !seenIds.has(r.id)).length;
-  // 요청 / 도착 예정 탭. 탭도 화면 안에서만 바꾼다 (주소를 바꾸면 알림 켜짐이 끊김)
+  // 요청 / 도착 예정 탭. 탭도 화면 안에서만 바꾼다 (주소를 바꾸면 실시간 연결이 다시 붙음)
   const [tab, setTab] = useState<'requests' | 'incoming'>('requests');
   // 2분이 안 지난 대기 요청만 서버가 거절(요청 중지)로 바꾼다
   const waitingInTime = incoming.waiting.filter(
@@ -144,17 +132,12 @@ export function ShiftScreen({
       )}
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line bg-card px-[32px] py-[14px]">
         {brand}
-        {/* 오른쪽은 작게: 담당자·PC, 알림·연결 상태, 근무 종료 */}
+        {/* 오른쪽은 작게: 담당자·PC, 연결 상태, 근무 종료 */}
         <div className="flex flex-wrap items-center gap-[8px]">
           {/* 근무 중이면 '담당자 · PC', 근무 전이면 '병원 · PC' (어느 병원·PC 인지 늘 보이게) */}
           <span className="mr-1 text-[16px] font-semibold">
             {[shift ? shift.staffName : hospitalName, pcName].filter(Boolean).join(' · ')}
           </span>
-          {shift !== null && alarm.kind === 'on' && (
-            <Chip tone="success" className="border border-success-dot/40 py-0.5 text-[14px]">
-              🔔 알림 켜짐
-            </Chip>
-          )}
           {connection === 'connected' && (
             <Chip
               tone="success"
@@ -178,30 +161,7 @@ export function ShiftScreen({
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-[20px] px-[32px] pt-[20px] pb-[48px]">
         {notice}
 
-        {shift === null && <StartShift onStarted={() => setStartedHere(true)} />}
-        {shift !== null && alarm.kind !== 'on' && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border-2 border-destructive bg-danger-soft px-6 py-4">
-            <div className="flex flex-col gap-2">
-              <p className="text-[26px] font-extrabold text-danger-strong">
-                {offMessage(alarm, startedHere)}
-              </p>
-              {turnOn.isError && (
-                <p role="alert" className="text-lg font-bold text-destructive">
-                  {errorText(turnOn.error)}
-                </p>
-              )}
-            </div>
-            <Button
-              size="lg"
-              className="h-[64px] rounded-[12px]"
-              onClick={() => turnOn.mutate()}
-              disabled={turnOn.isPending || connection !== 'connected'}
-            >
-              {turnOn.isPending ? '켜는 중…' : '알림 켜기'}
-            </Button>
-          </div>
-        )}
-
+        {shift === null && <StartShift />}
         {shift !== null && (
           <>
             {/* 탭 줄: 요청 / 도착 예정 / 잠시 요청 중지, 오른쪽에 새 요청 알림 (시안) */}
@@ -287,12 +247,6 @@ export function ShiftScreen({
                         새 요청 {newCount}건
                       </Chip>
                     )}
-                    {/* 대기 요청이 있는 동안 소리가 반복된다 (useNewRequests) */}
-                    {incoming.waiting.length > 0 && alarm.kind === 'on' && (
-                      <Chip tone="danger" className="border border-danger-line py-0.5 text-[14px]">
-                        🔔 알림음 반복 중
-                      </Chip>
-                    )}
                   </div>
                   <RequestList
                     items={incoming.items}
@@ -337,6 +291,17 @@ export function ShiftScreen({
           </>
         )}
       </div>
+      {/* 새 요청이 오면 오른쪽 위에 작게 떴다가 사라진다. 누르면 그 요청 상세가 열린다 */}
+      {shift !== null && (
+        <NewRequestToasts
+          toasts={incoming.toasts}
+          onOpen={(id) => {
+            setTab('requests');
+            openRequest(id);
+          }}
+          onClose={incoming.dismissToast}
+        />
+      )}
     </div>
   );
 }

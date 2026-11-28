@@ -23,17 +23,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const alarmButton = () => screen.getByRole('button', { name: '알림 켜기' });
+const resumes = () => socket.emitted.filter((e) => e.event === 'alarm.resume');
 
-describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
-  it('담당자 이름으로 근무를 시작하고, 알림 켜기를 누르면 이 탭의 socketId 를 보낸다', async () => {
+describe('근무 시작 → 자동으로 요청 받기 (SFR-117)', () => {
+  it('담당자 이름으로 근무를 시작하면 누를 것 없이 이 탭이 요청 받기로 등록된다', async () => {
     const server = fakeServer({
       'GET /hw/session': [
         { status: 200, body: { ...HOSPITAL, shift: null } },
         { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       ],
-      'POST /hw/shifts': { status: 201, body: { shiftId: 9 } },
-      'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
+      'POST /hw/shifts': { status: 201, body: { shiftId: 5 } },
       'GET /hw/requests?status=open': NO_REQUESTS,
       'GET /hw/incoming': NO_INCOMING,
     });
@@ -41,20 +40,19 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
     // 소켓은 PC 확인(GET /hw/session)이 끝나고 화면이 뜬 뒤에 만들어진다
     const nameInput = await screen.findByLabelText('담당자 이름');
     socket.serverConnect('sock-1');
+    // 근무 전에는 등록하지 않는다
+    expect(resumes()).toEqual([]);
 
     fireEvent.change(nameInput, { target: { value: ' 김간호 ' } });
     fireEvent.click(screen.getByRole('button', { name: '근무 시작' }));
 
-    expect(await screen.findByText('알림 켜기를 눌러야 새 요청을 받아요.')).toBeDefined();
+    await waitFor(() => expect(resumes()).toHaveLength(1));
+    expect(resumes()[0].args[0]).toEqual({ shiftId: 5 });
     expect(server.callsTo('POST /hw/shifts')[0].body).toEqual({ staffName: '김간호' });
-
-    fireEvent.click(alarmButton());
-    // 위쪽 막대 오른쪽: 작은 '알림 켜짐' 칩과 '담당자 · PC 이름'
-    expect(await screen.findByText(/알림 켜짐/)).toBeDefined();
+    // '알림 켜기' 버튼·안내는 없다
+    expect(screen.queryByRole('button', { name: '알림 켜기' })).toBeNull();
+    expect(screen.queryByText(/알림 켜기/)).toBeNull();
     expect(screen.getByText(/김간호/)).toBeDefined();
-    expect(server.callsTo('POST /hw/shifts/current/alarm-on')[0].body).toEqual({
-      socketId: 'sock-1',
-    });
   });
 
   it('근무 전에는 요청 목록을 부르지 않는다', async () => {
@@ -67,48 +65,36 @@ describe('근무 시작 → 알림 켜기 (SFR-117)', () => {
     expect(server.callsTo('GET /hw/requests?status=open')).toEqual([]);
   });
 
-  it('이미 근무 중인데 새로 열었으면 다시 누르라고 크게 알려준다', async () => {
+  it('이미 근무 중인 화면을 새로 열어도 연결되자마자 자동으로 등록한다', async () => {
     fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
       'GET /hw/requests?status=open': NO_REQUESTS,
       'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    expect(await screen.findByText('알림 켜기를 다시 누르세요.')).toBeDefined();
-  });
-
-  it('실시간 연결 전에는 알림 켜기를 누를 수 없다', async () => {
-    fakeServer({
-      'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
-      'GET /hw/requests?status=open': NO_REQUESTS,
-      'GET /hw/incoming': NO_INCOMING,
-    });
-    renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
-    expect(alarmButton()).toHaveProperty('disabled', true);
+    await screen.findByRole('tab', { name: /요청/ });
+    // 연결 전에는 보낼 수 없다
+    expect(resumes()).toEqual([]);
     socket.serverConnect();
-    expect(alarmButton()).toHaveProperty('disabled', false);
+    expect(resumes().map((e) => e.args[0])).toEqual([{ shiftId: 5 }]);
   });
 });
 
-describe('연결 끊김·자동 복구·꺼짐', () => {
-  async function renderWithAlarmOn() {
+describe('연결 끊김·자동 다시 등록', () => {
+  async function renderOnShift() {
     const server = fakeServer({
       'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
-      'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
       'GET /hw/requests?status=open': NO_REQUESTS,
       'GET /hw/incoming': NO_INCOMING,
     });
     renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
+    await screen.findByRole('tab', { name: /요청/ });
     socket.serverConnect('sock-1');
-    fireEvent.click(alarmButton());
-    await screen.findByText(/알림 켜짐/);
     return server;
   }
 
-  it('끊기면 맨 위에 빨간 연결 끊김 배너, 탭을 유지한 채 다시 붙으면 shiftId 로 자동 복구', async () => {
-    await renderWithAlarmOn();
+  it('끊기면 맨 위에 빨간 연결 끊김 배너, 다시 붙으면 자동으로 다시 등록', async () => {
+    await renderOnShift();
 
     socket.serverDisconnect();
     const banner = screen.getByRole('alert');
@@ -118,64 +104,29 @@ describe('연결 끊김·자동 복구·꺼짐', () => {
 
     socket.serverConnect('sock-2');
     expect(screen.queryByRole('alert')).toBeNull();
-    const resume = socket.emitted.at(-1);
-    expect(resume?.event).toBe('alarm.resume');
-    expect(resume?.args[0]).toEqual({ shiftId: 9 });
-    expect(screen.getByText(/알림 켜짐/)).toBeDefined();
+    expect(resumes()).toHaveLength(2);
+    expect(resumes()[1].args[0]).toEqual({ shiftId: 5 });
   });
 
-  it('서버가 복구를 거부하면 다시 누르라고 안내', async () => {
-    await renderWithAlarmOn();
-    socket.resumeOk = false;
-    socket.serverDisconnect();
-    socket.serverConnect('sock-2');
-    expect(screen.getByText(/알림을 복구하지 못했어요/)).toBeDefined();
-    expect(alarmButton()).toBeDefined();
-  });
-
-  it('처음 연결될 때는 복구를 시도하지 않는다 (켠 적이 없으므로)', async () => {
-    fakeServer({
-      'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
-      'GET /hw/requests?status=open': NO_REQUESTS,
-      'GET /hw/incoming': NO_INCOMING,
-    });
-    renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
-    socket.serverConnect();
-    expect(socket.emitted).toEqual([]);
-  });
-
-  it('응답이 없어 서버가 알림을 끄면 다시 켜 달라고 안내', async () => {
-    await renderWithAlarmOn();
+  it('응답이 없어 서버가 등록을 풀면(no_ack) 사람이 할 일 없이 곧바로 다시 등록', async () => {
+    await renderOnShift();
     socket.fire('hospital.alarm_off', envelope({ reason: 'no_ack' }));
-    expect(screen.getByText(/응답하지 않아 알림이 꺼졌어요/)).toBeDefined();
+    expect(resumes()).toHaveLength(2);
+    expect(screen.queryByText(/알림/)).toBeNull();
+  });
+
+  it('서버가 등록을 거부하면(근무가 이미 끝남) 근무 정보를 다시 받는다', async () => {
+    socket.resumeOk = false;
+    const server = await renderOnShift();
+    await waitFor(() => expect(server.callsTo('GET /hw/session')).toHaveLength(2));
   });
 
   it('근무가 끝나면 근무 정보를 다시 받아 근무 시작 화면으로', async () => {
-    const server = await renderWithAlarmOn();
+    const server = await renderOnShift();
     server.set('GET /hw/session', { status: 200, body: { ...HOSPITAL, shift: null } });
     socket.fire('hospital.alarm_off', envelope({ reason: 'shift_ended' }));
     expect(await screen.findByLabelText('담당자 이름')).toBeDefined();
     expect(server.callsTo('GET /hw/session')).toHaveLength(2);
-  });
-});
-
-describe('알림 켜기 실패', () => {
-  it('서버 오류면 문구를 보여주고 꺼진 상태로 남는다', async () => {
-    fakeServer({
-      'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
-      'GET /hw/requests?status=open': NO_REQUESTS,
-      'GET /hw/incoming': NO_INCOMING,
-      'POST /hw/shifts/current/alarm-on': {
-        status: 404,
-        body: { error: { code: 'NOT_FOUND', message: '근무 중이 아니에요' } },
-      },
-    });
-    renderWithQuery(<HospitalHome createSocket={createSocket} />);
-    await screen.findByText('알림 켜기를 다시 누르세요.');
-    socket.serverConnect();
-    fireEvent.click(alarmButton());
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('근무 중이 아니에요'));
-    expect(screen.queryByText(/알림 켜짐/)).toBeNull();
+    expect(resumes()).toHaveLength(1);
   });
 });

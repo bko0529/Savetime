@@ -411,8 +411,25 @@
 .request-new-blink-text {
   animation: request-new-blink-text 1.2s ease-in-out infinite;
 }
+/* 새 요청 작은 알림: 위에서 살짝 내려오며 나타난다 (메신저 알림처럼) */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast-in {
+  animation: toast-in 0.25s ease-out;
+}
 /* 'PC 애니메이션 줄이기'를 켠 경우 깜빡이지 않고 빨간 배경만 */
 @media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation: none;
+  }
   .request-new-blink-text {
     animation: none;
   }

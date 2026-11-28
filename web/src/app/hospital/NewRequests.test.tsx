@@ -1,20 +1,10 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as alarm from '@/lib/alarm/browserAlarm';
 import { envelope, FakeSocket } from '@/testing/fakeSocket';
 import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-// 소리·브라우저 알림은 jsdom 에 없으니 불렸는지만 본다
-vi.mock('@/lib/alarm/browserAlarm', () => ({
-  unlockSound: vi.fn(async () => true),
-  askNotificationPermission: vi.fn(async () => 'granted'),
-  notificationPermission: vi.fn(() => 'granted'),
-  startAlarmLoop: vi.fn(),
-  stopAlarmLoop: vi.fn(),
-  showRequestNotification: vi.fn(),
-}));
 
 const HOSPITAL = { hospital: { id: 1, name: 'A병원' }, pc: { id: 7, name: '접수대' } };
 const SHIFT = { id: 5, staffName: '김간호', alarmOn: true };
@@ -45,15 +35,12 @@ beforeEach(async () => {
   socket = new FakeSocket();
   server = fakeServer({
     'GET /hw/session': { status: 200, body: { ...HOSPITAL, shift: SHIFT } },
-    'POST /hw/shifts/current/alarm-on': { status: 200, body: { shiftId: 9 } },
     [LIST]: list(),
     'GET /hw/incoming': { status: 200, body: { items: [] } },
   });
   renderWithQuery(<HospitalHome createSocket={() => socket.asSocket()} />);
-  await screen.findByText('알림 켜기를 다시 누르세요.');
+  await screen.findByRole('tab', { name: /요청/ });
   socket.serverConnect();
-  fireEvent.click(screen.getByRole('button', { name: '알림 켜기' }));
-  await screen.findByText(/알림 켜짐/);
 });
 afterEach(() => {
   cleanup();
@@ -72,7 +59,7 @@ function newRequest(id: number) {
 }
 
 describe('새 요청 받기 (SFR-117·135·161)', () => {
-  it('받자마자 ack 를 보내고, 목록을 다시 받아 목록 카드·소리·탭 제목·브라우저 알림으로 알린다 (빨간 덮개 창은 없음)', async () => {
+  it('받자마자 ack 를 보내고, 목록을 다시 받아 목록 카드·탭 제목·오른쪽 위 작은 알림으로 알린다 (빨간 덮개 창은 없음)', async () => {
     server.set(LIST, list(item(101, 110)));
     const before = server.callsTo(LIST).length;
     const ack = newRequest(101);
@@ -86,11 +73,12 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     expect(server.callsTo(LIST).length).toBeGreaterThan(before);
     expect(screen.getByText('새 이송 요청 1건')).toBeDefined();
     expect(document.title).toBe('🔴 새 이송 요청 1건');
-    expect(alarm.startAlarmLoop).toHaveBeenCalledTimes(1);
-    expect(alarm.showRequestNotification).toHaveBeenCalledWith(101, 'R-101');
+    const toasts = screen.getByRole('list', { name: '새 요청 알림' });
+    expect(toasts.textContent).toContain('새 이송 요청');
+    expect(toasts.textContent).toContain('R-101 · 흉통 · 도착 약 8분');
   });
 
-  it('여러 건이 와도 소리는 하나만, 브라우저 알림은 요청마다 1번, 목록에 둘 다', async () => {
+  it('여러 건이 오면 작은 알림이 요청마다 1개씩 최신이 위로 쌓이고, 목록에 둘 다', async () => {
     server.set(LIST, list(item(101, 110)));
     newRequest(101);
     await screen.findByText('새 이송 요청 1건');
@@ -101,12 +89,14 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
 
     const cards = within(screen.getByRole('list', { name: '요청 목록' })).getAllByRole('listitem');
     expect(cards.map((c) => c.textContent?.slice(0, 5))).toEqual(['R-101', 'R-102']);
-    expect(alarm.startAlarmLoop).toHaveBeenCalledTimes(1);
-    expect(alarm.showRequestNotification).toHaveBeenCalledTimes(2);
+    const toasts = within(screen.getByRole('list', { name: '새 요청 알림' })).getAllByRole(
+      'listitem',
+    );
+    expect(toasts.map((t) => t.textContent?.match(/R-\d+/)?.[0])).toEqual(['R-102', 'R-101']);
     expect(document.title).toBe('🔴 새 이송 요청 2건');
   });
 
-  it('다른 PC 응답·만료로 요청이 끝나면(request.changed) 소리·제목·건수가 멈춘다', async () => {
+  it('다른 PC 응답·만료로 요청이 끝나면(request.changed) 작은 알림·제목·건수가 사라진다', async () => {
     server.set(LIST, list(item(101, 110)));
     newRequest(101);
     await screen.findByText('새 이송 요청 1건');
@@ -124,7 +114,7 @@ describe('새 요청 받기 (SFR-117·135·161)', () => {
     );
 
     await waitFor(() => expect(screen.queryByText(/새 이송 요청 \d+건/)).toBeNull());
-    expect(alarm.stopAlarmLoop).toHaveBeenCalled();
+    expect(screen.getByRole('list', { name: '새 요청 알림' }).children).toHaveLength(0);
     expect(document.title).toBe('세이브타임');
   });
 

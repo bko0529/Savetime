@@ -5,14 +5,6 @@ import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock('@/lib/alarm/browserAlarm', () => ({
-  unlockSound: vi.fn(async () => true),
-  askNotificationPermission: vi.fn(async () => 'granted'),
-  notificationPermission: vi.fn(() => 'granted'),
-  startAlarmLoop: vi.fn(),
-  stopAlarmLoop: vi.fn(),
-  showRequestNotification: vi.fn(),
-}));
 
 const INCOMING = 'GET /hw/incoming';
 const SESSION = {
