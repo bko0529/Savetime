@@ -175,6 +175,29 @@ describe('요청 목록·상세 (SFR-135·118)', () => {
     expect(document.title).toBe('🔴 새 이송 요청 1건');
   });
 
+  it('대원이 환자 정보를 고쳐 보내면(request.updated) 열린 상세를 새로 받아 새 값을 보여 준다 (SFR-105)', async () => {
+    server.set(LIST, list(item(102, 60)));
+    server.set(DETAIL, { status: 200, body: detailBody });
+    newRequest(102);
+    // 덮개 창은 없어졌으니(#111) 목록 카드를 눌러 상세를 연다
+    fireEvent.click(await screen.findByRole('button', { name: 'R-102' }));
+    await screen.findByText('⚠ 85%');
+
+    server.set(DETAIL, {
+      status: 200,
+      body: { ...detailBody, assessment: { ...detailBody.assessment, spo2: 77 } },
+    });
+    socket.fire('request.updated', envelope({ requestId: 102, changedFields: ['spo2'] }));
+    expect(await screen.findByText('⚠ 77%')).toBeTruthy();
+    expect(server.callsTo(DETAIL)).toHaveLength(2);
+  });
+
+  it('길찾기로 도착 예상이 바뀌면(request.eta) 목록을 다시 받는다 (SFR-129)', async () => {
+    const before = server.callsTo(LIST).length;
+    socket.fire('request.eta', envelope({ requestId: 102, etaMin: 5, etaSource: 'route' }));
+    await waitFor(() => expect(server.callsTo(LIST).length).toBeGreaterThan(before));
+  });
+
   it('열어 둔 요청이 다른 PC 응답으로 끝나면 상세도 끝난 요청으로 바뀐다', async () => {
     server.set(LIST, list(item(102, 60)));
     server.set(DETAIL, { status: 200, body: detailBody });
