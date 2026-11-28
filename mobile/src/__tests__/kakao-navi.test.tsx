@@ -24,8 +24,10 @@ jest.mock('../transport/location', () => ({
   ...jest.requireActual('../transport/location'),
   currentLocation: () => mockLoc(),
 }));
-const mockBack = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack, push: jest.fn() }) }));
+const mockNavigate = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ back: jest.fn(), push: jest.fn(), navigate: mockNavigate }),
+}));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),
   setItemAsync: jest.fn(async () => undefined),
@@ -93,7 +95,7 @@ test('확정 병원 입구로 앱 안 카카오내비를 띄운다 (출발=내 �
   expect(openUrl).not.toHaveBeenCalled();
   // 아래 띠의 '이송 화면으로'
   await fireEvent.press(screen.getByRole('button', { name: '이송 화면으로' }));
-  expect(mockBack).toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledWith('/transport');
 });
 
 test('시작하지 못하면 이유와 다시 시도 — 다른 앱으로 넘기지 않는다 (D-137)', async () => {

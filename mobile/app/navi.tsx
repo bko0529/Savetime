@@ -3,7 +3,8 @@
  * - 화면 대부분은 카카오내비(경로선 · 음성 안내 · 회전 안내 · 재탐색)
  * - 아래 띠: 병원 이름 · 남은 시간 · 도착 처리(입구 근처 · 병원 도착 확인 · 내비 도착 때 켜짐) · 이송 화면으로
  * - 시작하지 못하면 이유와 [다시 시도] (외부 앱으로 넘기지 않음, D-137)
- * - 운전 폰(경로 안내 담당)은 확정되면 이 페이지가 저절로 열린다 (SFR-157)
+ * - 병원을 확정한 폰과 운전 폰(경로 안내 담당)은 확정되면 이 페이지가 바로 열린다 (SFR-111 · SFR-157)
+ *   출발지는 내 현재 위치, 목적지는 확정 병원 응급실 입구
  */
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Flag, RotateCw } from 'lucide-react-native';
@@ -177,7 +178,8 @@ export default function NaviScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Pressable
-            onPress={() => router.back()}
+            // 확정하자마자 이 페이지로 왔으면 아래에는 요청 화면이 있다 → 이송 화면으로 바꿔 연다
+            onPress={() => router.navigate('/transport')}
             accessibilityRole="button"
             accessibilityLabel="이송 화면으로"
             style={{

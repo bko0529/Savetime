@@ -96,6 +96,8 @@ export type EngineState = {
   navDeviceId: string | null;
   /** 이 기기가 위치 기록·경로 안내 담당인가 */
   navIsMe: boolean;
+  /** 이 기기에서 병원을 확정했나 (확정하자마자 길 안내 페이지를 연다) */
+  confirmedHere: boolean;
   /** 담당 단말이 병원 입구까지 남은 거리 (m) */
   remainingM: number | null;
   /** 병원이 '도착 확인'을 눌렀다 (SFR-144) */
@@ -149,6 +151,7 @@ const initial = (): EngineState => ({
   etaMin: null,
   navDeviceId: null,
   navIsMe: false,
+  confirmedHere: false,
   remainingM: null,
   arriveRequested: false,
   confirmed: null,
@@ -531,6 +534,7 @@ export function apply(t: ServerTransport, myDevice = myDeviceId) {
   s.etaMin = t.etaMin;
   s.navDeviceId = t.navDeviceId;
   s.navIsMe = !!t.navDeviceId && t.navDeviceId === myDevice;
+  s.confirmedHere = pickedByMe === t.id;
   s.lastSentSeq = t.lastSentAssessmentSeq;
   s.status = t.status;
   if (from !== t.status) {

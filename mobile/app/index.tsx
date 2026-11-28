@@ -61,7 +61,7 @@ export default function HomeScreen() {
     router.push('/patient');
   };
   const resume = () => {
-    const to = routeForStatus(e.status, e.phoneTarget);
+    const to = routeForStatus(e.status, e.phoneTarget, e.navIsMe || e.confirmedHere);
     if (to) router.push(to);
   };
 
