@@ -270,9 +270,9 @@ CREATE TABLE transport (                               -- 이송 건
   team_id               bigint           REFERENCES team(id),          -- 종료 뒤 팀 연결 끊음 (SFR-086, DAR-013)
   prev_transport_id     uuid             REFERENCES transport(id),  -- 직전 건 (제외 병원 이어받기)
   status                transport_status NOT NULL DEFAULT 'requesting',
-  request_radius_km     smallint         NOT NULL DEFAULT 20 CHECK (request_radius_km IN (10,20,30,40)),
+  request_radius_km     smallint         NOT NULL DEFAULT 20 CHECK (request_radius_km IN (10,20,30,40,60,80)),
   requested_grade       smallint         CHECK (requested_grade IN (1,2,3)),  -- NULL = 등급 안 고름(전체). 고른 등급 이상에만 요청 (SFR-162)
-  fallback_radius_km    smallint         NOT NULL DEFAULT 20 CHECK (fallback_radius_km IN (10,20,30,40)),
+  fallback_radius_km    smallint         NOT NULL DEFAULT 20 CHECK (fallback_radius_km IN (10,20,30,40,60,80)),
   origin_lat            numeric(9,6),                   -- 원본 위치: 이송 끝나면 NULL
   origin_lng            numeric(9,6),
   location_consent      boolean          NOT NULL,
@@ -343,7 +343,7 @@ CREATE TABLE request_round (                           -- 요청 회차 (첫 요
   transport_id        uuid        NOT NULL REFERENCES transport(id),
   round_no            smallint    NOT NULL,
   kind                varchar(12) NOT NULL DEFAULT 'first' CHECK (kind IN ('first','expand','re_request','dest_change')),  -- 회차 종류 (round.started.kind)
-  radius_km           smallint    NOT NULL CHECK (radius_km IN (10,20,30,40)),
+  radius_km           smallint    NOT NULL CHECK (radius_km IN (10,20,30,40,60,80)),
   sent_at             timestamptz NOT NULL DEFAULT now(),
   respond_until       timestamptz NOT NULL,            -- sent_at + 2분
   approval_valid_until timestamptz NOT NULL,           -- sent_at + 5분

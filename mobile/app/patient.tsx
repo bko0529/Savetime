@@ -18,7 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { actions, preloadNearby, previewTargets, useEngine } from '../src/transport/engine';
-import { RADIUS_STEPS, type Grade } from '../src/transport/hospitals';
+import { radiusChoices, startRadiusFor, type Grade } from '../src/transport/hospitals';
 import { currentLocation, manualLocation } from '../src/transport/location';
 import { AddressSheet } from '../src/transport/ui/AddressSheet';
 import { vitalWarnings } from '../src/transport/labels';
@@ -92,6 +92,10 @@ export default function PatientScreen() {
   const [sending, setSending] = useState(false);
   const [targets, setTargets] = useState<number | null>(null);
   const radiusKm = useRadius();
+  // 대학병원급을 고르면 반경 버튼이 40·60·80km 로 바뀌고 40km 부터. 다른 등급으로 돌아가면 20km (D-141)
+  useEffect(() => {
+    if (!radiusChoices(p.grade).includes(radiusKm)) setRadius(startRadiusFor(p.grade));
+  }, [p.grade, radiusKm]);
   // 위치를 못 잡으면 '위치 확인 불가 · 주소 입력' (SFR-009)
   const [locOk, setLocOk] = useState<boolean | null>(null);
   const [addrOpen, setAddrOpen] = useState(false);
@@ -225,7 +229,7 @@ export default function PatientScreen() {
                   <Txt style={{ fontFamily: font.bold, fontSize: 13, color: color.muted }}>
                     반경
                   </Txt>
-                  {RADIUS_STEPS.map((km) => (
+                  {radiusChoices(p.grade).map((km) => (
                     <Pressable
                       key={km}
                       onPress={() => setRadius(km)}

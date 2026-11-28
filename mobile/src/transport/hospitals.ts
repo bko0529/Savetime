@@ -72,3 +72,18 @@ export const RESPONSE_LIMIT_SEC = 120;
 export const APPROVAL_WINDOW_SEC = 300;
 export const RADIUS_STEPS = [10, 20, 30, 40];
 export const START_RADIUS = 20;
+/**
+ * 대학병원급(권역응급의료센터)은 전국 40여 곳뿐이라 40km 로 시작해 60 · 80km 까지 넓힐 수 있다 (D-141).
+ * 다른 등급·안 고름은 10~40km (서버 geo.ts maxRadiusFor 와 같은 규칙)
+ */
+export const TOP_GRADE_STEPS = [40, 60, 80];
+export const ALL_RADIUS_STEPS = [10, 20, 30, 40, 60, 80];
+export const radiusChoices = (grade: Grade) =>
+  grade === '대학병원급' ? TOP_GRADE_STEPS : RADIUS_STEPS;
+export const maxRadiusFor = (grade: Grade) => (grade === '대학병원급' ? 80 : 40);
+export const startRadiusFor = (grade: Grade) => (grade === '대학병원급' ? 40 : START_RADIUS);
+/** 한 단계 넓힌 반경. 그 등급의 최대면 null */
+export function nextRadiusFor(grade: Grade, km: number): number | null {
+  const next = ALL_RADIUS_STEPS[ALL_RADIUS_STEPS.indexOf(km) + 1];
+  return next && next <= maxRadiusFor(grade) ? next : null;
+}

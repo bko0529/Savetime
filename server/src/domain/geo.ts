@@ -8,9 +8,16 @@ export function isInKorea(lat: number | undefined, lng: number | undefined): boo
 }
 
 // 앱이 고를 수 있는 검색 반경 (SFR-012). 넓히기는 한 단계씩 (SFR-029)
-export const RADIUS_KM = [10, 20, 30, 40] as const;
+// 대학병원급(권역응급의료센터, 등급 1)은 전국에 40여 곳뿐이라 60·80km 까지 넓힐 수 있다 (D-141)
+export const RADIUS_KM = [10, 20, 30, 40, 60, 80] as const;
 export type RadiusKm = (typeof RADIUS_KM)[number];
 export const MAX_RADIUS_KM: RadiusKm = 40;
+export const TOP_GRADE_MAX_RADIUS_KM: RadiusKm = 80;
+
+/** 고른 병원 등급에 따른 최대 반경: 대학병원급만 80km, 나머지·안 고름은 40km */
+export function maxRadiusFor(grade: number | null | undefined): RadiusKm {
+  return grade === 1 ? TOP_GRADE_MAX_RADIUS_KM : MAX_RADIUS_KM;
+}
 
 // 두 좌표 사이 직선거리(m, 하버사인). 위치 기록은 5초 간격이라 구간을 직선으로 이어도 실제 거리와 거의 같다
 export function distanceM(

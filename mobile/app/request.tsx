@@ -31,7 +31,8 @@ import {
 import {
   bedsLabel,
   capCount,
-  RADIUS_STEPS,
+  maxRadiusFor,
+  nextRadiusFor,
   RESPONSE_LIMIT_SEC,
   type Hospital,
 } from '../src/transport/hospitals';
@@ -158,7 +159,7 @@ export default function RequestScreen() {
     );
   };
   const excludedNames = e.excluded.map((id) => hospital(id).name);
-  const nextRadius = RADIUS_STEPS[RADIUS_STEPS.indexOf(e.radius) + 1];
+  const nextRadius = nextRadiusFor(e.grade, e.radius) ?? undefined;
   const subtitle = fallback
     ? `${cur.length}곳 응답 종료 · 반경 ${e.radius}km`
     : `${cur.length}곳 요청 · ${e.grade ? `${e.grade} 이상` : '모든 등급'} · 반경 ${e.radius}km`;
@@ -200,7 +201,7 @@ export default function RequestScreen() {
                 onPress={() => void run(actions.expand())}
               >{`반경 넓혀 다시 요청 (${nextRadius}km)`}</BigButton>
             ) : (
-              <Notice tone="warn">최대 반경(40km)이에요 · 가까운 병원에 전화로 확인하세요</Notice>
+              <Notice tone="warn">{`최대 반경(${maxRadiusFor(e.grade)}km)이에요 · 가까운 병원에 전화로 확인하세요`}</Notice>
             )
           ) : null}
           <BigButton variant="outline" onPress={cancel}>
@@ -612,7 +613,7 @@ function HospitalRow({
   );
 }
 
-/** 추천 0건 안내 (SFR-029): 한 단계 넓혀 다시 찾기, 40km 면 전화로 확인 */
+/** 추천 0건 안내 (SFR-029): 한 단계 넓혀 다시 찾기, 최대(40km · 대학병원급 80km)면 전화로 확인 */
 function EmptyGuide({
   noData,
   onRefresh,

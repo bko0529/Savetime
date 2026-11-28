@@ -16,7 +16,8 @@ import { onEvent, type AppEventName } from '../realtime/socket';
 import {
   GRADE_NAME,
   GRADE_NO,
-  RADIUS_STEPS,
+  nextRadiusFor,
+  maxRadiusFor,
   START_RADIUS,
   type Grade,
   type Hospital,
@@ -985,8 +986,9 @@ export const actions = {
   /** 예비 추천 반경만 한 단계 넓혀 다시 찾기 (SFR-029, 요청은 안 보냄) */
   async widenRecommend() {
     return guard(async () => {
-      const next = RADIUS_STEPS[RADIUS_STEPS.indexOf(s.radius) + 1];
-      if (!next) throw new ApiError(409, 'MAX_RADIUS', '최대 반경(40km)이에요');
+      const next = nextRadiusFor(s.grade, s.radius);
+      if (!next)
+        throw new ApiError(409, 'MAX_RADIUS', `최대 반경(${maxRadiusFor(s.grade)}km)이에요`);
       await api('PUT', `/transports/${tid()}/fallback-radius`, { body: { radiusKm: next } });
       await refresh();
       await loadNearby();
@@ -994,8 +996,9 @@ export const actions = {
   },
   async expand() {
     return guard(async () => {
-      const next = RADIUS_STEPS[RADIUS_STEPS.indexOf(s.radius) + 1];
-      if (!next) throw new ApiError(409, 'MAX_RADIUS', '최대 반경(40km)이에요');
+      const next = nextRadiusFor(s.grade, s.radius);
+      if (!next)
+        throw new ApiError(409, 'MAX_RADIUS', `최대 반경(${maxRadiusFor(s.grade)}km)이에요`);
       await api('POST', `/transports/${tid()}/rounds`, {
         body: { kind: 'expand', radiusKm: next, version: s.version },
       });

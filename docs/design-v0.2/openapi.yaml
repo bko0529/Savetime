@@ -1083,6 +1083,8 @@ paths:
           - 20
           - 30
           - 40
+          - 60
+          - 80
         description: ''
       responses:
         '200':
@@ -1189,6 +1191,8 @@ paths:
                   - 20
                   - 30
                   - 40
+                  - 60
+                  - 80
                 location:
                   allOf:
                   - $ref: '#/components/schemas/LatLng'
@@ -1372,6 +1376,8 @@ paths:
                     - 20
                     - 30
                     - 40
+                    - 60
+                    - 80
                   items:
                     type: array
                     items:
@@ -1430,6 +1436,8 @@ paths:
                   - 20
                   - 30
                   - 40
+                  - 60
+                  - 80
                   description: 지금보다 한 단계 큰 값
               required:
               - radiusKm
@@ -1492,6 +1500,8 @@ paths:
                   - 20
                   - 30
                   - 40
+                  - 60
+                  - 80
                   description: expand일 때 다음 단계 1칸
                 version:
                   type: integer
@@ -3884,6 +3894,8 @@ paths:
           - 20
           - 30
           - 40
+          - 60
+          - 80
       - name: grade
         in: query
         required: false
@@ -4405,6 +4417,8 @@ components:
           - 20
           - 30
           - 40
+          - 60
+          - 80
         sentAt:
           type: string
           format: date-time
@@ -4540,6 +4554,8 @@ components:
           - 20
           - 30
           - 40
+          - 60
+          - 80
         fallbackRadiusKm:
           type: integer
           enum:
@@ -4547,6 +4563,8 @@ components:
           - 20
           - 30
           - 40
+          - 60
+          - 80
         fallbackReason:
           type: string
           enum:
