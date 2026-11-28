@@ -1,9 +1,9 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import type { ApiPaths } from '@/lib/api/client';
 import { errorText } from '@/lib/api/errorText';
+import { ExpandableBox } from '../ExpandableBox';
 import { useAdminApi } from '../useAdminApi';
 
 type AuditList =
@@ -24,10 +24,14 @@ export function AuditLog() {
   });
 
   const items = logs.data?.pages.flatMap((p) => p.items) ?? [];
+  // 상자를 끝까지 내리면 다음 30개
+  function loadMore() {
+    if (logs.hasNextPage && !logs.isFetchingNextPage) void logs.fetchNextPage();
+  }
 
   return (
-    <section aria-labelledby="audit-title" className="flex flex-col gap-4">
-      <h2 id="audit-title" className="text-2xl font-bold">
+    <section aria-labelledby="audit-title" className="panel">
+      <h2 id="audit-title" className="section-title panel-title">
         관리자 작업 이력
       </h2>
       {logs.isError && (
@@ -36,42 +40,48 @@ export function AuditLog() {
         </p>
       )}
       {logs.isSuccess && items.length === 0 && (
-        <p className="text-lg text-muted-foreground">아직 기록된 작업이 없어요.</p>
+        <p className="well px-5 py-6 text-center text-base text-muted-foreground">
+          아직 기록된 작업이 없어요.
+        </p>
       )}
       {items.length > 0 && (
-        <table className="w-full border-collapse text-lg">
-          <thead>
-            <tr className="border-b-2 border-foreground text-left">
-              <th className="p-3">시각</th>
-              <th className="p-3">관리자</th>
-              <th className="p-3">작업</th>
-              <th className="p-3">대상</th>
-              <th className="p-3">사유</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i, n) => (
-              <tr key={`${i.at}-${n}`} className="border-b">
-                <td className="p-3 tabular-nums">{i.at ? timeText(i.at) : '—'}</td>
-                <td className="p-3">{i.admin}</td>
-                <td className="p-3 font-bold">{i.action}</td>
-                <td className="p-3">{i.target}</td>
-                <td className="p-3">{i.reason ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {logs.hasNextPage && (
-        <Button
-          variant="outline"
-          size="lg"
-          className="self-start"
-          disabled={logs.isFetchingNextPage}
-          onClick={() => void logs.fetchNextPage()}
+        <ExpandableBox
+          title="관리자 작업 이력"
+          showMore={items.length > 4 || !!logs.hasNextPage}
+          loadingMore={logs.isFetchingNextPage}
+          onScrollEnd={loadMore}
+          boxClassName="panel-table max-h-[330px]"
         >
-          {logs.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
-        </Button>
+          {(expanded) => (
+            <table className="data-table data-table-flush overflow-visible">
+              {/* 스크롤해도 제목 줄은 위에 고정 */}
+              <thead
+                className={
+                  expanded ? 'sticky -top-8 z-10 bg-surface' : 'sticky top-0 z-10 bg-surface'
+                }
+              >
+                <tr className="text-left">
+                  <th className="px-3 py-3.5">시각</th>
+                  <th className="px-3 py-3.5">관리자</th>
+                  <th className="px-3 py-3.5">작업</th>
+                  <th className="px-3 py-3.5">대상</th>
+                  <th className="px-3 py-3.5">사유</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((i, n) => (
+                  <tr key={`${i.at}-${n}`} className="border-b">
+                    <td className="px-3 py-4 tabular-nums">{i.at ? timeText(i.at) : '—'}</td>
+                    <td className="px-3 py-4">{i.admin}</td>
+                    <td className="px-3 py-4 font-bold">{i.action}</td>
+                    <td className="px-3 py-4">{i.target}</td>
+                    <td className="px-3 py-4">{i.reason ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </ExpandableBox>
       )}
     </section>
   );

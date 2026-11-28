@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { NewRequestOverlay, type OverlayRequest } from '@/components/hospital/NewRequestOverlay';
+import { useRef, useState } from 'react';
+import type { OverlayRequest } from '@/components/hospital/NewRequestOverlay';
+import { NewRequestToasts } from '@/components/hospital/NewRequestToasts';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -16,48 +17,37 @@ import { useTabTitleAlert } from '@/hooks/useTabTitleAlert';
 // 시연용 가짜 요청. 환자 식별정보·구급대 소속은 넣지 않는다.
 const SAMPLE_COMPLAINTS = ['흉통', '호흡곤란', '의식 저하', '복통', '두부 외상'];
 
-type PreviewRequest = OverlayRequest & { confirmed: boolean };
+type PreviewRequest = OverlayRequest;
 
-// 디자인 시안 화면: 버튼·표·새 요청 덮개 알림 창을 한곳에서 확인한다. 실제 서버 연결은 S3.
+// 디자인 시안 화면: 버튼·표·새 요청 작은 알림을 서버 없이 한곳에서 확인한다 (시연·디자인 확인용)
 export function DesignPreview() {
   const [requests, setRequests] = useState<PreviewRequest[]>([]);
-  // 빌드 때 미리 그리는 단계에서는 현재 시각을 쓸 수 없어서, 브라우저에서 화면이 뜬 뒤에 시계를 시작한다
-  const [nowMs, setNowMs] = useState(0);
-
-  useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   useTabTitleAlert(requests.length);
 
-  const nextUnconfirmed = requests.find((r) => !r.confirmed) ?? null;
+  // 새 요청이 오면 오른쪽 위에 뜨는 작은 알림 (실제 근무 화면과 같은 부품)
+  const [toasts, setToasts] = useState<OverlayRequest[]>([]);
+  const nextId = useRef(101);
 
   function addRequest() {
-    setRequests((prev) => {
-      const id = (prev.at(-1)?.id ?? 100) + 1;
-      return [
-        ...prev,
-        {
-          id,
-          label: `R-${id}`,
-          chiefComplaint: SAMPLE_COMPLAINTS[id % SAMPLE_COMPLAINTS.length],
-          etaMin: 5 + (id % 10),
-          respondUntil: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-          confirmed: false,
-        },
-      ];
-    });
+    const id = nextId.current++;
+    const request: PreviewRequest = {
+      id,
+      label: `R-${id}`,
+      chiefComplaint: SAMPLE_COMPLAINTS[id % SAMPLE_COMPLAINTS.length],
+      etaMin: 5 + (id % 10),
+      respondUntil: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+    };
+    setRequests((prev) => [...prev, request]);
+    setToasts((prev) => [request, ...prev].slice(0, 3));
   }
 
-  function confirm(id: number) {
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, confirmed: true } : r)));
+  function dismissToast(id: number) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
   function respond(id: number) {
     setRequests((prev) => prev.filter((r) => r.id !== id));
+    dismissToast(id);
   }
 
   return (
@@ -76,7 +66,6 @@ export function DesignPreview() {
           <Button variant="destructive">거절</Button>
           <Button variant="outline">상세 보기</Button>
           <Button variant="secondary">근무 종료</Button>
-          <Button size="lg">알림 켜기</Button>
           <Button disabled>처리 중</Button>
         </div>
       </section>
@@ -126,12 +115,7 @@ export function DesignPreview() {
         </Table>
       </section>
 
-      <NewRequestOverlay
-        request={nextUnconfirmed}
-        pendingCount={requests.length}
-        nowMs={nowMs}
-        onConfirm={confirm}
-      />
+      <NewRequestToasts toasts={toasts} onOpen={() => {}} onClose={dismissToast} />
     </main>
   );
 }

@@ -49,11 +49,11 @@ export function FeatureFlags() {
   });
 
   return (
-    <section aria-labelledby="flags-title" className="flex flex-col gap-4">
-      <h2 id="flags-title" className="text-2xl font-bold">
+    <section aria-labelledby="flags-title" className="panel">
+      <h2 id="flags-title" className="section-title panel-title">
         기능 켜고 끄기
       </h2>
-      <p className="text-lg text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         바꾸면 구급대원 앱과 병원 웹에 1분 안에 반영돼요.
       </p>
       {flags.isError && (
@@ -70,16 +70,22 @@ export function FeatureFlags() {
               <li
                 key={field}
                 aria-label={label}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4"
+                className="well flex flex-wrap items-center justify-between gap-4 rounded-xl px-5 py-4"
               >
                 <div className="flex flex-col gap-1">
-                  <p className="text-xl font-bold">
+                  <p className="flex items-center gap-2 text-lg font-extrabold">
                     {label}{' '}
-                    <span className={on ? 'text-green-700' : 'text-muted-foreground'}>
+                    <span
+                      className={
+                        on
+                          ? 'rounded-full border border-success/25 bg-success-soft px-2.5 py-0.5 text-xs font-bold text-success-strong'
+                          : 'rounded-full border border-border bg-neutral-soft px-2.5 py-0.5 text-xs font-bold text-muted-foreground'
+                      }
+                    >
                       {on ? '켜짐' : '꺼짐'}
                     </span>
                   </p>
-                  <p className="text-base text-muted-foreground">{help}</p>
+                  <p className="text-sm text-muted-foreground">{help}</p>
                 </div>
                 <Button
                   size="lg"

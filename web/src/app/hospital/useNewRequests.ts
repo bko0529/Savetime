@@ -1,8 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { showRequestNotification, startAlarmLoop, stopAlarmLoop } from '@/lib/alarm/browserAlarm';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, type ApiPaths } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { HospitalSocket } from '@/lib/realtime/hospitalSocket';
@@ -13,6 +12,8 @@ type RequestList = ApiPaths['/hw/requests']['get']['responses'][200]['content'][
 export type HwRequestItem = components['schemas']['HwRequestItem'];
 
 export const REQUESTS_KEY = ['hw', 'requests', 'open'] as const;
+// 한꺼번에 쌓아 보여줄 작은 알림 수
+const TOAST_LIMIT = 3;
 
 function toOverlay(item: HwRequestItem): OverlayRequest | null {
   if (item.id === undefined || !item.respondUntil) return null;
@@ -29,6 +30,8 @@ function toOverlay(item: HwRequestItem): OverlayRequest | null {
 // 이벤트는 '새 요청 왔어요' 벨일 뿐이고 환자 정보는 없다. 내용은 GET /hw/requests 로 받는다 (SER-014)
 export function useNewRequests(socket: HospitalSocket | null) {
   const queryClient = useQueryClient();
+  // request.new 로 받은 요청 번호 (작은 알림용, 이 탭 화면 표시에만 쓴다)
+  const arrived = useRef(new Set<number>());
 
   const requests = useQuery({
     queryKey: REQUESTS_KEY,
@@ -46,9 +49,11 @@ export function useNewRequests(socket: HospitalSocket | null) {
     const refetchList = () => void queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
     // 목록과 열려 있는 상세를 같이 다시 받는다 (['hw','requests'] 로 시작하는 것 전부)
     const refetchAll = () => void queryClient.invalidateQueries({ queryKey: ['hw', 'requests'] });
-    const onNew: Parameters<typeof socket.on<'request.new'>>[1] = (_e, ack) => {
-      // 무엇보다 먼저 '받았어요'. 5초 안에 안 보내면 서버가 이 PC 알림을 끄고 전달 실패로 센다 (SFR-161)
+    const onNew: Parameters<typeof socket.on<'request.new'>>[1] = (e, ack) => {
+      // 무엇보다 먼저 '받았어요'. 5초 안에 안 보내면 서버가 전달 실패로 세고 이 탭 등록을 푼다 (SFR-161)
       ack({ received: true });
+      // 방금 도착한 요청 번호를 기억해 두었다가, 목록을 받으면 작은 알림으로 띄운다
+      arrived.current.add(e.data.requestId);
       refetchList();
     };
     socket.on('request.new', onNew);
@@ -60,9 +65,9 @@ export function useNewRequests(socket: HospitalSocket | null) {
       });
     };
     socket.on('request.updated', onUpdated);
-    // 길찾기로 도착 예상이 바뀜 (SFR-129). 목록·덮개 창의 도착 예상만 바뀌므로 목록만 다시 받는다
+    // 길찾기로 도착 예상이 바뀜 (SFR-129). 목록·작은 알림의 도착 예상만 바뀌므로 목록만 다시 받는다
     socket.on('request.eta', refetchList);
-    // 다른 PC 응답·만료·닫힘으로 요청이 끝나면 창과 소리를 멈추고, 열린 상세도 '끝난 요청'으로 바꾼다
+    // 다른 PC 응답·만료·닫힘으로 요청이 끝나면 목록·알림을 내리고, 열린 상세도 '끝난 요청'으로 바꾼다
     socket.on('request.changed', refetchAll);
     // 재연결 때는 놓친 게 있을 수 있어 항상 전체를 다시 받는다 (실시간 설계 B)
     socket.on('connect', refetchAll);
@@ -75,9 +80,6 @@ export function useNewRequests(socket: HospitalSocket | null) {
     };
   }, [socket, queryClient]);
 
-  // '확인'을 누른 요청. 덮개 창만 닫고, 응답 대기는 그대로라 소리·탭 제목은 계속된다
-  const [confirmed, setConfirmed] = useState<ReadonlySet<number>>(new Set());
-
   const waiting = useMemo(
     () =>
       (requests.data?.items ?? [])
@@ -87,27 +89,30 @@ export function useNewRequests(socket: HospitalSocket | null) {
         .sort((a, b) => Date.parse(a.respondUntil) - Date.parse(b.respondUntil)),
     [requests.data],
   );
-  const overlay = waiting.find((r) => !confirmed.has(r.id)) ?? null;
 
   useTabTitleAlert(waiting.length);
 
-  // 대기 요청이 하나라도 있으면 소리 1개 반복, 0건이 되면 멈춤
-  const hasWaiting = waiting.length > 0;
+  // 새로 들어온 요청을 작은 알림(토스트)으로 띄운다. 요청마다 1번만.
+  // '새로 온 것' = 이 탭이 request.new 로 받은 요청. 화면을 열 때 이미 있던 요청은 목록·깜빡임으로 보인다.
+  // 이벤트에는 번호만 있으니(절대 규칙 5) 목록을 받은 뒤 그 요청의 내용으로 띄운다
+  const toasted = useRef(new Set<number>());
+  const [toasts, setToasts] = useState<OverlayRequest[]>([]);
   useEffect(() => {
-    if (hasWaiting) startAlarmLoop();
-    else stopAlarmLoop();
-  }, [hasWaiting]);
-  useEffect(() => () => stopAlarmLoop(), []);
-
-  // 브라우저 알림은 요청마다 1번만
-  const notified = useRef(new Set<number>());
-  useEffect(() => {
-    for (const r of waiting) {
-      if (notified.current.has(r.id)) continue;
-      notified.current.add(r.id);
-      showRequestNotification(r.id, r.label);
-    }
+    const fresh = waiting.filter((r) => arrived.current.has(r.id) && !toasted.current.has(r.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((r) => toasted.current.add(r.id));
+    // 최신이 맨 위, 많아도 3개까지만 쌓는다
+    setToasts((prev) => [...fresh, ...prev].slice(0, TOAST_LIMIT));
   }, [waiting]);
+  const dismissToast = useCallback(
+    (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id)),
+    [],
+  );
+  // 다른 PC 응답·만료로 끝난 요청의 알림은 바로 내린다
+  const visibleToasts = useMemo(() => {
+    const ids = new Set(waiting.map((r) => r.id));
+    return toasts.filter((t) => ids.has(t.id));
+  }, [toasts, waiting]);
 
   const items = useMemo(() => requests.data?.items ?? [], [requests.data]);
 
@@ -123,9 +128,5 @@ export function useNewRequests(socket: HospitalSocket | null) {
     return () => clearInterval(timer);
   }, [hasItems, offsetMs]);
 
-  function confirm(id: number) {
-    setConfirmed((prev) => new Set(prev).add(id));
-  }
-
-  return { items, waiting, overlay, nowMs, confirm };
+  return { items, waiting, nowMs, toasts: visibleToasts, dismissToast };
 }

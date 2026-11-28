@@ -3694,8 +3694,18 @@ paths:
                           - pc_change
                           - key_expiring
                           - odd_pc
+                          - api_quota
+                          - integrity
                         text:
                           type: string
+                        refId:
+                          type: integer
+                          nullable: true
+                          description: '알림 대상 ID. signup = 가입 신청 ID, pc_change·odd_pc = 병원 ID, key_expiring = 라이선스 키 ID, integrity = 발견 건수, api_quota = 80·100. 누르면 해당 화면으로 갈 때 쓴다'
+                        hospitalName:
+                          type: string
+                          nullable: true
+                          description: 병원 관련 알림(pc_change·odd_pc·key_expiring)의 병원 이름. 병원 관리 화면에서 그 병원을 찾을 때 쓴다
                         occurrences:
                           type: integer
                         lastAt:
@@ -3824,9 +3834,10 @@ paths:
         schema:
           type: integer
           enum:
+          - 0
           - 7
           - 30
-        description: ''
+        description: 기간(일). 0 = 전체 기간
       responses:
         '200':
           description: 성공
@@ -3838,6 +3849,7 @@ paths:
                   days:
                     type: integer
                     enum:
+                    - 0
                     - 7
                     - 30
                   avgRequestToDepartSec:

@@ -1,18 +1,10 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { envelope, FakeSocket } from '@/testing/fakeSocket';
-import { fakeServer, renderWithQuery } from '@/testing/render';
+import { apiError, fakeServer, renderWithQuery } from '@/testing/render';
 import { HospitalHome } from './HospitalHome';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock('@/lib/alarm/browserAlarm', () => ({
-  unlockSound: vi.fn(async () => true),
-  askNotificationPermission: vi.fn(async () => 'granted'),
-  notificationPermission: vi.fn(() => 'granted'),
-  startAlarmLoop: vi.fn(),
-  stopAlarmLoop: vi.fn(),
-  showRequestNotification: vi.fn(),
-}));
 
 const INCOMING = 'GET /hw/incoming';
 const SESSION = {
@@ -61,7 +53,9 @@ afterEach(() => {
 });
 
 // '도착 예정' 제목 아래 표
+// 요청 / 도착 예정 탭 중 '도착 예정' 탭을 눌러 연다
 async function incomingTable() {
+  fireEvent.click(await screen.findByRole('tab', { name: /도착 예정/ }));
   const heading = await screen.findByRole('heading', { name: '도착 예정' });
   return heading.parentElement!;
 }
@@ -80,12 +74,15 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('구급차 위치·지도는 보여 주지 않는다 (D-71)', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
-    expect(document.body.textContent).not.toMatch(/위도|경도|지도|km/);
+    // 글자 조각마다 본다 (붙여 읽으면 '요청 중지' + '도착'이 '지도'처럼 보임)
+    expect(screen.queryAllByText(/위도|경도|지도|km/)).toEqual([]);
     expect(document.querySelector('iframe, canvas, [data-map]')).toBeNull();
   });
 
   it('새로 확정·도착 예상 갱신·도착 알림이 오면 목록을 다시 받는다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     const before = server.callsTo(INCOMING).length;
 
@@ -108,6 +105,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('이송이 취소되면 목록에서 빠지고, 확인을 누를 때까지 이유를 보여 준다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     server.set(INCOMING, list());
     socket.fire('incoming.removed', envelope({ requestId: 102, reason: 'cancelled' }));
@@ -123,6 +121,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('목적지가 바뀌거나 승인을 취소해도 이유를 보여 준다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     server.set(INCOMING, list());
     socket.fire('incoming.removed', envelope({ requestId: 102, reason: 'dest_changed' }));
@@ -132,6 +131,7 @@ describe('도착 예정 목록 (SFR-121)', () => {
   });
 
   it('다시 연결되면 전체를 다시 받는다', async () => {
+    await incomingTable();
     await screen.findByText('도착 예상 7분');
     const before = server.callsTo(INCOMING).length;
     socket.serverConnect('sock-2');
@@ -200,7 +200,7 @@ describe('도착 예정 실시간 (SFR-144·105)', () => {
     );
   });
 
-  it('번호를 누르면 확정된 요청의 상세가 열리고, 환자 정보가 바뀌면 새로 받는다', async () => {
+  it('펼친 환자 정보는 환자 정보가 바뀔 때만 새로 받는다 (남은 시간만 바뀐 때는 그대로)', async () => {
     const DETAIL = 'GET /hw/requests/102';
     const body = (spo2: number) => ({
       status: 200,
@@ -217,8 +217,8 @@ describe('도착 예정 실시간 (SFR-144·105)', () => {
     });
     server.set(DETAIL, body(85));
     const section = await incomingTable();
-    fireEvent.click(await within(section).findByRole('button', { name: 'R-102' }));
-    expect(await screen.findByText('⚠ 85%')).toBeTruthy();
+    fireEvent.click(await within(section).findByRole('button', { name: '환자 정보 보기 ▾' }));
+    expect(await screen.findByText(/85%/)).toBeTruthy();
 
     // 남은 시간만 바뀐 때는 상세를 다시 받지 않는다 (열람 기록이 1분마다 쌓이지 않게)
     socket.fire('incoming.updated', envelope({ requestId: 102, etaMin: 5 }));
@@ -227,7 +227,61 @@ describe('도착 예정 실시간 (SFR-144·105)', () => {
 
     server.set(DETAIL, body(77));
     socket.fire('incoming.updated', envelope({ requestId: 102, changedFields: ['spo2'] }));
-    expect(await screen.findByText('⚠ 77%')).toBeTruthy();
+    expect(await screen.findByText(/77%/)).toBeTruthy();
     expect(server.callsTo(DETAIL)).toHaveLength(2);
+  });
+});
+
+describe('도착 예정 줄을 펼쳐 환자 정보 보기', () => {
+  const DETAIL = 'GET /hw/requests/102';
+  const detailBody = {
+    id: 102,
+    label: 'R-102',
+    status: 'confirmed',
+    version: 1,
+    respondUntil: new Date().toISOString(),
+    serverNow: new Date().toISOString(),
+    assessment: {
+      chiefComplaint: '뇌출혈 의심',
+      sex: 'M',
+      ageBand: '60s',
+      consciousness: 'pain',
+      bp: '160/95',
+      pulse: 88,
+      unknownFields: ['spo2'],
+    },
+    abnormalFields: ['consciousness'],
+    etaMin: 7,
+    etaSource: 'route',
+    ourHospital: { capability: null, beds: null },
+  };
+
+  it('줄을 누르면 환자 평가 전체가 펼쳐지고(열람 기록 API), 확인 불가는 X, 다시 누르면 접힌다', async () => {
+    server.set(DETAIL, { status: 200, body: detailBody });
+    const section = await incomingTable();
+    const row = (await within(section).findByText('R-102')).closest('tr')!;
+    // 펼치기 전에는 환자 상세를 부르지 않는다 (열람 기록이 남으니까)
+    expect(server.callsTo(DETAIL)).toHaveLength(0);
+
+    fireEvent.click(within(row).getByText('남·60대 · 뇌출혈 의심'));
+    expect(await screen.findByText('⚠ 통증 반응 (P)')).toBeTruthy();
+    expect(screen.getByText('160/95 mmHg')).toBeTruthy();
+    // 산소포화도는 대원이 '확인 불가'로 보냄 → X
+    const spo2 = screen.getByText('산소포화도').parentElement!;
+    expect(spo2.querySelector('[data-unknown]')!.textContent).toBe('X확인 불가');
+    expect(server.callsTo(DETAIL)).toHaveLength(1);
+
+    fireEvent.click(within(row).getByRole('button', { name: '환자 정보 접기 ▴' }));
+    await waitFor(() => expect(screen.queryByText('⚠ 통증 반응 (P)')).toBeNull());
+  });
+
+  it('도착 1시간이 지나 서버가 막으면 안내만', async () => {
+    server.set(DETAIL, {
+      status: 409,
+      body: apiError('REQUEST_CLOSED', { status: 'arrived' }),
+    });
+    const section = await incomingTable();
+    fireEvent.click(await within(section).findByRole('button', { name: '환자 정보 보기 ▾' }));
+    expect(await screen.findByText('환자 정보는 도착 후 1시간까지만 볼 수 있어요.')).toBeTruthy();
   });
 });

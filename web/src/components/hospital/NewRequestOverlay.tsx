@@ -72,7 +72,8 @@ export function NewRequestOverlay({ request, pendingCount, nowMs, onConfirm }: P
           <Button
             size="lg"
             autoFocus
-            className="h-[88px] min-w-[300px] rounded-[12px] bg-white text-[34px] font-extrabold text-destructive hover:bg-white/90"
+            // bg-none: 기본 버튼의 검정 그라데이션이 흰 바탕을 덮지 않게
+            className="h-[88px] min-w-[300px] rounded-[12px] bg-white bg-none text-[34px] font-extrabold text-destructive shadow-none hover:bg-white/90"
             onClick={() => onConfirm(request.id)}
           >
             확인

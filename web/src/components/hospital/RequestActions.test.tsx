@@ -300,7 +300,7 @@ describe('응답할 수 없는 요청', () => {
 
   it('남은 시간이 0이면 버튼이 없다 (서버 판정 전이라도)', async () => {
     open({ [DETAIL]: detail({ respondUntil: new Date(NOW - 1000).toISOString() }) });
-    await screen.findByText('흉통');
+    await screen.findByRole('region', { name: '환자 평가 정보' });
     expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
   });
 });

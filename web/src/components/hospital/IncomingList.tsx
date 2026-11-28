@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment, useState, type MouseEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import type { HwIncoming, RemovedNotice, RemovedReason } from '@/app/hospital/useIncoming';
 import { cn } from '@/lib/utils';
@@ -7,6 +8,7 @@ import { Chip, type Tone } from './Chip';
 import { table } from './tableStyles';
 import { ConfirmArrivalButton } from './ConfirmArrivalButton';
 import { ExtraMemoButton } from './ExtraMemoButton';
+import { IncomingPatient } from './IncomingPatient';
 import { UnacceptableButton } from './UnacceptableButton';
 
 const STATUS_TEXT: Record<string, string> = {
@@ -45,12 +47,24 @@ type Props = {
   items: HwIncoming[];
   notices: RemovedNotice[];
   onDismiss: (requestId: number) => void;
-  // 번호를 누르면 요청 상세를 연다 (확정 뒤에는 요청 목록에서 빠져서 여기서만 열 수 있다)
-  onOpen?: (requestId: number) => void;
 };
 
 // 도착 예정 목록 (SFR-121, H-03). 구급차 위치·지도는 보여 주지 않고 도착 예상 시간만 (D-71)
-export function IncomingList({ items, notices, onDismiss, onOpen }: Props) {
+export function IncomingList({ items, notices, onDismiss }: Props) {
+  // 펼친 줄 (환자 평가 전체를 보여 줌). 한 번에 여러 줄 펼칠 수 있다
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const toggle = (id: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  // 줄 어디를 눌러도 펼친다. 도착 확인·추가 메모 같은 버튼과 그 창 안을 누른 건 빼고
+  const onRowClick = (e: MouseEvent, id: number) => {
+    if ((e.target as Element).closest('button, a, input, textarea, [role=dialog]')) return;
+    toggle(id);
+  };
   return (
     <div className="flex flex-col">
       {notices.map((n) => (
@@ -88,56 +102,77 @@ export function IncomingList({ items, notices, onDismiss, onOpen }: Props) {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className={table.row}>
-                  <td className={cn(table.td, 'font-extrabold whitespace-nowrap tabular-nums')}>
-                    {onOpen && item.id != null ? (
-                      <button
-                        type="button"
-                        className="underline underline-offset-4"
-                        onClick={() => onOpen(item.id!)}
-                      >
+              {items.map((item) => {
+                const id = item.id!;
+                const expanded = open.has(id);
+                return (
+                  <Fragment key={id}>
+                    <tr
+                      className={cn(table.row, 'cursor-pointer')}
+                      onClick={(e) => onRowClick(e, id)}
+                    >
+                      <td className={cn(table.td, 'font-extrabold whitespace-nowrap tabular-nums')}>
                         {item.label}
-                      </button>
-                    ) : (
-                      item.label
-                    )}
-                  </td>
-                  {/* 요약은 도착 후 1시간까지만 서버가 준다 (SER-014). 없으면 비워 둔다 */}
-                  <td className={cn(table.td, 'break-words')}>{item.summary ?? '—'}</td>
-                  <td className={table.td}>
-                    <Chip tone={STATUS_TONE[item.status ?? ''] ?? 'neutral'}>
-                      {STATUS_TEXT[item.status ?? ''] ?? item.status}
-                    </Chip>
-                  </td>
-                  <td className={cn(table.td, 'font-bold whitespace-nowrap tabular-nums')}>
-                    {etaText(item)}
-                  </td>
-                  <td className={table.td}>
-                    {/* 이동 중인 환자에게만: 도착 확인(SFR-144) · 추가 메모 1번(SFR-140).
+                      </td>
+                      {/* 요약은 도착 후 1시간까지만 서버가 준다 (SER-014). 없으면 비워 둔다 */}
+                      <td className={cn(table.td, 'break-words')}>
+                        <div className="flex flex-col items-start gap-1">
+                          <span>{item.summary ?? '—'}</span>
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={`incoming-patient-${id}`}
+                            className="text-[15px] font-bold text-info-strong underline-offset-4 hover:underline"
+                            onClick={() => toggle(id)}
+                          >
+                            {expanded ? '환자 정보 접기 ▴' : '환자 정보 보기 ▾'}
+                          </button>
+                        </div>
+                      </td>
+                      <td className={table.td}>
+                        <Chip tone={STATUS_TONE[item.status ?? ''] ?? 'neutral'}>
+                          {STATUS_TEXT[item.status ?? ''] ?? item.status}
+                        </Chip>
+                      </td>
+                      <td className={cn(table.td, 'font-bold whitespace-nowrap tabular-nums')}>
+                        {etaText(item)}
+                      </td>
+                      <td className={table.td}>
+                        {/* 이동 중인 환자에게만: 도착 확인(SFR-144) · 추가 메모 1번(SFR-140).
                       이미 도착한 환자는 버튼 없이 '도착'으로만 보인다 */}
-                    {item.status === 'confirmed' && item.id != null && (
-                      <div className="flex flex-wrap items-start gap-3">
-                        <ConfirmArrivalButton
-                          requestId={item.id}
-                          version={item.version ?? 1}
-                          enabled={!!item.canConfirmArrival}
-                        />
-                        <ExtraMemoButton
-                          requestId={item.id}
-                          version={item.version ?? 1}
-                          used={!!item.extraMemoUsed}
-                          className="h-[52px] rounded-[10px] border-2 px-5 text-lg"
-                        />
-                      </div>
+                        {item.status === 'confirmed' && item.id != null && (
+                          <div className="flex flex-wrap items-start gap-3">
+                            <ConfirmArrivalButton
+                              requestId={item.id}
+                              version={item.version ?? 1}
+                              enabled={!!item.canConfirmArrival}
+                            />
+                            <ExtraMemoButton
+                              requestId={item.id}
+                              version={item.version ?? 1}
+                              used={!!item.extraMemoUsed}
+                              className="h-[52px] rounded-[10px] border-2 px-5 text-lg"
+                            />
+                          </div>
+                        )}
+                        {/* 도착한 지 10분 안의 환자에게만 수용 불가 (SFR-158). 10분 판정은 서버가 한다 */}
+                        {item.status === 'arrived' &&
+                          item.canMarkUnacceptable &&
+                          item.id != null && (
+                            <UnacceptableButton requestId={item.id} version={item.version ?? 1} />
+                          )}
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr id={`incoming-patient-${id}`} className="bg-surface">
+                        <td colSpan={5} className="px-6 py-4">
+                          <IncomingPatient requestId={id} />
+                        </td>
+                      </tr>
                     )}
-                    {/* 도착한 지 10분 안의 환자에게만 수용 불가 (SFR-158). 10분 판정은 서버가 한다 */}
-                    {item.status === 'arrived' && item.canMarkUnacceptable && item.id != null && (
-                      <UnacceptableButton requestId={item.id} version={item.version ?? 1} />
-                    )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
