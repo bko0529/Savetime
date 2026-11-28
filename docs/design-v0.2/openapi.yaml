@@ -3033,6 +3033,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /admin/auth/refresh:
+    post:
+      tags:
+      - 6. 관리자 웹
+      summary: 관리자 토큰 재발급
+      description: "15분짜리 관리자 accessToken 이 끝나면 refreshToken 으로 새 토큰을 받는다. 쓸 때마다 새 refreshToken\
+        \ 으로 바뀌고 예전 값은 못 쓴다. 만료 시각은 처음 로그인 기준(최대 14시간) 그대로.\n\n**요구사항**: SFR-082, SER-016\
+        \  \n**화면**: (관리자 모든 화면)  \n**오류 코드**: TOKEN_REVOKED, TOKEN_EXPIRED"
+      operationId: post_admin_auth_refresh
+      security: *id001
+      x-error-codes:
+      - TOKEN_REVOKED
+      - TOKEN_EXPIRED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required:
+              - refreshToken
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        4XX:
+          description: 오류 (코드는 오류 코드표)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /admin/signups:
     get:
       tags:
